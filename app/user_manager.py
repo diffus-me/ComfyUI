@@ -87,7 +87,7 @@ class UserManager():
     def add_routes(self, routes):
         self.settings.add_routes(routes)
 
-        @routes.get("/users")
+        @routes.get("/comfy/users")
         async def get_users(request):
             if args.multi_user:
                 return web.json_response({"storage": "server", "users": self.users})
@@ -98,7 +98,7 @@ class UserManager():
                     "migrated": os.path.exists(user_dir)
                 })
 
-        @routes.post("/users")
+        @routes.post("/comfy/users")
         async def post_users(request):
             body = await request.json()
             username = body["username"]
@@ -108,7 +108,7 @@ class UserManager():
             user_id = self.add_user(username)
             return web.json_response(user_id)
 
-        @routes.get("/userdata/{file}")
+        @routes.get("/comfy/userdata/{file}")
         async def getuserdata(request):
             file = request.match_info.get("file", None)
             if not file:
@@ -123,7 +123,7 @@ class UserManager():
             
             return web.FileResponse(path)
 
-        @routes.post("/userdata/{file}")
+        @routes.post("/comfy/userdata/{file}")
         async def post_userdata(request):
             file = request.match_info.get("file", None)
             if not file:

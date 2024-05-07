@@ -91,7 +91,7 @@ class PromptServer():
 
         self.on_prompt_handlers = []
 
-        @routes.get('/ws')
+        @routes.get('/comfy/ws')
         async def websocket_handler(request):
             ws = web.WebSocketResponse()
             await ws.prepare(request)
@@ -118,16 +118,16 @@ class PromptServer():
                 self.sockets.pop(sid, None)
             return ws
 
-        @routes.get("/")
+        @routes.get("/comfy/")
         async def get_root(request):
             return web.FileResponse(os.path.join(self.web_root, "index.html"))
 
-        @routes.get("/embeddings")
+        @routes.get("/comfy/embeddings")
         def get_embeddings(self):
             embeddings = folder_paths.get_filename_list("embeddings")
             return web.json_response(list(map(lambda a: os.path.splitext(a)[0], embeddings)))
 
-        @routes.get("/extensions")
+        @routes.get("/comfy/extensions")
         async def get_extensions(request):
             files = glob.glob(os.path.join(
                 glob.escape(self.web_root), 'extensions/**/*.js'), recursive=True)
@@ -197,13 +197,13 @@ class PromptServer():
             else:
                 return web.Response(status=400)
 
-        @routes.post("/upload/image")
+        @routes.post("/comfy/upload/image")
         async def upload_image(request):
             post = await request.post()
             return image_upload(post)
 
 
-        @routes.post("/upload/mask")
+        @routes.post("/comfy/upload/mask")
         async def upload_mask(request):
             post = await request.post()
 
@@ -212,7 +212,7 @@ class PromptServer():
                 filename, output_dir = folder_paths.annotated_filepath(original_ref['filename'])
 
                 # validation for security: prevent accessing arbitrary path
-                if filename[0] == '/' or '..' in filename:
+                if filename[0] == '/comfy/' or '..' in filename:
                     return web.Response(status=400)
 
                 if output_dir is None:
@@ -246,14 +246,14 @@ class PromptServer():
 
             return image_upload(post, image_save_function)
 
-        @routes.get("/view")
+        @routes.get("/comfy/view")
         async def view_image(request):
             if "filename" in request.rel_url.query:
                 filename = request.rel_url.query["filename"]
                 filename,output_dir = folder_paths.annotated_filepath(filename)
 
                 # validation for security: prevent accessing arbitrary path
-                if filename[0] == '/' or '..' in filename:
+                if filename[0] == '/comfy/' or '..' in filename:
                     return web.Response(status=400)
 
                 if output_dir is None:
@@ -334,7 +334,7 @@ class PromptServer():
 
             return web.Response(status=404)
 
-        @routes.get("/view_metadata/{folder_name}")
+        @routes.get("/comfy/view_metadata/{folder_name}")
         async def view_metadata(request):
             folder_name = request.match_info.get("folder_name", None)
             if folder_name is None:
@@ -357,7 +357,7 @@ class PromptServer():
                 return web.Response(status=404)
             return web.json_response(dt["__metadata__"])
 
-        @routes.get("/system_stats")
+        @routes.get("/comfy/system_stats")
         async def get_queue(request):
             device = comfy.model_management.get_torch_device()
             device_name = comfy.model_management.get_torch_device_name(device)
@@ -383,7 +383,7 @@ class PromptServer():
             }
             return web.json_response(system_stats)
 
-        @routes.get("/prompt")
+        @routes.get("/comfy/prompt")
         async def get_prompt(request):
             return web.json_response(self.get_queue_info())
 
@@ -407,7 +407,7 @@ class PromptServer():
                 info['category'] = obj_class.CATEGORY
             return info
 
-        @routes.get("/object_info")
+        @routes.get("/comfy/object_info")
         async def get_object_info(request):
             out = {}
             for x in nodes.NODE_CLASS_MAPPINGS:
@@ -418,7 +418,7 @@ class PromptServer():
                     logging.error(traceback.format_exc())
             return web.json_response(out)
 
-        @routes.get("/object_info/{node_class}")
+        @routes.get("/comfy/object_info/{node_class}")
         async def get_object_info_node(request):
             node_class = request.match_info.get("node_class", None)
             out = {}
@@ -426,19 +426,19 @@ class PromptServer():
                 out[node_class] = node_info(node_class)
             return web.json_response(out)
 
-        @routes.get("/history")
+        @routes.get("/comfy/history")
         async def get_history(request):
             max_items = request.rel_url.query.get("max_items", None)
             if max_items is not None:
                 max_items = int(max_items)
             return web.json_response(self.prompt_queue.get_history(max_items=max_items))
 
-        @routes.get("/history/{prompt_id}")
+        @routes.get("/comfy/history/{prompt_id}")
         async def get_history(request):
             prompt_id = request.match_info.get("prompt_id", None)
             return web.json_response(self.prompt_queue.get_history(prompt_id=prompt_id))
 
-        @routes.get("/queue")
+        @routes.get("/comfy/queue")
         async def get_queue(request):
             queue_info = {}
             current_queue = self.prompt_queue.get_current_queue()
@@ -446,7 +446,7 @@ class PromptServer():
             queue_info['queue_pending'] = current_queue[1]
             return web.json_response(queue_info)
 
-        @routes.post("/prompt")
+        @routes.post("/comfy/prompt")
         async def post_prompt(request):
             logging.info("got prompt")
             resp_code = 200
@@ -485,7 +485,7 @@ class PromptServer():
             else:
                 return web.json_response({"error": "no prompt", "node_errors": []}, status=400)
 
-        @routes.post("/queue")
+        @routes.post("/comfy/queue")
         async def post_queue(request):
             json_data =  await request.json()
             if "clear" in json_data:
@@ -499,12 +499,12 @@ class PromptServer():
 
             return web.Response(status=200)
 
-        @routes.post("/interrupt")
+        @routes.post("/comfy/interrupt")
         async def post_interrupt(request):
             nodes.interrupt_processing()
             return web.Response(status=200)
 
-        @routes.post("/free")
+        @routes.post("/comfy/free")
         async def post_free(request):
             json_data = await request.json()
             unload_models = json_data.get("unload_models", False)
@@ -515,7 +515,7 @@ class PromptServer():
                 self.prompt_queue.set_flag("free_memory", free_memory)
             return web.Response(status=200)
 
-        @routes.post("/history")
+        @routes.post("/comfy/history")
         async def post_history(request):
             json_data =  await request.json()
             if "clear" in json_data:
@@ -534,11 +534,11 @@ class PromptServer():
 
         for name, dir in nodes.EXTENSION_WEB_DIRS.items():
             self.app.add_routes([
-                web.static('/extensions/' + urllib.parse.quote(name), dir),
+                web.static('/comfy/extensions/' + urllib.parse.quote(name), dir),
             ])
 
         self.app.add_routes([
-            web.static('/', self.web_root),
+            web.static('/comfy', self.web_root),
         ])
 
     def get_queue_info(self):

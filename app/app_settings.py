@@ -23,11 +23,11 @@ class AppSettings():
             f.write(json.dumps(settings, indent=4))
 
     def add_routes(self, routes):
-        @routes.get("/settings")
+        @routes.get("/comfy/settings")
         async def get_settings(request):
             return web.json_response(self.get_settings(request))
 
-        @routes.get("/settings/{id}")
+        @routes.get("/comfy/settings/{id}")
         async def get_setting(request):
             value = None
             settings = self.get_settings(request)
@@ -36,14 +36,14 @@ class AppSettings():
                 value = settings[setting_id]
             return web.json_response(value)
 
-        @routes.post("/settings")
+        @routes.post("/comfy/settings")
         async def post_settings(request):
             settings = self.get_settings(request)
             new_settings = await request.json()
             self.save_settings(request, {**settings, **new_settings})
             return web.Response(status=200)
 
-        @routes.post("/settings/{id}")
+        @routes.post("/comfy/settings/{id}")
         async def post_setting(request):
             setting_id = request.match_info.get("id", None)
             if not setting_id:
