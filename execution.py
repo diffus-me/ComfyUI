@@ -38,6 +38,8 @@ def get_input_data(inputs, class_def, unique_id, outputs={}, prompt={}, extra_da
                 input_data_all[x] = [extra_data.get('extra_pnginfo', None)]
             if h[x] == "UNIQUE_ID":
                 input_data_all[x] = [unique_id]
+            if h[x] == "USER_HASH":
+                input_data_all[x] = [extra_data.get('user_hash', '')]
     return input_data_all
 
 def map_node_over_list(obj, input_data_all, func, allow_interrupt=False):

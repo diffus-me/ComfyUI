@@ -1,3 +1,4 @@
+import datetime
 import os
 import time
 import logging
@@ -58,38 +59,40 @@ def set_input_directory(input_dir):
     global input_directory
     input_directory = input_dir
 
-def get_output_directory():
+def get_output_directory(user_hash):
     global output_directory
-    return output_directory
+    return os.path.join(output_directory, user_hash, "output", "comfyui", datetime.datetime.now().strftime("%Y-%m-%d"))
 
 def get_temp_directory():
     global temp_directory
     return temp_directory
 
-def get_input_directory():
+def get_input_directory(user_hash):
     global input_directory
-    return input_directory
+    if not user_hash:
+        user_hash = 'anonymous'
+    return os.path.join(input_directory, user_hash, "comfyui", "input", datetime.datetime.now().strftime("%Y-%m-%d"))
 
 
 #NOTE: used in http server so don't put folders that should not be accessed remotely
-def get_directory_by_type(type_name):
+def get_directory_by_type(type_name, user_hash):
     if type_name == "output":
-        return get_output_directory()
+        return get_output_directory(user_hash)
     if type_name == "temp":
         return get_temp_directory()
     if type_name == "input":
-        return get_input_directory()
+        return get_input_directory(user_hash)
     return None
 
 
 # determine base_dir rely on annotation if name is 'filename.ext [annotation]' format
 # otherwise use default_path as base_dir
-def annotated_filepath(name):
+def annotated_filepath(name, user_hash):
     if name.endswith("[output]"):
-        base_dir = get_output_directory()
+        base_dir = get_output_directory(user_hash)
         name = name[:-9]
     elif name.endswith("[input]"):
-        base_dir = get_input_directory()
+        base_dir = get_input_directory(user_hash)
         name = name[:-8]
     elif name.endswith("[temp]"):
         base_dir = get_temp_directory()
@@ -100,23 +103,23 @@ def annotated_filepath(name):
     return name, base_dir
 
 
-def get_annotated_filepath(name, default_dir=None):
-    name, base_dir = annotated_filepath(name)
+def get_annotated_filepath(name, user_hash, default_dir=None):
+    name, base_dir = annotated_filepath(name, user_hash)
 
     if base_dir is None:
         if default_dir is not None:
             base_dir = default_dir
         else:
-            base_dir = get_input_directory()  # fallback path
+            base_dir = get_input_directory(user_hash)  # fallback path
 
     return os.path.join(base_dir, name)
 
 
-def exists_annotated_filepath(name):
-    name, base_dir = annotated_filepath(name)
+def exists_annotated_filepath(name, user_hash=''):
+    name, base_dir = annotated_filepath(name, user_hash)
 
     if base_dir is None:
-        base_dir = get_input_directory()  # fallback path
+        base_dir = get_input_directory(user_hash)  # fallback path
 
     filepath = os.path.join(base_dir, name)
     return os.path.exists(filepath)

@@ -1,3 +1,4 @@
+import datetime
 import os
 import sys
 import asyncio
@@ -118,6 +119,10 @@ class PromptServer():
                 self.sockets.pop(sid, None)
             return ws
 
+        @routes.get("/comfy")
+        async def get_root(request):
+            return web.FileResponse(os.path.join(self.web_root, "index.html"))
+
         @routes.get("/")
         async def get_root(request):
             return web.FileResponse(os.path.join(self.web_root, "index.html"))
@@ -127,9 +132,15 @@ class PromptServer():
             embeddings = folder_paths.get_filename_list("embeddings")
             return web.json_response(list(map(lambda a: os.path.splitext(a)[0], embeddings)))
 
+        @routes.get("/health/check")
+        def get_embeddings(self):
+            return web.json_response({'message': 'OK'})
+
         @routes.get("/extensions")
         async def get_extensions(request):
             files = glob.glob(os.path.join(
+                glob.escape(self.web_root), 'extensions_builtin/**/*.js'), recursive=True)
+            files += glob.glob(os.path.join(
                 glob.escape(self.web_root), 'extensions/**/*.js'), recursive=True)
             
             extensions = list(map(lambda f: "/" + os.path.relpath(f, self.web_root).replace("\\", "/"), files))
@@ -141,25 +152,25 @@ class PromptServer():
 
             return web.json_response(extensions)
 
-        def get_dir_by_type(dir_type):
+        def get_dir_by_type(dir_type, user_hash):
             if dir_type is None:
                 dir_type = "input"
 
             if dir_type == "input":
-                type_dir = folder_paths.get_input_directory()
+                type_dir = folder_paths.get_input_directory(user_hash)
             elif dir_type == "temp":
                 type_dir = folder_paths.get_temp_directory()
             elif dir_type == "output":
-                type_dir = folder_paths.get_output_directory()
+                type_dir = folder_paths.get_output_directory(user_hash)
 
             return type_dir, dir_type
 
-        def image_upload(post, image_save_function=None):
+        def image_upload(post, user_hash, image_save_function=None):
             image = post.get("image")
             overwrite = post.get("overwrite")
 
             image_upload_type = post.get("type")
-            upload_dir, image_upload_type = get_dir_by_type(image_upload_type)
+            upload_dir, image_upload_type = get_dir_by_type(image_upload_type, user_hash)
 
             if image and image.file:
                 filename = image.filename
@@ -200,16 +211,17 @@ class PromptServer():
         @routes.post("/upload/image")
         async def upload_image(request):
             post = await request.post()
-            return image_upload(post)
+            user_hash = request.headers.get('x-diffus-user-hash', '')
+            return image_upload(post, user_hash)
 
 
         @routes.post("/upload/mask")
         async def upload_mask(request):
             post = await request.post()
-
+            user_hash = request.headers.get('x-diffus-user-hash', '')
             def image_save_function(image, post, filepath):
                 original_ref = json.loads(post.get("original_ref"))
-                filename, output_dir = folder_paths.annotated_filepath(original_ref['filename'])
+                filename, output_dir = folder_paths.annotated_filepath(original_ref['filename'], user_hash)
 
                 # validation for security: prevent accessing arbitrary path
                 if filename[0] == '/' or '..' in filename:
@@ -217,7 +229,7 @@ class PromptServer():
 
                 if output_dir is None:
                     type = original_ref.get("type", "output")
-                    output_dir = folder_paths.get_directory_by_type(type)
+                    output_dir = folder_paths.get_directory_by_type(type, user_hash)
 
                 if output_dir is None:
                     return web.Response(status=400)
@@ -244,13 +256,14 @@ class PromptServer():
                         original_pil.putalpha(new_alpha)
                         original_pil.save(filepath, compress_level=4, pnginfo=metadata)
 
-            return image_upload(post, image_save_function)
+            return image_upload(post, user_hash, image_save_function)
 
         @routes.get("/view")
         async def view_image(request):
+            user_hash = request.headers.get('x-diffus-user-hash', '')
             if "filename" in request.rel_url.query:
                 filename = request.rel_url.query["filename"]
-                filename,output_dir = folder_paths.annotated_filepath(filename)
+                filename,output_dir = folder_paths.annotated_filepath(filename, user_hash)
 
                 # validation for security: prevent accessing arbitrary path
                 if filename[0] == '/' or '..' in filename:
@@ -258,8 +271,7 @@ class PromptServer():
 
                 if output_dir is None:
                     type = request.rel_url.query.get("type", "output")
-                    output_dir = folder_paths.get_directory_by_type(type)
-
+                    output_dir = folder_paths.get_directory_by_type(type, user_hash)
                 if output_dir is None:
                     return web.Response(status=400)
 
@@ -471,6 +483,8 @@ class PromptServer():
                 if "extra_data" in json_data:
                     extra_data = json_data["extra_data"]
 
+                extra_data['user_hash'] = request.headers.get('x-diffus-user-hash', '')
+
                 if "client_id" in json_data:
                     extra_data["client_id"] = json_data["client_id"]
                 if valid[0]:
@@ -535,6 +549,7 @@ class PromptServer():
         for name, dir in nodes.EXTENSION_WEB_DIRS.items():
             self.app.add_routes([
                 web.static('/extensions/' + urllib.parse.quote(name), dir),
+                web.static('/extensions_builtin/' + urllib.parse.quote(name), dir),
             ])
 
         self.app.add_routes([
