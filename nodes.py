@@ -403,13 +403,13 @@ class InpaintModelConditioning:
 
 class SaveLatent:
     def __init__(self):
-        self.output_dir = folder_paths.get_output_directory()
+        pass
 
     @classmethod
     def INPUT_TYPES(s):
         return {"required": { "samples": ("LATENT", ),
                               "filename_prefix": ("STRING", {"default": "latents/ComfyUI"})},
-                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
+                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO", "user_hash": "USER_HASH"},
                 }
     RETURN_TYPES = ()
     FUNCTION = "save"
@@ -418,8 +418,9 @@ class SaveLatent:
 
     CATEGORY = "_for_testing"
 
-    def save(self, samples, filename_prefix="ComfyUI", prompt=None, extra_pnginfo=None):
-        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, self.output_dir)
+    def save(self, samples, filename_prefix="ComfyUI", prompt=None, extra_pnginfo=None, user_hash=''):
+        output_dir = folder_paths.get_output_directory(user_hash)
+        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, output_dir)
 
         # support save metadata for latent sharing
         prompt_info = ""
@@ -457,15 +458,16 @@ class LoadLatent:
     def INPUT_TYPES(s):
         input_dir = folder_paths.get_input_directory()
         files = [f for f in os.listdir(input_dir) if os.path.isfile(os.path.join(input_dir, f)) and f.endswith(".latent")]
-        return {"required": {"latent": [sorted(files), ]}, }
+        return {"required": {"latent": [sorted(files), ]},
+                "hidden": {"user_hash": "USER_HASH"}}
 
     CATEGORY = "_for_testing"
 
     RETURN_TYPES = ("LATENT", )
     FUNCTION = "load"
 
-    def load(self, latent):
-        latent_path = folder_paths.get_annotated_filepath(latent)
+    def load(self, latent, user_hash=''):
+        latent_path = folder_paths.get_annotated_filepath(latent, user_hash)
         latent = safetensors.torch.load_file(latent_path, device="cpu")
         multiplier = 1.0
         if "latent_format_version_0" not in latent:
@@ -475,7 +477,7 @@ class LoadLatent:
 
     @classmethod
     def IS_CHANGED(s, latent):
-        image_path = folder_paths.get_annotated_filepath(latent)
+        image_path = folder_paths.get_annotated_filepath(latent, '')
         m = hashlib.sha256()
         with open(image_path, 'rb') as f:
             m.update(f.read())
@@ -1408,7 +1410,6 @@ class KSamplerAdvanced:
 
 class SaveImage:
     def __init__(self):
-        self.output_dir = folder_paths.get_output_directory()
         self.type = "output"
         self.prefix_append = ""
         self.compress_level = 4
@@ -1418,7 +1419,7 @@ class SaveImage:
         return {"required": 
                     {"images": ("IMAGE", ),
                      "filename_prefix": ("STRING", {"default": "ComfyUI"})},
-                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
+                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO", "user_hash": "USER_HASH"},
                 }
 
     RETURN_TYPES = ()
@@ -1428,9 +1429,10 @@ class SaveImage:
 
     CATEGORY = "image"
 
-    def save_images(self, images, filename_prefix="ComfyUI", prompt=None, extra_pnginfo=None):
+    def save_images(self, images, filename_prefix="ComfyUI", prompt=None, extra_pnginfo=None, user_hash=''):
         filename_prefix += self.prefix_append
-        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, self.output_dir, images[0].shape[1], images[0].shape[0])
+        output_dir = folder_paths.get_output_directory(user_hash)
+        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, output_dir, images[0].shape[1], images[0].shape[0])
         results = list()
         ts = time.time()
         for (batch_number, image) in enumerate(images):
@@ -1474,10 +1476,12 @@ class PreviewImage(SaveImage):
 class LoadImage:
     @classmethod
     def INPUT_TYPES(s):
-        input_dir = folder_paths.get_input_directory()
+        input_dir = folder_paths.get_input_directory('')
         files = [f for f in os.listdir(input_dir) if os.path.isfile(os.path.join(input_dir, f))]
         return {"required":
                     {"image": (sorted(files), {"image_upload": True})},
+                "hidden":
+                    {"user_hash": "USER_HASH"},
                 }
 
     CATEGORY = "image"
@@ -1485,7 +1489,7 @@ class LoadImage:
     RETURN_TYPES = ("IMAGE", "MASK")
     FUNCTION = "load_image"
     def load_image(self, image):
-        image_path = folder_paths.get_annotated_filepath(image)
+        image_path = folder_paths.get_annotated_filepath(image, user_hash='')
         
         img = node_helpers.pillow(Image.open, image_path)
         
@@ -1530,7 +1534,7 @@ class LoadImage:
 
     @classmethod
     def IS_CHANGED(s, image):
-        image_path = folder_paths.get_annotated_filepath(image)
+        image_path = folder_paths.get_annotated_filepath(image, '')
         m = hashlib.sha256()
         with open(image_path, 'rb') as f:
             m.update(f.read())
@@ -1551,15 +1555,17 @@ class LoadImageMask:
         files = [f for f in os.listdir(input_dir) if os.path.isfile(os.path.join(input_dir, f))]
         return {"required":
                     {"image": (sorted(files), {"image_upload": True}),
-                     "channel": (s._color_channels, ), }
+                     "channel": (s._color_channels, ), },
+                "hidden":
+                    {"user_hash": "USER_HASH"},
                 }
 
     CATEGORY = "mask"
 
     RETURN_TYPES = ("MASK",)
     FUNCTION = "load_image"
-    def load_image(self, image, channel):
-        image_path = folder_paths.get_annotated_filepath(image)
+    def load_image(self, image, channel, user_hash=''):
+        image_path = folder_paths.get_annotated_filepath(image, user_hash)
         i = node_helpers.pillow(Image.open, image_path)
         i = node_helpers.pillow(ImageOps.exif_transpose, i)
         if i.getbands() != ("R", "G", "B", "A"):
@@ -1579,7 +1585,7 @@ class LoadImageMask:
 
     @classmethod
     def IS_CHANGED(s, image, channel):
-        image_path = folder_paths.get_annotated_filepath(image)
+        image_path = folder_paths.get_annotated_filepath(image, '')
         m = hashlib.sha256()
         with open(image_path, 'rb') as f:
             m.update(f.read())

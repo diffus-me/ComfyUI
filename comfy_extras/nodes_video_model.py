@@ -115,10 +115,10 @@ class ImageOnlyCheckpointSave(comfy_extras.nodes_model_merging.CheckpointSave):
                               "clip_vision": ("CLIP_VISION",),
                               "vae": ("VAE",),
                               "filename_prefix": ("STRING", {"default": "checkpoints/ComfyUI"}),},
-                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},}
+                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO", "user_hash": "USER_HASH"}}
 
-    def save(self, model, clip_vision, vae, filename_prefix, prompt=None, extra_pnginfo=None):
-        comfy_extras.nodes_model_merging.save_checkpoint(model, clip_vision=clip_vision, vae=vae, filename_prefix=filename_prefix, output_dir=self.output_dir, prompt=prompt, extra_pnginfo=extra_pnginfo)
+    def save(self, model, clip_vision, vae, filename_prefix, prompt=None, extra_pnginfo=None, user_hash=''):
+        comfy_extras.nodes_model_merging.save_checkpoint(model, clip_vision=clip_vision, vae=vae, filename_prefix=filename_prefix, output_dir=folder_paths.get_output_directory(user_hash), prompt=prompt, extra_pnginfo=extra_pnginfo)
         return {}
 
 NODE_CLASS_MAPPINGS = {
