@@ -119,7 +119,7 @@ def get_annotated_filepath(name, user_hash, default_dir=None):
     return os.path.join(base_dir, name)
 
 
-def exists_annotated_filepath(name, user_hash=''):
+def exists_annotated_filepath(name, user_hash):
     name, base_dir = annotated_filepath(name, user_hash)
 
     if base_dir is None:
