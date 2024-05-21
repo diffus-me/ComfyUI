@@ -1,5 +1,6 @@
 import torch
 
+import inspect
 import os
 import sys
 import json
@@ -41,6 +42,28 @@ def before_node_execution():
 
 def interrupt_processing(value=True):
     comfy.model_management.interrupt_current_processing(value)
+
+
+def get_node_input_types(node_class, node_hash):
+    signature = inspect.signature(node_class.INPUT_TYPES)
+    positional_args = []
+    inputs = []
+    for i, param in enumerate(signature.parameters.values()):
+        if param.kind not in (param.POSITIONAL_ONLY, param.POSITIONAL_OR_KEYWORD):
+            break
+        positional_args.append(param)
+    for i, param in enumerate(positional_args):
+        if param.annotation == str and param.name == 'user_hash':
+            inputs.insert(i, node_hash)
+    while len(inputs) < len(positional_args):
+        i = len(inputs)
+        param = positional_args[i]
+        if param.default == param.empty:
+            inputs.append(None)
+        else:
+            inputs.append(param.default)
+    return node_class.INPUT_TYPES(*inputs)
+
 
 MAX_RESOLUTION=16384
 
@@ -453,8 +476,8 @@ class SaveLatent:
 
 class LoadLatent:
     @classmethod
-    def INPUT_TYPES(s):
-        input_dir = folder_paths.get_input_directory()
+    def INPUT_TYPES(s, user_hash: str = ''):
+        input_dir = folder_paths.get_input_directory(user_hash)
         files = [f for f in os.listdir(input_dir) if os.path.isfile(os.path.join(input_dir, f)) and f.endswith(".latent")]
         return {"required": {"latent": [sorted(files), ]},
                 "hidden": {"user_hash": "USER_HASH"}}
@@ -464,7 +487,7 @@ class LoadLatent:
     RETURN_TYPES = ("LATENT", )
     FUNCTION = "load"
 
-    def load(self, latent, user_hash=''):
+    def load(self, latent, user_hash):
         latent_path = folder_paths.get_annotated_filepath(latent, user_hash)
         latent = safetensors.torch.load_file(latent_path, device="cpu")
         multiplier = 1.0
@@ -474,15 +497,15 @@ class LoadLatent:
         return (samples, )
 
     @classmethod
-    def IS_CHANGED(s, latent):
-        image_path = folder_paths.get_annotated_filepath(latent, '')
+    def IS_CHANGED(s, latent, user_hash):
+        image_path = folder_paths.get_annotated_filepath(latent, user_hash)
         m = hashlib.sha256()
         with open(image_path, 'rb') as f:
             m.update(f.read())
         return m.digest().hex()
 
     @classmethod
-    def VALIDATE_INPUTS(s, latent):
+    def VALIDATE_INPUTS(s, latent, user_hash):
         if not folder_paths.exists_annotated_filepath(latent):
             return "Invalid latent file: {}".format(latent)
         return True
@@ -1387,7 +1410,7 @@ class SaveImage:
 
     @classmethod
     def INPUT_TYPES(s):
-        return {"required": 
+        return {"required":
                     {"images": ("IMAGE", ),
                      "filename_prefix": ("STRING", {"default": "ComfyUI"})},
                 "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO", "user_hash": "USER_HASH"},
@@ -1446,8 +1469,8 @@ class PreviewImage(SaveImage):
 
 class LoadImage:
     @classmethod
-    def INPUT_TYPES(s):
-        input_dir = folder_paths.get_input_directory('')
+    def INPUT_TYPES(s, user_hash: str = ''):
+        input_dir = folder_paths.get_input_directory(user_hash)
         files = [f for f in os.listdir(input_dir) if os.path.isfile(os.path.join(input_dir, f))]
         return {"required":
                     {"image": (sorted(files), {"image_upload": True})},
@@ -1459,8 +1482,8 @@ class LoadImage:
 
     RETURN_TYPES = ("IMAGE", "MASK")
     FUNCTION = "load_image"
-    def load_image(self, image):
-        image_path = folder_paths.get_annotated_filepath(image, user_hash='')
+    def load_image(self, image, user_hash):
+        image_path = folder_paths.get_annotated_filepath(image, user_hash)
         
         img = node_helpers.pillow(Image.open, image_path)
         
@@ -1504,16 +1527,16 @@ class LoadImage:
         return (output_image, output_mask)
 
     @classmethod
-    def IS_CHANGED(s, image):
-        image_path = folder_paths.get_annotated_filepath(image, '')
+    def IS_CHANGED(s, image, user_hash):
+        image_path = folder_paths.get_annotated_filepath(image, user_hash)
         m = hashlib.sha256()
         with open(image_path, 'rb') as f:
             m.update(f.read())
         return m.digest().hex()
 
     @classmethod
-    def VALIDATE_INPUTS(s, image):
-        if not folder_paths.exists_annotated_filepath(image):
+    def VALIDATE_INPUTS(s, image, user_hash):
+        if not folder_paths.exists_annotated_filepath(image, user_hash):
             return "Invalid image file: {}".format(image)
 
         return True
@@ -1521,8 +1544,8 @@ class LoadImage:
 class LoadImageMask:
     _color_channels = ["alpha", "red", "green", "blue"]
     @classmethod
-    def INPUT_TYPES(s):
-        input_dir = folder_paths.get_input_directory()
+    def INPUT_TYPES(s, user_hash: str = ''):
+        input_dir = folder_paths.get_input_directory(user_hash)
         files = [f for f in os.listdir(input_dir) if os.path.isfile(os.path.join(input_dir, f))]
         return {"required":
                     {"image": (sorted(files), {"image_upload": True}),
@@ -1535,7 +1558,7 @@ class LoadImageMask:
 
     RETURN_TYPES = ("MASK",)
     FUNCTION = "load_image"
-    def load_image(self, image, channel, user_hash=''):
+    def load_image(self, image, channel, user_hash):
         image_path = folder_paths.get_annotated_filepath(image, user_hash)
         i = node_helpers.pillow(Image.open, image_path)
         i = node_helpers.pillow(ImageOps.exif_transpose, i)
@@ -1555,16 +1578,16 @@ class LoadImageMask:
         return (mask.unsqueeze(0),)
 
     @classmethod
-    def IS_CHANGED(s, image, channel):
-        image_path = folder_paths.get_annotated_filepath(image, '')
+    def IS_CHANGED(s, image, channel, user_hash):
+        image_path = folder_paths.get_annotated_filepath(image, user_hash)
         m = hashlib.sha256()
         with open(image_path, 'rb') as f:
             m.update(f.read())
         return m.digest().hex()
 
     @classmethod
-    def VALIDATE_INPUTS(s, image):
-        if not folder_paths.exists_annotated_filepath(image):
+    def VALIDATE_INPUTS(s, image, user_hash):
+        if not folder_paths.exists_annotated_filepath(image, user_hash):
             return "Invalid image file: {}".format(image)
 
         return True

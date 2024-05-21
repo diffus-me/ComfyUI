@@ -399,10 +399,10 @@ class PromptServer():
         async def get_prompt(request):
             return web.json_response(self.get_queue_info())
 
-        def node_info(node_class):
+        def node_info(node_class, user_hash):
             obj_class = nodes.NODE_CLASS_MAPPINGS[node_class]
             info = {}
-            info['input'] = obj_class.INPUT_TYPES()
+            info['input'] = nodes.get_node_input_types(obj_class, user_hash)
             info['output'] = obj_class.RETURN_TYPES
             info['output_is_list'] = obj_class.OUTPUT_IS_LIST if hasattr(obj_class, 'OUTPUT_IS_LIST') else [False] * len(obj_class.RETURN_TYPES)
             info['output_name'] = obj_class.RETURN_NAMES if hasattr(obj_class, 'RETURN_NAMES') else info['output']
@@ -422,9 +422,10 @@ class PromptServer():
         @routes.get("/object_info")
         async def get_object_info(request):
             out = {}
+            user_hash = request.headers.get('x-diffus-user-hash', '')
             for x in nodes.NODE_CLASS_MAPPINGS:
                 try:
-                    out[x] = node_info(x)
+                    out[x] = node_info(x, user_hash)
                 except Exception as e:
                     logging.error(f"[ERROR] An error occurred while retrieving information for the '{x}' node.")
                     logging.error(traceback.format_exc())
@@ -433,9 +434,10 @@ class PromptServer():
         @routes.get("/object_info/{node_class}")
         async def get_object_info_node(request):
             node_class = request.match_info.get("node_class", None)
+            user_hash = request.headers.get('x-diffus-user-hash', '')
             out = {}
             if (node_class is not None) and (node_class in nodes.NODE_CLASS_MAPPINGS):
-                out[node_class] = node_info(node_class)
+                out[node_class] = node_info(node_class, user_hash)
             return web.json_response(out)
 
         @routes.get("/history")
@@ -463,6 +465,7 @@ class PromptServer():
             logging.info("got prompt")
             resp_code = 200
             out_string = ""
+            user_hash = request.headers.get('x-diffus-user-hash', '')
             json_data =  await request.json()
             json_data = self.trigger_on_prompt(json_data)
 
@@ -478,7 +481,7 @@ class PromptServer():
 
             if "prompt" in json_data:
                 prompt = json_data["prompt"]
-                valid = execution.validate_prompt(prompt)
+                valid = execution.validate_prompt(prompt, user_hash)
                 extra_data = {}
                 if "extra_data" in json_data:
                     extra_data = json_data["extra_data"]
