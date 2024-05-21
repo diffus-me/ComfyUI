@@ -13,7 +13,7 @@ import nodes
 import comfy.model_management
 
 def get_input_data(inputs, class_def, unique_id, outputs={}, prompt={}, extra_data={}):
-    valid_inputs = class_def.INPUT_TYPES()
+    valid_inputs = nodes.get_node_input_types(class_def, extra_data.get('user_hash', ''))
     input_data_all = {}
     for x in inputs:
         input_data = inputs[x]
@@ -403,7 +403,7 @@ class PromptExecutor:
 
 
 
-def validate_inputs(prompt, item, validated):
+def validate_inputs(prompt, item, validated, user_hash):
     unique_id = item
     if unique_id in validated:
         return validated[unique_id]
@@ -412,7 +412,7 @@ def validate_inputs(prompt, item, validated):
     class_type = prompt[unique_id]['class_type']
     obj_class = nodes.NODE_CLASS_MAPPINGS[class_type]
 
-    class_inputs = obj_class.INPUT_TYPES()
+    class_inputs = nodes.get_node_input_types(obj_class, user_hash)
     required_inputs = class_inputs['required']
 
     errors = []
@@ -473,7 +473,7 @@ def validate_inputs(prompt, item, validated):
                 errors.append(error)
                 continue
             try:
-                r = validate_inputs(prompt, o_id, validated)
+                r = validate_inputs(prompt, o_id, validated, user_hash)
                 if r[0] is False:
                     # `r` will be set in `validated[o_id]` already
                     valid = False
@@ -621,7 +621,7 @@ def full_type_name(klass):
         return klass.__qualname__
     return module + '.' + klass.__qualname__
 
-def validate_prompt(prompt):
+def validate_prompt(prompt, user_hash):
     outputs = set()
     for x in prompt:
         if 'class_type' not in prompt[x]:
@@ -664,7 +664,7 @@ def validate_prompt(prompt):
         valid = False
         reasons = []
         try:
-            m = validate_inputs(prompt, o, validated)
+            m = validate_inputs(prompt, o, validated, user_hash)
             valid = m[0]
             reasons = m[1]
         except Exception as ex:
