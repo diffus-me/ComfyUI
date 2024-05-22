@@ -2,6 +2,7 @@ import { api } from "./api.js";
 import { ComfyDialog as _ComfyDialog } from "./ui/dialog.js";
 import { toggleSwitch } from "./ui/toggleSwitch.js";
 import { ComfySettingsDialog } from "./ui/settings.js";
+import { initUserCenterMenu } from "./userCenter.js";
 
 export const ComfyDialog = _ComfyDialog;
 
@@ -407,6 +408,38 @@ export class ComfyUI {
 				}
 			}
 		});
+
+		this.userMenu = $el(
+			"div.diffus-user-menu-anchor",
+			{
+        id: "diffus_user_menu_anchor",
+				parent: document.body,
+        style: {
+          position: "absolute",
+          left: "0px",
+          top: "0px",
+          width: "100%",
+          "z-index": 1000,
+        }
+			},
+      [$el("v-app",
+        {
+          id: "diffus_user_menu_app"
+        }, 
+        [$el("div.diffus-user-menu-container",
+          {
+            id: "diffus_user_menu_container",
+            style: {
+              display: "block",
+              position: "absolute",
+              right: "20px",
+              top: "20px",
+            },
+          }
+        )])],
+		);
+
+    initUserCenterMenu();
 
 		this.menuHamburger = $el(
 			"div.comfy-menu-hamburger",
