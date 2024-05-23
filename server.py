@@ -506,7 +506,7 @@ class PromptServer():
                 if "extra_data" in json_data:
                     extra_data = json_data["extra_data"]
 
-                extra_data['user_hash'] = request.headers.get('x-diffus-user-hash', '')
+                extra_data['user_hash'] = user_hash
 
                 if "client_id" in json_data:
                     extra_data["client_id"] = json_data["client_id"]

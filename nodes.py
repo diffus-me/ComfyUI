@@ -44,7 +44,7 @@ def interrupt_processing(value=True):
     comfy.model_management.interrupt_current_processing(value)
 
 
-def get_node_input_types(node_class, node_hash):
+def get_node_input_types(node_class, user_hash):
     signature = inspect.signature(node_class.INPUT_TYPES)
     positional_args = []
     inputs = []
@@ -54,7 +54,7 @@ def get_node_input_types(node_class, node_hash):
         positional_args.append(param)
     for i, param in enumerate(positional_args):
         if param.annotation == str and param.name == 'user_hash':
-            inputs.insert(i, node_hash)
+            inputs.insert(i, user_hash)
     while len(inputs) < len(positional_args):
         i = len(inputs)
         param = positional_args[i]
@@ -508,7 +508,7 @@ class LoadLatent:
 
     @classmethod
     def VALIDATE_INPUTS(s, latent, user_hash):
-        if not folder_paths.exists_annotated_filepath(latent):
+        if not folder_paths.exists_annotated_filepath(latent, user_hash):
             return "Invalid latent file: {}".format(latent)
         return True
 
@@ -1498,7 +1498,7 @@ class PreviewImage(SaveImage):
 
 class LoadImage:
     @classmethod
-    def INPUT_TYPES(s, user_hash: str = ''):
+    def INPUT_TYPES(s, user_hash: str):
         input_dir = folder_paths.get_input_directory(user_hash)
         files = [f for f in os.listdir(input_dir) if os.path.isfile(os.path.join(input_dir, f))]
         return {"required":
