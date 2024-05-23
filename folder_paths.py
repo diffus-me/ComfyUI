@@ -60,7 +60,11 @@ def set_input_directory(input_dir):
     input_directory = input_dir
 
 def get_output_directory(user_hash):
-    global output_directory
+    if not user_hash:
+        import traceback
+        import sys
+        traceback.print_stack(file=sys.stdout)
+        raise Exception("missed user_hash from get_output_directory")
     return os.path.join(output_directory, user_hash, "output", "comfyui", datetime.datetime.now().strftime("%Y-%m-%d"))
 
 def get_temp_directory():
@@ -68,10 +72,12 @@ def get_temp_directory():
     return temp_directory
 
 def get_input_directory(user_hash):
-    global input_directory
     if not user_hash:
-        user_hash = 'anonymous'
-    return os.path.join(input_directory, user_hash, "comfyui", "input", datetime.datetime.now().strftime("%Y-%m-%d"))
+        import traceback
+        import sys
+        traceback.print_stack(file=sys.stdout)
+        raise Exception("missed user_hash from get_input_directory")
+    return os.path.join(output_directory, user_hash, "comfyui", "input")
 
 
 #NOTE: used in http server so don't put folders that should not be accessed remotely

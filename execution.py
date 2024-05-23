@@ -217,7 +217,7 @@ def recursive_will_execute(prompt, outputs, current_item, memo={}):
     memo[unique_id] = will_execute + [unique_id]
     return memo[unique_id]
 
-def recursive_output_delete_if_changed(prompt, old_prompt, outputs, current_item):
+def recursive_output_delete_if_changed(prompt, old_prompt, outputs, current_item, extra_data):
     unique_id = current_item
     inputs = prompt[unique_id]['inputs']
     class_type = prompt[unique_id]['class_type']
@@ -230,7 +230,7 @@ def recursive_output_delete_if_changed(prompt, old_prompt, outputs, current_item
         if unique_id in old_prompt and 'is_changed' in old_prompt[unique_id]:
             is_changed_old = old_prompt[unique_id]['is_changed']
         if 'is_changed' not in prompt[unique_id]:
-            input_data_all = get_input_data(inputs, class_def, unique_id, outputs)
+            input_data_all = get_input_data(inputs, class_def, unique_id, outputs, extra_data=extra_data)
             if input_data_all is not None:
                 try:
                     #is_changed = class_def.IS_CHANGED(**input_data_all)
@@ -257,7 +257,7 @@ def recursive_output_delete_if_changed(prompt, old_prompt, outputs, current_item
                     input_unique_id = input_data[0]
                     output_index = input_data[1]
                     if input_unique_id in outputs:
-                        to_delete = recursive_output_delete_if_changed(prompt, old_prompt, outputs, input_unique_id)
+                        to_delete = recursive_output_delete_if_changed(prompt, old_prompt, outputs, input_unique_id, extra_data)
                     else:
                         to_delete = True
                     if to_delete:
@@ -362,7 +362,7 @@ class PromptExecutor:
                 del d
 
             for x in prompt:
-                recursive_output_delete_if_changed(prompt, self.old_prompt, self.outputs, x)
+                recursive_output_delete_if_changed(prompt, self.old_prompt, self.outputs, x, extra_data)
 
             current_outputs = set(self.outputs.keys())
             for x in list(self.outputs_ui.keys()):
@@ -579,7 +579,7 @@ def validate_inputs(prompt, item, validated, user_hash):
                         continue
 
     if len(validate_function_inputs) > 0:
-        input_data_all = get_input_data(inputs, obj_class, unique_id)
+        input_data_all = get_input_data(inputs, obj_class, unique_id, extra_data={'user_hash': user_hash})
         input_filtered = {}
         for x in input_data_all:
             if x in validate_function_inputs:
