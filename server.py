@@ -504,22 +504,22 @@ class PromptServer():
 
         @routes.post("/queue")
         async def post_queue(request):
-            json_data =  await request.json()
-            if "clear" in json_data:
-                if json_data["clear"]:
-                    self.prompt_queue.wipe_queue()
-            if "delete" in json_data:
-                to_delete = json_data['delete']
-                for id_to_delete in to_delete:
-                    delete_func = lambda a: a[1] == id_to_delete
-                    self.prompt_queue.delete_queue_item(delete_func)
+            # json_data =  await request.json()
+            # if "clear" in json_data:
+            #     if json_data["clear"]:
+            #         self.prompt_queue.wipe_queue()
+            # if "delete" in json_data:
+            #     to_delete = json_data['delete']
+            #     for id_to_delete in to_delete:
+            #         delete_func = lambda a: a[1] == id_to_delete
+            #         self.prompt_queue.delete_queue_item(delete_func)
 
-            return web.Response(status=200)
+            return web.Response(status=403)
 
         @routes.post("/interrupt")
         async def post_interrupt(request):
-            nodes.interrupt_processing()
-            return web.Response(status=200)
+            # nodes.interrupt_processing()
+            return web.Response(status=403)
 
         @routes.post("/free")
         async def post_free(request):
