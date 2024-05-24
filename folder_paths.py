@@ -81,7 +81,11 @@ def get_input_directory(user_hash):
         import sys
         traceback.print_stack(file=sys.stdout)
         raise Exception("missed user_hash from get_input_directory")
-    return os.path.join(output_directory, user_hash, "comfyui", "input")
+    d = os.path.join(output_directory, user_hash, "comfyui", "input")
+    if not os.path.exists(d):
+        os.mkdir(d)
+    return d
+
 
 
 #NOTE: used in http server so don't put folders that should not be accessed remotely
