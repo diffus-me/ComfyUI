@@ -1464,7 +1464,7 @@ class PreviewImage(SaveImage):
     def INPUT_TYPES(s):
         return {"required":
                     {"images": ("IMAGE", ), },
-                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
+                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO", "user_hash": "USER_HASH"},
                 }
 
 class LoadImage:
