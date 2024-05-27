@@ -442,15 +442,17 @@ class PromptServer():
 
         @routes.get("/history")
         async def get_history(request):
-            max_items = request.rel_url.query.get("max_items", None)
-            if max_items is not None:
-                max_items = int(max_items)
-            return web.json_response(self.prompt_queue.get_history(max_items=max_items))
+            # max_items = request.rel_url.query.get("max_items", None)
+            # if max_items is not None:
+            #     max_items = int(max_items)
+            # return web.json_response(self.prompt_queue.get_history(max_items=max_items))
+            return web.json_response([])
 
         @routes.get("/history/{prompt_id}")
         async def get_history(request):
-            prompt_id = request.match_info.get("prompt_id", None)
-            return web.json_response(self.prompt_queue.get_history(prompt_id=prompt_id))
+            # prompt_id = request.match_info.get("prompt_id", None)
+            # return web.json_response(self.prompt_queue.get_history(prompt_id=prompt_id))
+            return web.json_response({})
 
         @routes.get("/queue")
         async def get_queue(request):
@@ -534,16 +536,16 @@ class PromptServer():
 
         @routes.post("/history")
         async def post_history(request):
-            json_data =  await request.json()
-            if "clear" in json_data:
-                if json_data["clear"]:
-                    self.prompt_queue.wipe_history()
-            if "delete" in json_data:
-                to_delete = json_data['delete']
-                for id_to_delete in to_delete:
-                    self.prompt_queue.delete_history_item(id_to_delete)
+            # json_data =  await request.json()
+            # if "clear" in json_data:
+            #     if json_data["clear"]:
+            #         self.prompt_queue.wipe_history()
+            # if "delete" in json_data:
+            #     to_delete = json_data['delete']
+            #     for id_to_delete in to_delete:
+            #         self.prompt_queue.delete_history_item(id_to_delete)
 
-            return web.Response(status=200)
+            return web.Response(status=403)
         
     def add_routes(self):
         self.user_manager.add_routes(self.routes)
