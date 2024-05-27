@@ -71,9 +71,14 @@ def get_output_directory(user_hash):
         raise Exception("missed user_hash from get_output_directory")
     return os.path.join(output_directory, user_hash, "output", "comfyui", datetime.datetime.now().strftime("%Y-%m-%d"))
 
-def get_temp_directory():
-    global temp_directory
-    return temp_directory
+def get_temp_directory(user_hash):
+    if not user_hash:
+        import traceback
+        import sys
+        traceback.print_stack(file=sys.stdout)
+        raise Exception("missed user_hash from get_temp_directory")
+    return os.path.join(output_directory, user_hash, "comfyui", "temp")
+
 
 def get_input_directory(user_hash):
     if not user_hash:
@@ -83,7 +88,7 @@ def get_input_directory(user_hash):
         raise Exception("missed user_hash from get_input_directory")
     d = os.path.join(output_directory, user_hash, "comfyui", "input")
     if not os.path.exists(d):
-        os.mkdir(d)
+        os.makedirs(d, exist_ok=True)
     return d
 
 
@@ -93,7 +98,7 @@ def get_directory_by_type(type_name, user_hash):
     if type_name == "output":
         return get_output_directory(user_hash)
     if type_name == "temp":
-        return get_temp_directory()
+        return get_temp_directory(user_hash)
     if type_name == "input":
         return get_input_directory(user_hash)
     return None
@@ -109,7 +114,7 @@ def annotated_filepath(name, user_hash):
         base_dir = get_input_directory(user_hash)
         name = name[:-8]
     elif name.endswith("[temp]"):
-        base_dir = get_temp_directory()
+        base_dir = get_temp_directory(user_hash)
         name = name[:-7]
     else:
         return name, None
