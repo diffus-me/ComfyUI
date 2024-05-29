@@ -8,12 +8,15 @@ import inspect
 from typing import List, Literal, NamedTuple, Optional
 
 import torch
+
+import execution_context
+import node_helpers
 import nodes
 
 import comfy.model_management
 
-def get_input_data(inputs, class_def, unique_id, outputs={}, prompt={}, extra_data={}):
-    valid_inputs = nodes.get_node_input_types(class_def, extra_data.get('user_hash', ''))
+def get_input_data(context: execution_context.ExecutionContext, inputs, class_def, unique_id, outputs={}, prompt={}, extra_data={}):
+    valid_inputs = node_helpers.get_node_input_types(context, class_def)
     input_data_all = {}
     for x in inputs:
         input_data = inputs[x]
@@ -39,7 +42,9 @@ def get_input_data(inputs, class_def, unique_id, outputs={}, prompt={}, extra_da
             if h[x] == "UNIQUE_ID":
                 input_data_all[x] = [unique_id]
             if h[x] == "USER_HASH":
-                input_data_all[x] = [extra_data.get('user_hash', '')]
+                input_data_all[x] = [context.user_hash]
+            if h[x] == "EXECUTION_CONTEXT":
+                input_data_all[x] = [context]
     return input_data_all
 
 def map_node_over_list(obj, input_data_all, func, allow_interrupt=False):
@@ -118,7 +123,7 @@ def format_value(x):
     else:
         return str(x)
 
-def recursive_execute(server, prompt, outputs, current_item, extra_data, executed, prompt_id, outputs_ui, object_storage):
+def recursive_execute(server, context: execution_context.ExecutionContext, prompt, outputs, current_item, extra_data, executed, prompt_id, outputs_ui, object_storage):
     unique_id = current_item
     inputs = prompt[unique_id]['inputs']
     class_type = prompt[unique_id]['class_type']
@@ -133,14 +138,14 @@ def recursive_execute(server, prompt, outputs, current_item, extra_data, execute
             input_unique_id = input_data[0]
             output_index = input_data[1]
             if input_unique_id not in outputs:
-                result = recursive_execute(server, prompt, outputs, input_unique_id, extra_data, executed, prompt_id, outputs_ui, object_storage)
+                result = recursive_execute(server, context, prompt, outputs, input_unique_id, extra_data, executed, prompt_id, outputs_ui, object_storage)
                 if result[0] is not True:
                     # Another node failed further upstream
                     return result
 
     input_data_all = None
     try:
-        input_data_all = get_input_data(inputs, class_def, unique_id, outputs, prompt, extra_data)
+        input_data_all = get_input_data(context, inputs, class_def, unique_id, outputs, prompt, extra_data)
         if server.client_id is not None:
             server.last_node_id = unique_id
             server.send_sync("executing", { "node": unique_id, "prompt_id": prompt_id }, server.client_id)
@@ -217,7 +222,7 @@ def recursive_will_execute(prompt, outputs, current_item, memo={}):
     memo[unique_id] = will_execute + [unique_id]
     return memo[unique_id]
 
-def recursive_output_delete_if_changed(prompt, old_prompt, outputs, current_item, extra_data):
+def recursive_output_delete_if_changed(context: execution_context.ExecutionContext, prompt, old_prompt, outputs, current_item, extra_data):
     unique_id = current_item
     inputs = prompt[unique_id]['inputs']
     class_type = prompt[unique_id]['class_type']
@@ -230,7 +235,7 @@ def recursive_output_delete_if_changed(prompt, old_prompt, outputs, current_item
         if unique_id in old_prompt and 'is_changed' in old_prompt[unique_id]:
             is_changed_old = old_prompt[unique_id]['is_changed']
         if 'is_changed' not in prompt[unique_id]:
-            input_data_all = get_input_data(inputs, class_def, unique_id, outputs, extra_data=extra_data)
+            input_data_all = get_input_data(context, inputs, class_def, unique_id, outputs, extra_data=extra_data)
             if input_data_all is not None:
                 try:
                     #is_changed = class_def.IS_CHANGED(**input_data_all)
@@ -257,7 +262,7 @@ def recursive_output_delete_if_changed(prompt, old_prompt, outputs, current_item
                     input_unique_id = input_data[0]
                     output_index = input_data[1]
                     if input_unique_id in outputs:
-                        to_delete = recursive_output_delete_if_changed(prompt, old_prompt, outputs, input_unique_id, extra_data)
+                        to_delete = recursive_output_delete_if_changed(context, prompt, old_prompt, outputs, input_unique_id, extra_data)
                     else:
                         to_delete = True
                     if to_delete:
@@ -329,7 +334,7 @@ class PromptExecutor:
             d = self.outputs.pop(o)
             del d
 
-    def execute(self, prompt, prompt_id, extra_data={}, execute_outputs=[]):
+    def execute(self, context: execution_context.ExecutionContext, prompt, prompt_id, extra_data={}, execute_outputs=[]):
         nodes.interrupt_processing(False)
 
         if "client_id" in extra_data:
@@ -362,7 +367,7 @@ class PromptExecutor:
                 del d
 
             for x in prompt:
-                recursive_output_delete_if_changed(prompt, self.old_prompt, self.outputs, x, extra_data)
+                recursive_output_delete_if_changed(context, prompt, self.old_prompt, self.outputs, x, extra_data)
 
             current_outputs = set(self.outputs.keys())
             for x in list(self.outputs_ui.keys()):
@@ -390,7 +395,7 @@ class PromptExecutor:
                 # This call shouldn't raise anything if there's an error deep in
                 # the actual SD code, instead it will report the node where the
                 # error was raised
-                self.success, error, ex = recursive_execute(self.server, prompt, self.outputs, output_node_id, extra_data, executed, prompt_id, self.outputs_ui, self.object_storage)
+                self.success, error, ex = recursive_execute(self.server, context, prompt, self.outputs, output_node_id, extra_data, executed, prompt_id, self.outputs_ui, self.object_storage)
                 if self.success is not True:
                     self.handle_execution_error(prompt_id, prompt, current_outputs, executed, error, ex)
                     break
@@ -403,7 +408,7 @@ class PromptExecutor:
 
 
 
-def validate_inputs(prompt, item, validated, user_hash):
+def validate_inputs(context: execution_context.ExecutionContext, prompt, item, validated):
     unique_id = item
     if unique_id in validated:
         return validated[unique_id]
@@ -412,7 +417,7 @@ def validate_inputs(prompt, item, validated, user_hash):
     class_type = prompt[unique_id]['class_type']
     obj_class = nodes.NODE_CLASS_MAPPINGS[class_type]
 
-    class_inputs = nodes.get_node_input_types(obj_class, user_hash)
+    class_inputs = node_helpers.get_node_input_types(context, obj_class)
     required_inputs = class_inputs['required']
 
     errors = []
@@ -473,7 +478,7 @@ def validate_inputs(prompt, item, validated, user_hash):
                 errors.append(error)
                 continue
             try:
-                r = validate_inputs(prompt, o_id, validated, user_hash)
+                r = validate_inputs(context, prompt, o_id, validated)
                 if r[0] is False:
                     # `r` will be set in `validated[o_id]` already
                     valid = False
@@ -579,7 +584,7 @@ def validate_inputs(prompt, item, validated, user_hash):
                         continue
 
     if len(validate_function_inputs) > 0:
-        input_data_all = get_input_data(inputs, obj_class, unique_id, extra_data={'user_hash': user_hash})
+        input_data_all = get_input_data(context, inputs, obj_class, unique_id)
         input_filtered = {}
         for x in input_data_all:
             if x in validate_function_inputs:
@@ -621,7 +626,7 @@ def full_type_name(klass):
         return klass.__qualname__
     return module + '.' + klass.__qualname__
 
-def validate_prompt(prompt, user_hash):
+def validate_prompt(context: execution_context.ExecutionContext, prompt):
     outputs = set()
     for x in prompt:
         class_ = nodes.NODE_CLASS_MAPPINGS[prompt[x]['class_type']]
@@ -645,7 +650,7 @@ def validate_prompt(prompt, user_hash):
         valid = False
         reasons = []
         try:
-            m = validate_inputs(prompt, o, validated, user_hash)
+            m = validate_inputs(context, prompt, o, validated)
             valid = m[0]
             reasons = m[1]
         except Exception as ex:
