@@ -1,9 +1,10 @@
-import datetime
 import os
 import sys
 import asyncio
 import traceback
 
+import execution_context
+import node_helpers
 import nodes
 import folder_paths
 import execution
@@ -165,12 +166,12 @@ class PromptServer():
 
             return type_dir, dir_type
 
-        def image_upload(post, user_hash, image_save_function=None):
+        def image_upload(context: execution_context.ExecutionContext, post, image_save_function=None):
             image = post.get("image")
             overwrite = post.get("overwrite")
 
             image_upload_type = post.get("type")
-            upload_dir, image_upload_type = get_dir_by_type(image_upload_type, user_hash)
+            upload_dir, image_upload_type = get_dir_by_type(image_upload_type, context.user_hash)
 
             if image and image.file:
                 filename = image.filename
@@ -211,17 +212,17 @@ class PromptServer():
         @routes.post("/upload/image")
         async def upload_image(request):
             post = await request.post()
-            user_hash = request.headers.get('x-diffus-user-hash', '')
-            return image_upload(post, user_hash)
+            context = execution_context.ExecutionContext(request=request)
+            return image_upload(context, post)
 
 
         @routes.post("/upload/mask")
         async def upload_mask(request):
             post = await request.post()
-            user_hash = request.headers.get('x-diffus-user-hash', '')
+            context = execution_context.ExecutionContext(request=request)
             def image_save_function(image, post, filepath):
                 original_ref = json.loads(post.get("original_ref"))
-                filename, output_dir = folder_paths.annotated_filepath(original_ref['filename'], user_hash)
+                filename, output_dir = folder_paths.annotated_filepath(original_ref['filename'], context.user_hash)
 
                 # validation for security: prevent accessing arbitrary path
                 if filename[0] == '/' or '..' in filename:
@@ -229,7 +230,7 @@ class PromptServer():
 
                 if output_dir is None:
                     type = original_ref.get("type", "output")
-                    output_dir = folder_paths.get_directory_by_type(type, user_hash)
+                    output_dir = folder_paths.get_directory_by_type(type, context.user_hash)
 
                 if output_dir is None:
                     return web.Response(status=400)
@@ -256,14 +257,14 @@ class PromptServer():
                         original_pil.putalpha(new_alpha)
                         original_pil.save(filepath, compress_level=4, pnginfo=metadata)
 
-            return image_upload(post, user_hash, image_save_function)
+            return image_upload(context, post, image_save_function)
 
         @routes.get("/view")
         async def view_image(request):
-            user_hash = request.headers.get('x-diffus-user-hash', '')
+            context = execution_context.ExecutionContext(request=request)
             if "filename" in request.rel_url.query:
                 filename = request.rel_url.query["filename"]
-                filename,output_dir = folder_paths.annotated_filepath(filename, user_hash)
+                filename,output_dir = folder_paths.annotated_filepath(filename, context.user_hash)
 
                 # validation for security: prevent accessing arbitrary path
                 if filename[0] == '/' or '..' in filename:
@@ -271,7 +272,7 @@ class PromptServer():
 
                 if output_dir is None:
                     type = request.rel_url.query.get("type", "output")
-                    output_dir = folder_paths.get_directory_by_type(type, user_hash)
+                    output_dir = folder_paths.get_directory_by_type(type, context.user_hash)
                 if output_dir is None:
                     return web.Response(status=400)
 
@@ -399,10 +400,10 @@ class PromptServer():
         async def get_prompt(request):
             return web.json_response(self.get_queue_info())
 
-        def node_info(node_class, user_hash):
+        def node_info(context: execution_context.ExecutionContext, node_class):
             obj_class = nodes.NODE_CLASS_MAPPINGS[node_class]
             info = {}
-            info['input'] = nodes.get_node_input_types(obj_class, user_hash)
+            info['input'] = node_helpers.get_node_input_types(context, obj_class)
             info['output'] = obj_class.RETURN_TYPES
             info['output_is_list'] = obj_class.OUTPUT_IS_LIST if hasattr(obj_class, 'OUTPUT_IS_LIST') else [False] * len(obj_class.RETURN_TYPES)
             info['output_name'] = obj_class.RETURN_NAMES if hasattr(obj_class, 'RETURN_NAMES') else info['output']
@@ -422,10 +423,10 @@ class PromptServer():
         @routes.get("/object_info")
         async def get_object_info(request):
             out = {}
-            user_hash = request.headers.get('x-diffus-user-hash', '')
+            context = execution_context.ExecutionContext(request)
             for x in nodes.NODE_CLASS_MAPPINGS:
                 try:
-                    out[x] = node_info(x, user_hash)
+                    out[x] = node_info(context, x)
                 except Exception as e:
                     logging.error(f"[ERROR] An error occurred while retrieving information for the '{x}' node.")
                     logging.error(traceback.format_exc())
@@ -434,10 +435,10 @@ class PromptServer():
         @routes.get("/object_info/{node_class}")
         async def get_object_info_node(request):
             node_class = request.match_info.get("node_class", None)
-            user_hash = request.headers.get('x-diffus-user-hash', '')
+            context = execution_context.ExecutionContext(request=request)
             out = {}
             if (node_class is not None) and (node_class in nodes.NODE_CLASS_MAPPINGS):
-                out[node_class] = node_info(node_class, user_hash)
+                out[node_class] = node_info(context, node_class)
             return web.json_response(out)
 
         @routes.get("/history")
@@ -467,7 +468,6 @@ class PromptServer():
             logging.info("got prompt")
             resp_code = 200
             out_string = ""
-            user_hash = request.headers.get('x-diffus-user-hash', '')
             json_data =  await request.json()
             json_data = self.trigger_on_prompt(json_data)
 
@@ -483,19 +483,20 @@ class PromptServer():
 
             if "prompt" in json_data:
                 prompt = json_data["prompt"]
-                valid = execution.validate_prompt(prompt, user_hash)
                 extra_data = {}
                 if "extra_data" in json_data:
                     extra_data = json_data["extra_data"]
 
-                extra_data['user_hash'] = user_hash
-
                 if "client_id" in json_data:
                     extra_data["client_id"] = json_data["client_id"]
+
+                context = execution_context.ExecutionContext(request=request, extra_data=extra_data)
+
+                valid = execution.validate_prompt(context, prompt)
                 if valid[0]:
                     prompt_id = str(uuid.uuid4())
                     outputs_to_execute = valid[2]
-                    self.prompt_queue.put((number, prompt_id, prompt, extra_data, outputs_to_execute))
+                    self.prompt_queue.put((number, prompt_id, prompt, extra_data, outputs_to_execute, context))
                     response = {"prompt_id": prompt_id, "number": number, "node_errors": valid[3]}
                     return web.json_response(response)
                 else:
