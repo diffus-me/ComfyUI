@@ -44,27 +44,6 @@ def interrupt_processing(value=True):
     comfy.model_management.interrupt_current_processing(value)
 
 
-def get_node_input_types(node_class, user_hash):
-    signature = inspect.signature(node_class.INPUT_TYPES)
-    positional_args = []
-    inputs = []
-    for i, param in enumerate(signature.parameters.values()):
-        if param.kind not in (param.POSITIONAL_ONLY, param.POSITIONAL_OR_KEYWORD):
-            break
-        positional_args.append(param)
-    for i, param in enumerate(positional_args):
-        if param.annotation == str and param.name == 'user_hash':
-            inputs.insert(i, user_hash)
-    while len(inputs) < len(positional_args):
-        i = len(inputs)
-        param = positional_args[i]
-        if param.default == param.empty:
-            inputs.append(None)
-        else:
-            inputs.append(param.default)
-    return node_class.INPUT_TYPES(*inputs)
-
-
 MAX_RESOLUTION=16384
 
 class CLIPTextEncode:
