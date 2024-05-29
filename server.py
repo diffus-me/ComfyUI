@@ -457,9 +457,9 @@ class PromptServer():
         @routes.get("/queue")
         async def get_queue(request):
             queue_info = {}
-            current_queue = self.prompt_queue.get_current_queue()
-            queue_info['queue_running'] = current_queue[0]
-            queue_info['queue_pending'] = current_queue[1]
+            # current_queue = self.prompt_queue.get_current_queue()
+            queue_info['queue_running'] = []
+            queue_info['queue_pending'] = []
             return web.json_response(queue_info)
 
         @routes.post("/prompt")
@@ -475,9 +475,9 @@ class PromptServer():
                 number = float(json_data['number'])
             else:
                 number = self.number
-                if "front" in json_data:
-                    if json_data['front']:
-                        number = -number
+                # if "front" in json_data:
+                #     if json_data['front']:
+                #         number = -number
 
                 self.number += 1
 
