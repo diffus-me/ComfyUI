@@ -1,10 +1,24 @@
 import os
+import pathlib
 from typing import Literal
 
 from pydantic import BaseModel
 from sqlalchemy.orm import Session, Query
 
 from diffus import models, database
+
+MODEL_BINARY_CONTAINER = os.getenv('MODEL_BINARY_CONTAINER')
+MODEL_CONFIG_CONTAINER = os.getenv('MODEL_CONFIG_CONTAINER')
+
+
+def get_binary_path(sha256: str):
+    sha256 = sha256.lower()
+    return pathlib.Path(MODEL_BINARY_CONTAINER, sha256[0:2], sha256[2:4], sha256[4:6], sha256)
+
+
+def get_config_path(sha256: str) -> pathlib.Path:
+    sha256 = sha256.lower()
+    return pathlib.Path(MODEL_CONFIG_CONTAINER, sha256)
 
 
 class ModelInfo(BaseModel):
@@ -87,8 +101,7 @@ def get_favorite_model_full_path(user_id: str, folder_name: str, name: str):
         query = _make_favorite_model_query(session)
         query = _filter_favorite_model_by_model_type(query, user_id, model_type)
         query = _filter_model_by_name(query, name)
-        model = create_model_info(session.scalar(query))
-        return model.filename
+        return create_model_info(session.scalar(query))
 
 
 def _make_favorite_model_query(session: Session) -> Query:

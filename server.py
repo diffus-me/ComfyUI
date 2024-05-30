@@ -129,12 +129,12 @@ class PromptServer():
             return web.FileResponse(os.path.join(self.web_root, "index.html"))
 
         @routes.get("/embeddings")
-        def get_embeddings(self):
-            embeddings = folder_paths.get_filename_list("embeddings")
+        async def get_embeddings(request):
+            embeddings = folder_paths.get_filename_list(execution_context.ExecutionContext(request), "embeddings")
             return web.json_response(list(map(lambda a: os.path.splitext(a)[0], embeddings)))
 
         @routes.get("/health/check")
-        def get_embeddings(self):
+        async def health_check(request):
             return web.json_response({'message': 'OK'})
 
         @routes.get("/extensions")
@@ -359,7 +359,8 @@ class PromptServer():
             if not filename.endswith(".safetensors"):
                 return web.Response(status=404)
 
-            safetensors_path = folder_paths.get_full_path(folder_name, filename)
+            context = execution_context.ExecutionContext(request)
+            safetensors_path = folder_paths.get_full_path(context, folder_name, filename)
             if safetensors_path is None:
                 return web.Response(status=404)
             out = comfy.utils.safetensors_header(safetensors_path, max_size=1024*1024)

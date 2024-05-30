@@ -367,7 +367,8 @@ class SamplerCustom:
                     "sampler": ("SAMPLER", ),
                     "sigmas": ("SIGMAS", ),
                     "latent_image": ("LATENT", ),
-                     }
+                     },
+                "hidden": {"context": "EXECUTION_CONTEXT"}
                 }
 
     RETURN_TYPES = ("LATENT","LATENT")
@@ -377,7 +378,7 @@ class SamplerCustom:
 
     CATEGORY = "sampling/custom_sampling"
 
-    def sample(self, model, add_noise, noise_seed, cfg, positive, negative, sampler, sigmas, latent_image):
+    def sample(self, model, add_noise, noise_seed, cfg, positive, negative, sampler, sigmas, latent_image, context):
         latent = latent_image
         latent_image = latent["samples"]
         if not add_noise:
@@ -390,7 +391,7 @@ class SamplerCustom:
             noise_mask = latent["noise_mask"]
 
         x0_output = {}
-        callback = latent_preview.prepare_callback(model, sigmas.shape[-1] - 1, x0_output)
+        callback = latent_preview.prepare_callback(context, model, sigmas.shape[-1] - 1, x0_output)
 
         disable_pbar = not comfy.utils.PROGRESS_BAR_ENABLED
         samples = comfy.sample.sample_custom(model, noise, cfg, sampler, sigmas, positive, negative, latent_image, noise_mask=noise_mask, callback=callback, disable_pbar=disable_pbar, seed=noise_seed)
@@ -525,7 +526,8 @@ class SamplerCustomAdvanced:
                     "sampler": ("SAMPLER", ),
                     "sigmas": ("SIGMAS", ),
                     "latent_image": ("LATENT", ),
-                     }
+                     },
+                "hidden": {"context": "EXECUTION_CONTEXT"}
                 }
 
     RETURN_TYPES = ("LATENT","LATENT")
@@ -535,7 +537,7 @@ class SamplerCustomAdvanced:
 
     CATEGORY = "sampling/custom_sampling"
 
-    def sample(self, noise, guider, sampler, sigmas, latent_image):
+    def sample(self, noise, guider, sampler, sigmas, latent_image, context):
         latent = latent_image
         latent_image = latent["samples"]
 
@@ -544,7 +546,7 @@ class SamplerCustomAdvanced:
             noise_mask = latent["noise_mask"]
 
         x0_output = {}
-        callback = latent_preview.prepare_callback(guider.model_patcher, sigmas.shape[-1] - 1, x0_output)
+        callback = latent_preview.prepare_callback(context, guider.model_patcher, sigmas.shape[-1] - 1, x0_output)
 
         disable_pbar = not comfy.utils.PROGRESS_BAR_ENABLED
         samples = guider.sample(noise.generate_noise(latent), latent_image, sampler, sigmas, denoise_mask=noise_mask, callback=callback, disable_pbar=disable_pbar, seed=noise.seed)

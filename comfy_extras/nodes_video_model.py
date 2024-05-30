@@ -1,3 +1,4 @@
+import execution_context
 import nodes
 import torch
 import comfy.utils
@@ -8,16 +9,17 @@ import comfy_extras.nodes_model_merging
 
 class ImageOnlyCheckpointLoader:
     @classmethod
-    def INPUT_TYPES(s):
-        return {"required": { "ckpt_name": (folder_paths.get_filename_list("checkpoints"), ),
-                             }}
+    def INPUT_TYPES(s, context: execution_context.ExecutionContext):
+        return {"required": { "ckpt_name": (folder_paths.get_filename_list(context, "checkpoints"), ),
+                             },
+                "hidden": {"context": "EXECUTION_CONTEXT"}}
     RETURN_TYPES = ("MODEL", "CLIP_VISION", "VAE")
     FUNCTION = "load_checkpoint"
 
     CATEGORY = "loaders/video_models"
 
-    def load_checkpoint(self, ckpt_name, output_vae=True, output_clip=True):
-        ckpt_path = folder_paths.get_full_path("checkpoints", ckpt_name)
+    def load_checkpoint(self, ckpt_name, output_vae=True, output_clip=True, context: execution_context.ExecutionContext=None):
+        ckpt_path = folder_paths.get_full_path(context, "checkpoints", ckpt_name)
         out = comfy.sd.load_checkpoint_guess_config(ckpt_path, output_vae=True, output_clip=False, output_clipvision=True, embedding_directory=folder_paths.get_folder_paths("embeddings"))
         return (out[0], out[3], out[2])
 
