@@ -11,7 +11,13 @@ import itertools
 def load_torch_file(ckpt, safe_load=False, device=None):
     if device is None:
         device = torch.device("cpu")
-    if ckpt.lower().endswith(".safetensors"):
+    if hasattr(ckpt, 'is_safetensors') and hasattr(ckpt, 'filename') and ckpt.is_safetensors:
+        is_safetensors = ckpt.is_safetensors
+        ckpt = ckpt.filename
+    else:
+        is_safetensors = ckpt.lower().endswith(".safetensors")
+
+    if is_safetensors:
         sd = safetensors.torch.load_file(ckpt, device=device.type)
     else:
         if safe_load:

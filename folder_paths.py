@@ -4,6 +4,10 @@ import time
 import logging
 from typing import Set, List, Dict, Tuple
 
+import diffus.repository
+import diffus.models
+import execution_context
+
 supported_pt_extensions: Set[str] = set(['.ckpt', '.pt', '.bin', '.pth', '.safetensors', '.pkl'])
 
 SupportedFileExtensionsType = Set[str]
@@ -191,19 +195,21 @@ def filter_files_extensions(files, extensions):
     return sorted(list(filter(lambda a: os.path.splitext(a)[-1].lower() in extensions or len(extensions) == 0, files)))
 
 
-
-def get_full_path(folder_name, filename):
-    global folder_names_and_paths
-    if folder_name not in folder_names_and_paths:
-        return None
-    folders = folder_names_and_paths[folder_name]
-    filename = os.path.relpath(os.path.join("/", filename), "/")
-    for x in folders[0]:
-        full_path = os.path.join(x, filename)
-        if os.path.isfile(full_path):
-            return full_path
-        elif os.path.islink(full_path):
-            logging.warning("WARNING path {} exists but doesn't link anywhere, skipping.".format(full_path))
+def get_full_path(context: execution_context.ExecutionContext, folder_name, filename):
+    if folder_name in diffus.models.FAVORITE_MODEL_TYPES:
+        return diffus.repository.get_favorite_model_full_path(context.user_id, folder_name, filename)
+    else:
+        global folder_names_and_paths
+        if folder_name not in folder_names_and_paths:
+            return None
+        folders = folder_names_and_paths[folder_name]
+        filename = os.path.relpath(os.path.join("/", filename), "/")
+        for x in folders[0]:
+            full_path = os.path.join(x, filename)
+            if os.path.isfile(full_path):
+                return full_path
+            elif os.path.islink(full_path):
+                logging.warning("WARNING path {} exists but doesn't link anywhere, skipping.".format(full_path))
 
     return None
 
@@ -240,13 +246,18 @@ def cached_filename_list_(folder_name):
 
     return out
 
-def get_filename_list(folder_name):
-    out = cached_filename_list_(folder_name)
-    if out is None:
-        out = get_filename_list_(folder_name)
-        global filename_list_cache
-        filename_list_cache[folder_name] = out
+
+def get_filename_list(context: execution_context.ExecutionContext, folder_name):
+    if folder_name in diffus.models.FAVORITE_MODEL_TYPES:
+        return diffus.repository.list_favorite_model_by_model_type(context.user_id, folder_name)
+    else:
+        out = cached_filename_list_(folder_name)
+        if out is None:
+            out = get_filename_list_(folder_name)
+            global filename_list_cache
+            filename_list_cache[folder_name] = out
     return list(out[0])
+
 
 def get_save_image_path(filename_prefix, output_dir, image_width=0, image_height=0):
     def map_filename(filename):
