@@ -1421,7 +1421,7 @@ class SaveImage:
         return {"required":
                     {"images": ("IMAGE", ),
                      "filename_prefix": ("STRING", {"default": "ComfyUI"})},
-                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO", "context": "EXECUTION_CONTEXT"},
+                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO", "context": "EXECUTION_CONTEXT", "user_hash": "USER_HASH"},
                 }
 
     RETURN_TYPES = ()
@@ -1431,9 +1431,11 @@ class SaveImage:
 
     CATEGORY = "image"
 
-    def save_images(self, images, filename_prefix="ComfyUI", prompt=None, extra_pnginfo=None, context: execution_context.ExecutionContext=None):
+    def save_images(self, images, filename_prefix="ComfyUI", prompt=None, extra_pnginfo=None, context: execution_context.ExecutionContext = None, user_hash: str = ''):
         filename_prefix += self.prefix_append
-        output_dir = folder_paths.get_output_directory(context.user_hash)
+        if not user_hash:
+            user_hash = context.user_hash
+        output_dir = folder_paths.get_output_directory(user_hash)
         full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, output_dir, images[0].shape[1], images[0].shape[0])
         results = list()
         ts = time.time()
