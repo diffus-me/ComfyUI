@@ -403,10 +403,15 @@ class PromptServer():
 
         def node_info(context: execution_context.ExecutionContext, node_class):
             obj_class = nodes.NODE_CLASS_MAPPINGS[node_class]
+            if callable(obj_class.RETURN_TYPES):
+                return_types = obj_class.RETURN_TYPES(context)
+            else:
+                return_types = obj_class.RETURN_TYPES
+
             info = {}
             info['input'] = node_helpers.get_node_input_types(context, obj_class)
-            info['output'] = obj_class.RETURN_TYPES
-            info['output_is_list'] = obj_class.OUTPUT_IS_LIST if hasattr(obj_class, 'OUTPUT_IS_LIST') else [False] * len(obj_class.RETURN_TYPES)
+            info['output'] = return_types
+            info['output_is_list'] = obj_class.OUTPUT_IS_LIST if hasattr(obj_class, 'OUTPUT_IS_LIST') else [False] * len(return_types)
             info['output_name'] = obj_class.RETURN_NAMES if hasattr(obj_class, 'RETURN_NAMES') else info['output']
             info['name'] = node_class
             info['display_name'] = nodes.NODE_DISPLAY_NAME_MAPPINGS[node_class] if node_class in nodes.NODE_DISPLAY_NAME_MAPPINGS.keys() else node_class
