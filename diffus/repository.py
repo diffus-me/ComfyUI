@@ -72,6 +72,9 @@ class ModelInfo(BaseModel):
             self.config_filename
         ), f"Config '{self.config_sha256}' for model '{self.title}' does not exist"
 
+    def __str__(self):
+        return self.name
+
 
 def create_model_info(record: models.Model) -> ModelInfo:
     return ModelInfo(
