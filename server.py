@@ -3,6 +3,7 @@ import sys
 import asyncio
 import traceback
 
+import diffus.message
 import execution_context
 import node_helpers
 import nodes
@@ -92,6 +93,8 @@ class PromptServer():
         self.client_id = None
 
         self.on_prompt_handlers = []
+
+        self.dffis_message_queue = diffus.message.MessageQueue()
 
         @routes.get('/ws')
         async def websocket_handler(request):
@@ -476,6 +479,7 @@ class PromptServer():
             out_string = ""
             json_data =  await request.json()
             json_data = self.trigger_on_prompt(json_data)
+            context = execution_context.ExecutionContext(request)
 
             if "number" in json_data:
                 number = float(json_data['number'])
@@ -493,8 +497,9 @@ class PromptServer():
                 if "extra_data" in json_data:
                     extra_data = json_data["extra_data"]
 
-                if "client_id" in json_data:
-                    extra_data["client_id"] = json_data["client_id"]
+                # if "client_id" in json_data:
+                #     extra_data["client_id"] = json_data["client_id"]
+                extra_data["client_id"] = context.user_id
 
                 context = execution_context.ExecutionContext(request=request, extra_data=extra_data)
 
@@ -618,6 +623,7 @@ class PromptServer():
 
     async def send_bytes(self, event, data, sid=None):
         message = self.encode_bytes(event, data)
+        self.dffis_message_queue.send_message(sid, bytes(message))
 
         if sid is None:
             sockets = list(self.sockets.values())
@@ -628,6 +634,7 @@ class PromptServer():
 
     async def send_json(self, event, data, sid=None):
         message = {"type": event, "data": data}
+        self.dffis_message_queue.send_message(sid, json.dumps(message))
 
         if sid is None:
             sockets = list(self.sockets.values())
