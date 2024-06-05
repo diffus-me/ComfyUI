@@ -1,4 +1,8 @@
 import comfy.options
+import diffus.message
+import diffus.task_queue
+import diffus.system_mornitor
+
 comfy.options.enable_args_parsing()
 
 import os
@@ -94,7 +98,7 @@ def cuda_malloc_warning():
         if cuda_malloc_warning:
             logging.warning("\nWARNING: this card most likely does not support cuda-malloc, if you get \"CUDA error\" please run ComfyUI with: --disable-cuda-malloc\n")
 
-def prompt_worker(q, server):
+def prompt_worker(q, server, task_dispatcher):
     e = execution.PromptExecutor(server)
     last_gc_collect = 0
     need_gc = False
@@ -113,7 +117,18 @@ def prompt_worker(q, server):
             server.last_prompt_id = prompt_id
             context = item[-1]
 
-            e.execute(context, item[2], prompt_id, item[3], item[4])
+            with diffus.system_mornitor.monitor_call_context(
+                    task_dispatcher,
+                    item[3],
+                    'comfy',
+                    'comfy',
+                    prompt_id,
+                    is_intermediate=False,
+                    only_available_for=['basic', 'plus', 'pro', 'api'],
+            ) as result_encoder:
+                e.execute(context, item[2], prompt_id, item[3], item[4])
+                result_encoder(e.success, e.status_messages)
+
             need_gc = True
             q.task_done(item_id,
                         e.outputs_ui,
@@ -210,6 +225,7 @@ if __name__ == "__main__":
     asyncio.set_event_loop(loop)
     server = server.PromptServer(loop)
     q = execution.PromptQueue(server)
+    task_dispatcher = diffus.task_queue.TaskDispatcher(q, server.routes)
 
     extra_model_paths_config_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "extra_model_paths.yaml")
     if os.path.isfile(extra_model_paths_config_path):
@@ -226,7 +242,7 @@ if __name__ == "__main__":
     server.add_routes()
     hijack_progress(server)
 
-    threading.Thread(target=prompt_worker, daemon=True, args=(q, server,)).start()
+    threading.Thread(target=prompt_worker, daemon=True, args=(q, server, task_dispatcher,)).start()
 
     if args.output_directory:
         output_dir = os.path.abspath(args.output_directory)
@@ -255,9 +271,15 @@ if __name__ == "__main__":
             webbrowser.open(f"{scheme}://{address}:{port}")
         call_on_start = startup_server
 
+    def on_startup(scheme, address, port):
+        if args.auto_launch:
+            startup_server(scheme, address, port)
+        task_dispatcher.start()
+
     try:
-        loop.run_until_complete(run(server, address=args.listen, port=args.port, verbose=not args.dont_print_server, call_on_start=call_on_start))
+        loop.run_until_complete(run(server, address=args.listen, port=args.port, verbose=not args.dont_print_server, call_on_start=on_startup))
     except KeyboardInterrupt:
         logging.info("\nStopped server")
+        task_dispatcher.stop()
 
     cleanup_temp()

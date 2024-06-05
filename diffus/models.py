@@ -1,8 +1,4 @@
-import os
-from typing import Literal
-
 from sqlalchemy import Column, Integer, String
-from sqlalchemy.orm import Session, Query
 
 from diffus import database
 
