@@ -17,3 +17,5 @@ spandrel
 PyMySQL
 SQLAlchemy
 pydantic
+requests
+redis
