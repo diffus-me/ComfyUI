@@ -160,7 +160,9 @@ def _post_task(_task_state: _State, request_obj, retry=1):
 
 def _fetch_task(_task_state: _State, fetch_task_timeout=5):
     if not _task_state.current_task and _task_state.remaining_tasks == 0:
-        queue_name_list = [f"SD-COMFY-TASKS-{tier}" for tier in _task_state.accepted_tiers]
+        queue_name_list = []
+        for task_type in _task_state.accepted_type_types:
+            queue_name_list += [f"SD-{task_type}-TASKS-{tier}" for tier in _task_state.accepted_tiers]
         _logger.info(
             f"begin to fetch pending requests from {queue_name_list}, current task: '{_task_state.current_task}'")
         queued_task = _task_state.redis_client.blpop(queue_name_list, timeout=fetch_task_timeout)
