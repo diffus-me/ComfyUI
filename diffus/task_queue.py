@@ -3,6 +3,7 @@ import logging
 import os
 import threading
 import time
+import uuid
 
 import aiohttp.web_routedef
 from aiohttp import web
@@ -123,6 +124,8 @@ def _service_is_alive(_task_state: _State):
 
 def _post_task(_task_state: _State, request_obj, retry=1):
     task_id = request_obj['task_id']
+    if not task_id:
+        task_id = str(uuid.uuid4())
     timeout = request_obj.get('timeout', 15 * 60)
     headers = request_obj['headers']
     path = request_obj['path']

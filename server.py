@@ -505,8 +505,12 @@ class PromptServer():
 
                 valid = execution.validate_prompt(context, prompt)
                 if valid[0]:
-                    prompt_id = str(uuid.uuid4())
+                    if 'x-task-id' in request.headers:
+                        prompt_id = request.headers['x-task-id']
+                    else:
+                        prompt_id = str(uuid.uuid4())
                     outputs_to_execute = valid[2]
+                    extra_data["prompt_id"] = prompt_id
                     self.prompt_queue.put((number, prompt_id, prompt, extra_data, outputs_to_execute, context))
                     response = {"prompt_id": prompt_id, "number": number, "node_errors": valid[3]}
                     return web.json_response(response)
