@@ -1,3 +1,4 @@
+import inspect
 import json
 import logging
 import os
@@ -176,7 +177,7 @@ def after_task_finished(
 
 @contextmanager
 def monitor_call_context(
-        queue_dispatcher: diffus.task_queue.TaskDispatcher,
+        queue_dispatcher: diffus.task_queue.TaskDispatcher | None,
         extra_data: dict,
         api_name: str,
         function_name: str,
@@ -200,10 +201,8 @@ def monitor_call_context(
         except Exception as e:
             logger.error(f'{task_id}: Json encode result failed {str(e)}.')
 
-    header_dict['x-task-id'] = task_id
-
     try:
-        if not is_intermediate:
+        if not is_intermediate and queue_dispatcher:
             queue_dispatcher.on_task_started(task_id)
         task_id = before_task_started(
             header_dict,
@@ -225,5 +224,39 @@ def monitor_call_context(
         raise e
     finally:
         after_task_finished(header_dict, task_id, status, message, is_intermediate, refund_if_failed)
-        if not is_intermediate:
+        if not is_intermediate and queue_dispatcher:
             queue_dispatcher.on_task_finished(task_id, not task_is_failed, message)
+
+
+def execution_monitor(recursive_execute, ):
+    prompt_arg_index = 2
+    current_item_arg_index = 4
+    extra_data_arg_index = 5
+
+    signature = inspect.signature(recursive_execute)
+    for i, param in enumerate(signature.parameters.values()):
+        if param.name == 'prompt':
+            prompt_arg_index = i
+        elif param.name == 'current_item':
+            current_item_arg_index = i
+        elif param.name == 'extra_data':
+            extra_data_arg_index = i
+
+    def wrapper(*args, **kwargs):
+        prompt = args[prompt_arg_index]
+        extra_data = args[extra_data_arg_index]
+        unique_id = args[current_item_arg_index]
+        class_type = prompt[unique_id]['class_type']
+
+        with monitor_call_context(
+                None,
+                extra_data,
+                f'comfy.{class_type}',
+                'comfyui',
+                is_intermediate=True,
+        ) as result_encoder:
+            success, error, ex = recursive_execute(*args, **kwargs)
+            result_encoder(success, error)
+            return success, error, ex
+
+    return wrapper
