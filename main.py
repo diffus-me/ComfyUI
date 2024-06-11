@@ -116,17 +116,18 @@ def prompt_worker(q, server, task_dispatcher):
             prompt_id = item[1]
             server.last_prompt_id = prompt_id
             context = item[-1]
+            extra_data = item[3]
 
             with diffus.system_mornitor.monitor_call_context(
                     task_dispatcher,
-                    item[3],
+                    extra_data,
                     'comfy',
-                    'comfy',
+                    'comfyui',
                     prompt_id,
                     is_intermediate=False,
                     only_available_for=['basic', 'plus', 'pro', 'api'],
             ) as result_encoder:
-                e.execute(context, item[2], prompt_id, item[3], item[4])
+                e.execute(context, item[2], prompt_id, extra_data, item[4])
                 result_encoder(e.success, e.status_messages)
 
             need_gc = True
