@@ -28,6 +28,7 @@ class ServiceStatusResponse(BaseModel):
     queued_tasks: list = Field(title='QueuedTasks', default=[])
     finished_task_count: int = Field(title='FinishedTaskCount', default=0)
     failed_task_count: int = Field(title='FailedTaskCount', default=0)
+    consecutive_failed_task_count: int = Field(title='ConsecutiveFailedTaskCount', default=0)
 
 
 class ServiceStatusRequest(BaseModel):
@@ -52,6 +53,7 @@ class _State:
         self.starting_flag = True
         self.finished_task_count = 0
         self.failed_task_count = 0
+        self.consecutive_failed_task_count = 0
         self.last_error_message = ''
         self.service_interrupted = False
 
@@ -86,7 +88,8 @@ def _setup_daemon_api(_task_state: _State, routes: aiohttp.web_routedef.RouteTab
             current_task=_task_state.current_task or '',
             finished_task_count=_task_state.finished_task_count,
             failed_task_count=_task_state.failed_task_count,
-            pending_task_count=_task_state.remaining_tasks
+            pending_task_count=_task_state.remaining_tasks,
+            consecutive_failed_task_count=_task_state.consecutive_failed_task_count,
         ).model_dump()
 
         return web.json_response(resp)
@@ -123,7 +126,6 @@ def _post_task(_task_state: _State, request_obj, retry=1):
     timeout = request_obj.get('timeout', 15 * 60)
     headers = request_obj['headers']
     path = request_obj['path']
-
 
     try:
         encoded_headers = {}
@@ -231,6 +233,8 @@ class TaskDispatcher:
         self._task_state.current_task = ''
         if success:
             self._task_state.finished_task_count += 1
+            self._task_state.consecutive_failed_task_count = 0
         else:
             self._task_state.failed_task_count += 1
+            self._task_state.consecutive_failed_task_count += 1
             self._task_state.last_error_message = messages
