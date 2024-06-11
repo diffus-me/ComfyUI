@@ -1536,16 +1536,16 @@ class LoadImage:
         return (output_image, output_mask)
 
     @classmethod
-    def IS_CHANGED(s, image, user_hash):
-        image_path = folder_paths.get_annotated_filepath(image, user_hash)
+    def IS_CHANGED(s, image, context: execution_context.ExecutionContext):
+        image_path = folder_paths.get_annotated_filepath(image, context.user_hash)
         m = hashlib.sha256()
         with open(image_path, 'rb') as f:
             m.update(f.read())
         return m.digest().hex()
 
     @classmethod
-    def VALIDATE_INPUTS(s, image, user_hash):
-        if not folder_paths.exists_annotated_filepath(image, user_hash):
+    def VALIDATE_INPUTS(s, image, context: execution_context.ExecutionContext):
+        if not folder_paths.exists_annotated_filepath(image, context.user_hash):
             return "Invalid image file: {}".format(image)
 
         return True
