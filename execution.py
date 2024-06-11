@@ -9,6 +9,7 @@ from typing import List, Literal, NamedTuple, Optional
 
 import torch
 
+import diffus.system_mornitor
 import execution_context
 import node_helpers
 import nodes
@@ -123,6 +124,8 @@ def format_value(x):
     else:
         return str(x)
 
+
+@diffus.system_mornitor.execution_monitor
 def recursive_execute(server, context: execution_context.ExecutionContext, prompt, outputs, current_item, extra_data, executed, prompt_id, outputs_ui, object_storage):
     unique_id = current_item
     inputs = prompt[unique_id]['inputs']
