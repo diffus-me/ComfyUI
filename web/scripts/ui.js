@@ -505,6 +505,7 @@ export class ComfyUI {
 						type: "number",
 						value: this.batchCount,
 						min: "1",
+						max: "4",
 						style: {width: "35%", "margin-left": "0.4em"},
 						oninput: (i) => {
 							this.batchCount = i.target.value;
@@ -515,56 +516,14 @@ export class ComfyUI {
 						id: "batchCountInputRange",
 						type: "range",
 						min: "1",
-						max: "100",
+						max: "4",
 						value: this.batchCount,
 						oninput: (i) => {
 							this.batchCount = i.srcElement.value;
 							document.getElementById("batchCountInputNumber").value = i.srcElement.value;
 						},
-					}),		
+					}),
 				]),
-				$el("div",[
-					$el("label",{
-						for:"autoQueueCheckbox",
-						innerHTML: "Auto Queue"
-					}),
-					$el("input", {
-						id: "autoQueueCheckbox",
-						type: "checkbox",
-						checked: false,
-						title: "Automatically queue prompt when the queue size hits 0",
-						onchange: (e) => {
-							this.autoQueueEnabled = e.target.checked;
-							autoQueueModeEl.style.display = this.autoQueueEnabled ? "" : "none";
-						}
-					}),
-					autoQueueModeEl
-				])
-			]),
-			$el("div.comfy-menu-btns", [
-				$el("button", {
-					id: "queue-front-button",
-					textContent: "Queue Front",
-					onclick: () => app.queuePrompt(-1, this.batchCount)
-				}),
-				$el("button", {
-					$: (b) => (this.queue.button = b),
-					id: "comfy-view-queue-button",
-					textContent: "View Queue",
-					onclick: () => {
-						this.history.hide();
-						this.queue.toggle();
-					},
-				}),
-				$el("button", {
-					$: (b) => (this.history.button = b),
-					id: "comfy-view-history-button",
-					textContent: "View History",
-					onclick: () => {
-						this.queue.hide();
-						this.history.toggle();
-					},
-				}),
 			]),
 			this.queue.element,
 			this.history.element,
