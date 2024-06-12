@@ -9,6 +9,7 @@ from typing import Optional
 import requests
 
 import diffus.task_queue
+import diffus.decoded_params
 
 logger = logging.getLogger(__name__)
 
@@ -228,35 +229,30 @@ def monitor_call_context(
             queue_dispatcher.on_task_finished(task_id, not task_is_failed, message)
 
 
-def execution_monitor(recursive_execute, ):
-    prompt_arg_index = 2
-    current_item_arg_index = 4
-    extra_data_arg_index = 5
+def node_execution_monitor(get_output_data):
+    import nodes
 
-    signature = inspect.signature(recursive_execute)
-    for i, param in enumerate(signature.parameters.values()):
-        if param.name == 'prompt':
-            prompt_arg_index = i
-        elif param.name == 'current_item':
-            current_item_arg_index = i
-        elif param.name == 'extra_data':
-            extra_data_arg_index = i
-
-    def wrapper(*args, **kwargs):
-        prompt = args[prompt_arg_index]
-        extra_data = args[extra_data_arg_index]
-        unique_id = args[current_item_arg_index]
-        class_type = prompt[unique_id]['class_type']
+    def wrapper(obj, input_data_all, extra_data):
+        node_class_name = type(obj).__name__
+        for k, v in nodes.NODE_CLASS_MAPPINGS.items():
+            if isinstance(obj, v):
+                node_class_name = k
+                break
 
         with monitor_call_context(
                 None,
                 extra_data,
-                f'comfy.{class_type}',
+                f'comfy.{node_class_name}',
                 'comfyui',
+                decoded_params=diffus.decoded_params.get_monitor_params(obj, node_class_name, input_data_all),
                 is_intermediate=True,
         ) as result_encoder:
-            success, error, ex = recursive_execute(*args, **kwargs)
-            result_encoder(success, error)
-            return success, error, ex
+            try:
+                output_data = get_output_data(obj, input_data_all, extra_data)
+                result_encoder(True, None)
+                return output_data
+            except Exception as ex:
+                result_encoder(False, ex)
+                raise
 
     return wrapper
