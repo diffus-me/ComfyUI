@@ -38,17 +38,19 @@ class AppSettings():
 
         @routes.post("/settings")
         async def post_settings(request):
-            settings = self.get_settings(request)
-            new_settings = await request.json()
-            self.save_settings(request, {**settings, **new_settings})
-            return web.Response(status=200)
+            # settings = self.get_settings(request)
+            # new_settings = await request.json()
+            # self.save_settings(request, {**settings, **new_settings})
+            # return web.Response(status=200)
+            return web.Response(status=403)
 
         @routes.post("/settings/{id}")
         async def post_setting(request):
-            setting_id = request.match_info.get("id", None)
-            if not setting_id:
-                return web.Response(status=400)
-            settings = self.get_settings(request)
-            settings[setting_id] = await request.json()
-            self.save_settings(request, settings)
-            return web.Response(status=200)
+            # setting_id = request.match_info.get("id", None)
+            # if not setting_id:
+            #     return web.Response(status=400)
+            # settings = self.get_settings(request)
+            # settings[setting_id] = await request.json()
+            # self.save_settings(request, settings)
+            # return web.Response(status=200)
+            return web.Response(status=403)
