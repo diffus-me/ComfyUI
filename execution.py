@@ -82,7 +82,9 @@ def map_node_over_list(obj, input_data_all, func, allow_interrupt=False):
             results.append(getattr(obj, func)(**slice_dict(input_data_all, i)))
     return results
 
-def get_output_data(obj, input_data_all):
+
+@diffus.system_mornitor.node_execution_monitor
+def get_output_data(obj, input_data_all, extra_data):
     
     results = []
     uis = []
@@ -125,7 +127,6 @@ def format_value(x):
         return str(x)
 
 
-@diffus.system_mornitor.execution_monitor
 def recursive_execute(server, context: execution_context.ExecutionContext, prompt, outputs, current_item, extra_data, executed, prompt_id, outputs_ui, object_storage):
     unique_id = current_item
     inputs = prompt[unique_id]['inputs']
@@ -158,7 +159,7 @@ def recursive_execute(server, context: execution_context.ExecutionContext, promp
             obj = class_def()
             object_storage[(unique_id, class_type)] = obj
 
-        output_data, output_ui = get_output_data(obj, input_data_all)
+        output_data, output_ui = get_output_data(obj, input_data_all, extra_data)
         outputs[unique_id] = output_data
         if len(output_ui) > 0:
             outputs_ui[unique_id] = output_ui
