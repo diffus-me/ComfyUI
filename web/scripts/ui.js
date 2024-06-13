@@ -465,10 +465,6 @@ export class ComfyUI {
 				$el("span.drag-handle"),
 				$el("span.comfy-menu-queue-size", { $: (q) => (this.queueSize = q) }),
 				$el("div.comfy-menu-actions", [
-					$el("button.comfy-settings-btn", {
-						textContent: "⚙️",
-						onclick: () => this.settings.show(),
-					}),
 					$el("button.comfy-close-menu-btn", {
 						textContent: "\u00d7",
 						onclick: () => {
