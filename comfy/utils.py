@@ -11,7 +11,7 @@ import itertools
 def load_torch_file(ckpt, safe_load=False, device=None):
     if device is None:
         device = torch.device("cpu")
-    if hasattr(ckpt, 'is_safetensors') and hasattr(ckpt, 'filename') and ckpt.is_safetensors:
+    if hasattr(ckpt, 'is_safetensors') and hasattr(ckpt, 'filename'):
         is_safetensors = ckpt.is_safetensors
         ckpt = ckpt.filename
     else:
