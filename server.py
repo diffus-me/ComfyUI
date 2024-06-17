@@ -484,6 +484,18 @@ class PromptServer():
             # return web.json_response(self.prompt_queue.get_history(prompt_id=prompt_id))
             return web.json_response({})
 
+        @routes.delete("/inputs")
+        async def clear_input(request):
+            context = execution_context.ExecutionContext(request=request)
+            folder_paths.clear_input_directory(context.user_hash)
+            await self.send("input_cleared", { "node": None, "user_id": context.user_id }, context.user_id)
+            return web.json_response({
+                "type": "input_cleared",
+                "data": {
+                    "user_id": context.user_id
+                }
+            })
+
         @routes.get("/queue")
         async def get_queue(request):
             queue_info = {}
