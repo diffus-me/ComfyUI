@@ -1,10 +1,12 @@
 import { api } from "./api.js";
 import { ComfyDialog as _ComfyDialog } from "./ui/dialog.js";
+import { ComfyConfirmDialog as _ComfyConfirmDialog } from "./ui/confirmDialog.js";
 import { toggleSwitch } from "./ui/toggleSwitch.js";
 import { ComfySettingsDialog } from "./ui/settings.js";
 import { initUserCenterMenu } from "./userCenter.js";
 
 export const ComfyDialog = _ComfyDialog;
+export const ComfyConfirmDialog = _ComfyConfirmDialog;
 
 /**
  * 
@@ -292,6 +294,7 @@ export class ComfyUI {
 	constructor(app) {
 		this.app = app;
 		this.dialog = new ComfyDialog();
+		this.confirmDialog = new ComfyConfirmDialog();
 		this.settings = new ComfySettingsDialog(app);
 
 		this.batchCount = 1;
@@ -600,6 +603,17 @@ export class ComfyUI {
 			$el("button", {
 				id: "comfy-reset-view-button", textContent: "Reset View", onclick: async () => {
 					app.resetView();
+				}
+			}),
+			$el("button", {
+				id: "comfy-clear-input-folder-button", textContent: "Clear Input", onclick: async () => {
+                    this.confirmDialog.show("Clear input folder? This CAN NOT be undone!", () => {
+                        // user clicked OK
+                        api.clearInput();
+                        this.confirmDialog.close();
+                    }, () => {
+                        this.confirmDialog.close();
+                    })
 				}
 			}),
 		]);

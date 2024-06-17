@@ -115,7 +115,7 @@ class PromptServer():
                 # On reconnect if we are the currently executing client send the current node
                 if self.client_id == sid and self.last_node_id is not None:
                     await self.send("executing", { "node": self.last_node_id }, sid)
-                    
+
                 async for msg in ws:
                     if msg.type == aiohttp.WSMsgType.ERROR:
                         logging.warning('ws connection closed with exception %s' % ws.exception())
@@ -146,9 +146,9 @@ class PromptServer():
                 glob.escape(self.web_root), 'extensions_builtin/**/*.js'), recursive=True)
             files += glob.glob(os.path.join(
                 glob.escape(self.web_root), 'extensions/**/*.js'), recursive=True)
-            
+
             extensions = list(map(lambda f: "/" + os.path.relpath(f, self.web_root).replace("\\", "/"), files))
-            
+
             for name, dir in nodes.EXTENSION_WEB_DIRS.items():
                 files = glob.glob(os.path.join(glob.escape(dir), '**/*.js'), recursive=True)
                 extensions.extend(list(map(lambda f: "/extensions/" + urllib.parse.quote(
@@ -463,6 +463,18 @@ class PromptServer():
             # prompt_id = request.match_info.get("prompt_id", None)
             # return web.json_response(self.prompt_queue.get_history(prompt_id=prompt_id))
             return web.json_response({})
+
+        @routes.delete("/inputs")
+        async def clear_input(request):
+            context = execution_context.ExecutionContext(request=request)
+            folder_paths.clear_input_directory(context.user_hash)
+            await self.send("input_cleared", { "node": None, "user_id": context.user_id }, context.user_id)
+            return web.json_response({
+                "type": "input_cleared",
+                "data": {
+                    "user_id": context.user_id
+                }
+            })
 
         @routes.get("/queue")
         async def get_queue(request):

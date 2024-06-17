@@ -142,6 +142,9 @@ class ComfyApi extends EventTarget {
 					    case "execution_cached":
 						    this.dispatchEvent(new CustomEvent("execution_cached", { detail: msg.data }));
 						    break;
+						case "input_cleared":
+							this.dispatchEvent(new CustomEvent("input_cleared", { detail: msg.data }));
+							break;
 					    default:
 						    if (this.#registered.has(msg.type)) {
 							    this.dispatchEvent(new CustomEvent(msg.type, { detail: msg.data }));
@@ -416,6 +419,14 @@ class ComfyApi extends EventTarget {
 		if (resp.status !== 200) {
 			throw new Error(`Error storing user data file '${file}': ${resp.status} ${(await resp).statusText}`);
 		}
+	}
+
+	/**
+	 * Clear user input folder
+	 * @returns { Promise<void> }
+	 */
+	async clearInput() {
+		return this.fetchApi(`/inputs`, { method: "DELETE"});
 	}
 }
 

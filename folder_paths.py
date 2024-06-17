@@ -1,5 +1,6 @@
 import datetime
 import os
+import shutil
 import time
 import logging
 
@@ -91,6 +92,17 @@ def get_input_directory(user_hash):
         os.makedirs(d, exist_ok=True)
     return d
 
+
+def clear_input_directory(user_hash):
+    if not user_hash:
+        import traceback
+        import sys
+        traceback.print_stack(file=sys.stdout)
+        raise Exception("missed user_hash from clear_input_directory")
+    d = os.path.join(output_directory, user_hash, "comfyui", "input")
+    if os.path.exists(d):
+        shutil.rmtree(d, ignore_errors=True)
+    return d
 
 
 #NOTE: used in http server so don't put folders that should not be accessed remotely

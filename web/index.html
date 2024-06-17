@@ -18,15 +18,19 @@
 		<link rel="stylesheet" type="text/css" href="./user.css" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Material+Icons">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vuetify@2.4.0/dist/vuetify.min.css">
+	<link rel="stylesheet" href="/components/style/notification/style.css?v=0.3"/>
+	<script type="text/javascript" src="/components/js/notification/index.var.js"></script>
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/vue@2.7.14"></script>
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/vuetify@2.4.0/dist/vuetify.js"></script>
 		<script type="text/javascript" src="./lib/litegraph.core.js"></script>
 		<script type="text/javascript" src="./lib/litegraph.extensions.js" defer></script>
 		<script type="module">
 			import { app } from "./scripts/app.js";
+			import { setupNotifier } from "./scripts/notifier.js"
 			await app.setup();
 			window.app = app;
 			window.graph = app.graph;
+			setupNotifier();
 		</script>
 	</head>
 	<body class="litegraph">
