@@ -142,6 +142,9 @@ class ComfyApi extends EventTarget {
 					    case "execution_cached":
 						    this.dispatchEvent(new CustomEvent("execution_cached", { detail: msg.data }));
 						    break;
+						case "finished":
+							this.dispatchEvent(new CustomEvent("finished", { detail: msg.data }));
+							break;
 						case "input_cleared":
 							this.dispatchEvent(new CustomEvent("input_cleared", { detail: msg.data }));
 							break;
