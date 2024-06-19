@@ -114,6 +114,8 @@ def prompt_worker(q, server, task_dispatcher):
             context = item[-1]
             extra_data = item[3]
 
+            begin = time.time()
+
             with diffus.system_mornitor.monitor_call_context(
                     task_dispatcher,
                     extra_data,
@@ -126,6 +128,7 @@ def prompt_worker(q, server, task_dispatcher):
                 e.execute(context, item[2], prompt_id, extra_data, item[4])
                 result_encoder(e.success, e.status_messages)
 
+            end = time.time()
             need_gc = True
             q.task_done(item_id,
                         e.outputs_ui,
@@ -135,10 +138,11 @@ def prompt_worker(q, server, task_dispatcher):
                             messages=e.status_messages))
             if server.client_id is not None:
                 server.send_sync("executing", { "node": None, "prompt_id": prompt_id }, server.client_id)
+                server.send_sync("finished",  { "node": None, 'prompt_id': prompt_id, 'used_time': end - begin, 'credits_consumption': extra_data['credits_consumption'] }, server.client_id)
 
             current_time = time.perf_counter()
             execution_time = current_time - execution_start_time
-            logging.info("Prompt executed in {:.2f} seconds".format(execution_time))
+            logging.info(f"Prompt executed in {execution_time:.2f} seconds, client_id: {server.client_id}")
 
         flags = q.get_flags()
         free_memory = flags.get("free_memory", False)
