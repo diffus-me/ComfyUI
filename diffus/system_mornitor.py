@@ -136,20 +136,20 @@ def after_task_finished(
     if job_id is None:
         logger.error(
             'task_id is not present in after_task_finished, there might be error occured in before_task_started.')
-        return
+        return {}
     monitor_addr, system_monitor_api_secret = _get_system_monitor_config(header_dict)
     if not monitor_addr or not system_monitor_api_secret:
         logger.error(f'{job_id}: system_monitor_addr or system_monitor_api_secret is not present')
-        return
+        return {}
 
     session_hash = header_dict.get('x-session-hash', None)
     if not session_hash:
         logger.error(f'{job_id}: x-session-hash does not presented in headers')
-        return None
+        return {}
     task_id = header_dict.get('x-task-id', None)
     if not task_id:
         logger.error(f'{job_id}: x-task-id does not presented in headers')
-        return None
+        return {}
 
     request_url = f'{monitor_addr}/{job_id}'
     request_body = {
@@ -174,6 +174,7 @@ def after_task_finished(
     if resp.status_code < 200 or resp.status_code > 299:
         logger.error((f'update monitor log failed, status: monitor_log_id: {job_id}, {resp.status_code}, '
                       f'message: {resp.text[:1000]}'))
+    return resp.json()
 
 
 @contextmanager
@@ -224,9 +225,12 @@ def monitor_call_context(
         message = f'{type(e).__name__}: {str(e)}'
         raise e
     finally:
-        after_task_finished(header_dict, task_id, status, message, is_intermediate, refund_if_failed)
-        if not is_intermediate and queue_dispatcher:
-            queue_dispatcher.on_task_finished(task_id, not task_is_failed, message)
+        monitor_result = after_task_finished(header_dict, task_id, status, message, is_intermediate, refund_if_failed)
+        if not is_intermediate:
+            logger.info(f'monitor_result: {monitor_result}')
+            extra_data['credits_consumption'] = monitor_result.get('consumptions', {}).get('credit_consumption', 0)
+            if queue_dispatcher:
+                queue_dispatcher.on_task_finished(task_id, not task_is_failed, message)
 
 
 def node_execution_monitor(get_output_data):

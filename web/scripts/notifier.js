@@ -17,15 +17,39 @@ class Notifier {
     this.executedNodes = 0;
   }
 
+  onPromptQueued({ detail }) {
+    this.awn.info("prompt queued");
+  }
+
+  onNodeExecuted({ detail }) {
+    this.executedNodes++;
+  }
+
+  onPromptFinished({ detail }) {
+    this.awn.info(`prompt finished, used time: <b>${detail.used_time.toFixed(2)}</b>s, credits consumption: <b><strike>${detail.credits_consumption}</strike> 0<b>`);
+  }
+
   onInputCleared({ detail }) {
     this.executedNodes++;
-    this.awn.info(`input folder cleared.`);
+    this.awn.info(`input folder cleared: ${detail.user_hash}`);
   }
 }
 
 const notifier = new Notifier();
 
 export function setupNotifier() {
+  api.addEventListener("promptQueued", (data) => {
+    notifier.onPromptQueued(data);
+  })
+
+  api.addEventListener("executed", (data) => {
+    notifier.onNodeExecuted(data);
+  })
+
+  api.addEventListener("finished", (data) => {
+    notifier.onPromptFinished(data);
+  })
+
   api.addEventListener("input_cleared", (data) => {
     notifier.onInputCleared(data);
   })
