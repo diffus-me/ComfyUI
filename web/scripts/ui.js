@@ -607,7 +607,7 @@ export class ComfyUI {
 			}),
 			$el("button", {
 				id: "comfy-clear-input-folder-button", textContent: "Clear Input", onclick: async () => {
-                    this.confirmDialog.show("Clear input folder? This CAN NOT be undone!", () => {
+					this.confirmDialog.show("Clear input folder?<br>All files you uploaded before will be deleted.<br>This CAN NOT be undone.", () => {
                         // user clicked OK
                         api.clearInput();
                         this.confirmDialog.close();
