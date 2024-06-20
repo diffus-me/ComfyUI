@@ -228,7 +228,7 @@ def monitor_call_context(
         monitor_result = after_task_finished(header_dict, task_id, status, message, is_intermediate, refund_if_failed)
         if not is_intermediate:
             logger.info(f'monitor_result: {monitor_result}')
-            extra_data['credits_consumption'] = monitor_result.get('consumptions', {}).get('credit_consumption', 0)
+            extra_data['subscription_consumption'] = monitor_result.get('consumptions', {})
             if queue_dispatcher:
                 queue_dispatcher.on_task_finished(task_id, not task_is_failed, message)
 

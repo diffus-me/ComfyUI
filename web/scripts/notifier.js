@@ -26,7 +26,10 @@ class Notifier {
   }
 
   onPromptFinished({ detail }) {
-    this.awn.info(`prompt finished, used time: <b>${detail.used_time.toFixed(2)}</b>s, credits consumption: <b><strike>${detail.credits_consumption}</strike> 0<b>`);
+    const consumption = detail.subscription_consumption.credit_consumption;
+    const discount = detail.subscription_consumption.discount;
+    const charged = Math.ceil(consumption * (1 - discount));
+    this.awn.info(`prompt finished, used time: <b>${detail.used_time.toFixed(2)}</b>s, credits consumption: <b><strike>${consumption}</strike> ${charged}<b>`);
   }
 
   onInputCleared({ detail }) {
