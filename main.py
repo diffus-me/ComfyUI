@@ -119,19 +119,25 @@ def prompt_worker(q, server, task_dispatcher):
             extra_data = item[3]
 
             begin = time.time()
-
-            with diffus.system_mornitor.monitor_call_context(
-                    task_dispatcher,
-                    extra_data,
-                    'comfy',
-                    'comfyui',
-                    prompt_id,
-                    is_intermediate=False,
-                    only_available_for=['basic', 'plus', 'pro', 'api'],
-            ) as result_encoder:
-                e.execute(context, item[2], prompt_id, extra_data, item[4])
-                result_encoder(e.success, e.status_messages)
-
+            monitor_error = None
+            try:
+                with diffus.system_mornitor.monitor_call_context(
+                        task_dispatcher,
+                        extra_data,
+                        'comfy',
+                        'comfyui',
+                        prompt_id,
+                        is_intermediate=False,
+                        only_available_for=['basic', 'plus', 'pro', 'api'],
+                ) as result_encoder:
+                    e.execute(context, item[2], prompt_id, extra_data, item[4])
+                    result_encoder(e.success, e.status_messages)
+            except diffus.system_mornitor.MonitorException as ex:
+                monitor_error = ex
+            except diffus.system_mornitor.MonitorTierMismatchedException as ex:
+                monitor_error = ex
+            except Exception as ex:
+                logging.exception(ex)
             end = time.time()
             need_gc = True
             q.task_done(item_id,
@@ -142,7 +148,10 @@ def prompt_worker(q, server, task_dispatcher):
                             messages=e.status_messages))
             if server.client_id is not None:
                 server.send_sync("executing", { "node": None, "prompt_id": prompt_id }, server.client_id)
-                server.send_sync("finished",  { "node": None, 'prompt_id': prompt_id, 'used_time': end - begin, 'subscription_consumption': extra_data['subscription_consumption'] }, server.client_id)
+                if monitor_error is not None:
+                    server.send_sync("monitor_error",  { "node": None, 'prompt_id': prompt_id, 'used_time': end - begin, 'message': diffus.system_mornitor.make_monitor_error_message(monitor_error) }, server.client_id)
+                else:
+                    server.send_sync("finished",  { "node": None, 'prompt_id': prompt_id, 'used_time': end - begin, 'subscription_consumption': extra_data['subscription_consumption'] }, server.client_id)
 
             current_time = time.perf_counter()
             execution_time = current_time - execution_start_time

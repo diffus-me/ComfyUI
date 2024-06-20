@@ -165,6 +165,10 @@ def recursive_execute(server, context: execution_context.ExecutionContext, promp
             outputs_ui[unique_id] = output_ui
             if server.client_id is not None:
                 server.send_sync("executed", { "node": unique_id, "output": output_ui, "prompt_id": prompt_id }, server.client_id)
+    except diffus.system_mornitor.MonitorException:
+        raise
+    except diffus.system_mornitor.MonitorTierMismatchedException:
+        raise
     except comfy.model_management.InterruptProcessingException as iex:
         logging.info("Processing interrupted")
 

@@ -2,23 +2,13 @@ import { api } from "./api.js";
 
 
 
-class Notifier {
-  notifierGlobalOptions = {
-    position: "bottom-right",
-    icons: { enabled: false },
-    minDurations: {
-      async: 30,
-      "async-block": 30,
-    },
-  };
-
+class Notification {
   constructor() {
-    this.awn = new AWN(this.notifierGlobalOptions);
     this.executedNodes = 0;
   }
 
   onPromptQueued({ detail }) {
-    this.awn.info("prompt queued");
+    notifier.info("prompt queued");
   }
 
   onNodeExecuted({ detail }) {
@@ -29,31 +19,39 @@ class Notifier {
     const consumption = detail.subscription_consumption.credit_consumption;
     const discount = detail.subscription_consumption.discount;
     const charged = Math.ceil(consumption * (1 - discount));
-    this.awn.info(`prompt finished, used time: <b>${detail.used_time.toFixed(2)}</b>s, credits consumption: <b><strike>${consumption}</strike> ${charged}<b>`);
+    notifier.info(`prompt finished, used time: <b>${detail.used_time.toFixed(2)}</b>s, credits consumption: <b><strike>${consumption}</strike> ${charged}<b>`);
   }
 
   onInputCleared({ detail }) {
     this.executedNodes++;
-    this.awn.info(`input folder cleared: ${detail.user_hash}`);
+    notifier.info(`input folder cleared: ${detail.user_hash}`);
+  }
+
+  onMonitorError({ detail }) {
+    upgradeCheck(detail.message)
   }
 }
 
-const notifier = new Notifier();
+const notification = new Notification();
 
-export function setupNotifier() {
+export function setupNotification() {
   api.addEventListener("promptQueued", (data) => {
-    notifier.onPromptQueued(data);
+    notification.onPromptQueued(data);
   })
 
   api.addEventListener("executed", (data) => {
-    notifier.onNodeExecuted(data);
+    notification.onNodeExecuted(data);
   })
 
   api.addEventListener("finished", (data) => {
-    notifier.onPromptFinished(data);
+    notification.onPromptFinished(data);
   })
 
   api.addEventListener("input_cleared", (data) => {
-    notifier.onInputCleared(data);
+    notification.onInputCleared(data);
+  })
+
+  api.addEventListener("monitor_error", (data) => {
+    notification.onMonitorError(data);
   })
 }

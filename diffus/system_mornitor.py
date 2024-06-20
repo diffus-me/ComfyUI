@@ -260,3 +260,34 @@ def node_execution_monitor(get_output_data):
                 raise
 
     return wrapper
+
+
+def make_monitor_error_message(ex):
+    if isinstance(ex, MonitorException):
+        match (ex.status_code, ex.code):
+            case (402, "WEBUIFE-01010001"):
+                upgrade_info = {
+                    "need_upgrade": True,
+                    "reason": "INSUFFICIENT_CREDITS",
+                }
+            case (402, "WEBUIFE-01010003"):
+                upgrade_info = {
+                    "need_upgrade": True,
+                    "reason": "INSUFFICIENT_DAILY_CREDITS",
+                }
+            case (429, "WEBUIFE-01010004"):
+                upgrade_info = {
+                    "need_upgrade": True,
+                    "reason": "REACH_CONCURRENCY_LIMIT",
+                }
+            case _:
+                logger.error(f"mismatched status_code({ex.status_code}) and code({ex.code}) in 'MonitorException'")
+                upgrade_info = {"need_upgrade": False}
+    elif isinstance(ex, MonitorTierMismatchedException):
+        upgrade_info = {
+            "need_upgrade": True,
+            "reason": "TIER_MISSMATCH",
+        }
+    else:
+        upgrade_info = {"need_upgrade": False}
+    return upgrade_info
