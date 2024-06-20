@@ -145,6 +145,9 @@ class ComfyApi extends EventTarget {
 						case "finished":
 							this.dispatchEvent(new CustomEvent("finished", { detail: msg.data }));
 							break;
+						case "monitor_error":
+							this.dispatchEvent(new CustomEvent("monitor_error", { detail: msg.data }));
+							break;
 						case "input_cleared":
 							this.dispatchEvent(new CustomEvent("input_cleared", { detail: msg.data }));
 							break;

@@ -20,17 +20,20 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vuetify@2.4.0/dist/vuetify.min.css">
 	<link rel="stylesheet" href="/components/style/notification/style.css?v=0.3"/>
 	<script type="text/javascript" src="/components/js/notification/index.var.js"></script>
+	<script type="text/javascript" src="/file=javascript/global.js"></script>
+	<script type="text/javascript" src="/file=javascript/notifier.js"></script>
+	<script type="text/javascript" src="/file=javascript/tierCheck.js"></script>
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/vue@2.7.14"></script>
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/vuetify@2.4.0/dist/vuetify.js"></script>
 		<script type="text/javascript" src="./lib/litegraph.core.js"></script>
 		<script type="text/javascript" src="./lib/litegraph.extensions.js" defer></script>
 		<script type="module">
 			import { app } from "./scripts/app.js";
-			import { setupNotifier } from "./scripts/notifier.js"
+			import { setupNotification } from "./scripts/notification.js"
 			await app.setup();
 			window.app = app;
 			window.graph = app.graph;
-			setupNotifier();
+			setupNotification();
 		</script>
 	</head>
 	<body class="litegraph">
