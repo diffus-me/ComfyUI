@@ -106,6 +106,24 @@ def _tsc_k_sampler_consumption(model, seed, steps, cfg, sampler_name, scheduler,
     }
 
 
+def _impact_k_sampler_basic_pipe_consumption(basic_pipe, seed, steps, cfg, sampler_name, scheduler, latent_image,
+                                             denoise=1.0, context: execution_context.ExecutionContext = None):
+    n_iter = latent_image.get("batch_index", 1)
+
+    latent = latent_image["samples"]
+    latent_size = latent.size()
+    batch_size = latent_size[0]
+    image_height = latent_size[2] * 8
+    image_width = latent_size[3] * 8
+    return {
+        'width': image_width,
+        'height': image_height,
+        'steps': steps,
+        'n_iter': n_iter,
+        'batch_size': batch_size
+    }
+
+
 def _ultimate_sd_upscale_consumption(image, model, positive, negative, vae, upscale_by, seed,
                                      steps, cfg, sampler_name, scheduler, denoise, upscale_model,
                                      mode_type, tile_width, tile_height, mask_blur, tile_padding,
@@ -292,6 +310,16 @@ def _face_detailer_consumption(
     }
 
 
+def _re_actor_build_face_model_consumption(image, det_size=(640, 640)):
+    return {
+        'width': det_size[0],
+        'height': det_size[1],
+        'steps': 1,
+        'n_iter': 1,
+        'batch_size': 1
+    }
+
+
 def _slice_dict(d, i):
     d_new = dict()
     for k, v in d.items():
@@ -326,18 +354,142 @@ def _default_consumption_maker(*args, **kwargs):
     return {}
 
 
+def _none_consumption_maker(*args, **kwargs):
+    return None
+
+
 _NODE_CONSUMPTION_MAPPING = {
     'KSampler': _k_sampler_consumption,
     'KSamplerAdvanced': _k_sampler_advanced_consumption,
     'KSampler (Efficient)': _tsc_k_sampler_consumption,
+    'ImpactKSamplerBasicPipe': _impact_k_sampler_basic_pipe_consumption,
     'ReActorRestoreFace': _reactor_restore_face_consumption,
     'ReActorFaceSwap': _reactor_face_swap_consumption,
+    'ReActorBuildFaceModel': _re_actor_build_face_model_consumption,
     'ImageUpscaleWithModel': _image_upscale_with_model_consumption,
     'UltimateSDUpscale': _ultimate_sd_upscale_consumption,
     'easy hiresFix': _easy_hires_fix_consumption,
     'VHS_VideoCombine': _vhs_video_combine_consumption,
     'FaceDetailer': _face_detailer_consumption,
     'FaceDetailerPipe': _face_detailer_pipe_consumption,
+
+    'ADE_UseEvolvedSampling': _none_consumption_maker,
+    'ModelSamplingSD3': _none_consumption_maker,
+    'HighRes-Fix Script': _none_consumption_maker,
+    'ImageBatch': _none_consumption_maker,
+    'ControlNetApplyAdvanced': _none_consumption_maker,
+    'ReActorLoadFaceModel': _none_consumption_maker,
+    'SVD_img2vid_Conditioning': _none_consumption_maker,
+    'VideoLinearCFGGuidance': _none_consumption_maker,
+    'ConstrainImage|pysssss': _none_consumption_maker,
+    'MiDaS-DepthMapPreprocessor': _none_consumption_maker,
+    'ImageQuantize': _none_consumption_maker,
+    'VHS_BatchManager': _none_consumption_maker,
+    'easy ultralyticsDetectorPipe': _none_consumption_maker,
+    'ColorPreprocessor': _none_consumption_maker,
+    'DWPreprocessor': _none_consumption_maker,
+    'FreeU_V2': _none_consumption_maker,
+    'ImageInvert': _none_consumption_maker,
+    'XY Plot': _none_consumption_maker,
+    'ApplyInstantID': _none_consumption_maker,
+    'CR Apply Multi-ControlNet': _none_consumption_maker,
+    'CR Multi-ControlNet Stack': _none_consumption_maker,
+    'AnimeLineArtPreprocessor': _none_consumption_maker,
+    'InstantIDFaceAnalysis': _none_consumption_maker,
+    'ImageScaleToTotalPixels': _none_consumption_maker,
+    'IPAdapterAdvanced': _none_consumption_maker,
+    'IPAdapter': _none_consumption_maker,
+    'RepeatLatentBatch': _none_consumption_maker,
+    'OpenposePreprocessor': _none_consumption_maker,
+    'ADE_AnimateDiffSamplingSettings': _none_consumption_maker,
+    'ADE_StandardStaticContextOptions': _none_consumption_maker,
+    'SaveImage': _none_consumption_maker,
+    'VAEDecode': _none_consumption_maker,
+    'CLIPTextEncode': _none_consumption_maker,
+    'LoraLoader': _none_consumption_maker,
+    'CheckpointLoaderSimple': _none_consumption_maker,
+    'VAEEncode': _none_consumption_maker,
+    'Image Resize': _none_consumption_maker,
+    'EmptyLatentImage': _none_consumption_maker,
+    'ImageScale': _none_consumption_maker,
+    'Save Image w/Metadata': _none_consumption_maker,
+    'CLIPSetLastLayer': _none_consumption_maker,
+    'LoadImage': _none_consumption_maker,
+    'easy promptReplace': _none_consumption_maker,
+    'Text Multiline': _none_consumption_maker,
+    'VAELoader': _none_consumption_maker,
+    'ConditioningSetTimestepRange': _none_consumption_maker,
+    'UpscaleModelLoader': _none_consumption_maker,
+    'LoraLoader|pysssss': _none_consumption_maker,
+    'RebatchLatents': _none_consumption_maker,
+    'LatentBatchSeedBehavior': _none_consumption_maker,
+    'Efficient Loader': _none_consumption_maker,
+    'SDXLPromptStyler': _none_consumption_maker,
+    'ConditioningCombine': _none_consumption_maker,
+    'ConditioningZeroOut': _none_consumption_maker,
+    'CR SDXL Aspect Ratio': _none_consumption_maker,
+    'TripleCLIPLoader': _none_consumption_maker,
+    'LatentUpscale': _none_consumption_maker,
+    'easy stylesSelector': _none_consumption_maker,
+    'Seed Generator': _none_consumption_maker,
+    'ComfyUIStyler': _none_consumption_maker,
+    'String Literal': _none_consumption_maker,
+    'CLIPTextEncodeSDXLRefiner': _none_consumption_maker,
+    'easy ipadapterApply': _none_consumption_maker,
+    'ArtistStyler': _none_consumption_maker,
+    'FantasyStyler': _none_consumption_maker,
+    'ADE_AnimateDiffLoaderGen1': _none_consumption_maker,
+    'AestheticStyler': _none_consumption_maker,
+    'ControlNetLoader': _none_consumption_maker,
+    'SaveAnimatedWEBP': _none_consumption_maker,
+    'CLIPTextEncodeSDXL': _none_consumption_maker,
+    'ImageScaleBy': _none_consumption_maker,
+    'ImageOnlyCheckpointLoader': _none_consumption_maker,
+    'IPAdapterUnifiedLoader': _none_consumption_maker,
+    'EnvironmentStyler': _none_consumption_maker,
+    'MilehighStyler': _none_consumption_maker,
+    'AnimeStyler': _none_consumption_maker,
+    'ADE_AnimateDiffLoaderWithContext': _none_consumption_maker,
+    'VHS_LoadVideo': _none_consumption_maker,
+    'MoodStyler': _none_consumption_maker,
+    'ReActorSaveFaceModel': _none_consumption_maker,
+    'Camera_AnglesStyler': _none_consumption_maker,
+    'TimeofdayStyler': _none_consumption_maker,
+    'FaceStyler': _none_consumption_maker,
+    'Breast_StateStyler': _none_consumption_maker,
+    'easy seed': _none_consumption_maker,
+    'EmptySD3LatentImage': _none_consumption_maker,
+    'UltralyticsDetectorProvider': _none_consumption_maker,
+    'CR Apply LoRA Stack': _none_consumption_maker,
+    'Upscale Model Loader': _none_consumption_maker,
+    'PortraitMaster': _none_consumption_maker,
+    'PlaySound|pysssss': _none_consumption_maker,
+    'WD14Tagger|pysssss': _none_consumption_maker,
+    'SAMLoader': _none_consumption_maker,
+    'ADE_AnimateDiffUniformContextOptions': _none_consumption_maker,
+    'ToBasicPipe': _none_consumption_maker,
+    'easy pipeOut': _none_consumption_maker,
+    'easy pipeIn': _none_consumption_maker,
+    'CR LoRA Stack': _none_consumption_maker,
+    'InstantIDModelLoader': _none_consumption_maker,
+    'LatentUpscaleBy': _none_consumption_maker,
+    'ToDetailerPipe': _none_consumption_maker,
+    'easy ipadapterStyleComposition': _none_consumption_maker,
+    'Canny': _none_consumption_maker,
+    'BaseModel_Loader_local': _none_consumption_maker,
+    'CR Load LoRA': _none_consumption_maker,
+    'SAM Model Loader': _none_consumption_maker,
+    'CLIPLoader': _none_consumption_maker,
+    'VHS_LoadImages': _none_consumption_maker,
+    'easy fullLoader': _none_consumption_maker,
+    'XY Input: Checkpoint': _none_consumption_maker,
+    'MaskToImage': _none_consumption_maker,
+    'CR Text Concatenate': _none_consumption_maker,
+    'CR Text': _none_consumption_maker,
+    'easy loadImageBase64': _none_consumption_maker,
+    'easy clearCacheAll': _none_consumption_maker,
+    'ShowText|pysssss': _none_consumption_maker,
+    'ADE_AnimateDiffLoRALoader': _none_consumption_maker
 }
 
 
