@@ -65,6 +65,9 @@ def before_task_started(
         is_intermediate: bool = False,
         refund_if_task_failed: bool = True,
         only_available_for: Optional[list[str]] = None) -> Optional[str]:
+    if decoded_params is None:
+        return ''
+
     if job_id is None:
         job_id = str(uuid.uuid4())
     monitor_addr, system_monitor_api_secret = _get_system_monitor_config(header_dict)
@@ -132,7 +135,10 @@ def after_task_finished(
         status: str,
         message: Optional[str] = None,
         is_intermediate: bool = False,
-        refund_if_failed: bool = False):
+        refund_if_failed: bool = False,
+        decoded_params=None, ):
+    if decoded_params is None:
+        return {}
     if job_id is None:
         logger.error(
             'task_id is not present in after_task_finished, there might be error occured in before_task_started.')
@@ -225,7 +231,15 @@ def monitor_call_context(
         message = f'{type(e).__name__}: {str(e)}'
         raise e
     finally:
-        monitor_result = after_task_finished(header_dict, task_id, status, message, is_intermediate, refund_if_failed)
+        monitor_result = after_task_finished(
+            header_dict,
+            task_id,
+            status,
+            message,
+            is_intermediate,
+            refund_if_failed,
+            decoded_params,
+        )
         if not is_intermediate:
             logger.info(f'monitor_result: {monitor_result}')
             extra_data['subscription_consumption'] = monitor_result.get('consumptions', {})
