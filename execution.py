@@ -165,8 +165,6 @@ def recursive_execute(server, context: execution_context.ExecutionContext, promp
             outputs_ui[unique_id] = output_ui
             if server.client_id is not None:
                 server.send_sync("executed", { "node": unique_id, "output": output_ui, "prompt_id": prompt_id }, server.client_id)
-    except diffus.system_mornitor.MonitorException:
-        raise
     except diffus.system_mornitor.MonitorTierMismatchedException:
         raise
     except comfy.model_management.InterruptProcessingException as iex:
@@ -178,7 +176,10 @@ def recursive_execute(server, context: execution_context.ExecutionContext, promp
         }
 
         return (False, error_details, iex)
-    except Exception as ex:
+    except (diffus.system_mornitor.MonitorException, Exception) as ex:
+        upgrade_info = diffus.system_mornitor.make_monitor_error_message(ex)
+        if upgrade_info['need_upgrade']:
+            raise
         typ, _, tb = sys.exc_info()
         exception_type = full_type_name(typ)
         input_data_formatted = {}
