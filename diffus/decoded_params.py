@@ -489,7 +489,10 @@ _NODE_CONSUMPTION_MAPPING = {
     'easy loadImageBase64': _none_consumption_maker,
     'easy clearCacheAll': _none_consumption_maker,
     'ShowText|pysssss': _none_consumption_maker,
-    'ADE_AnimateDiffLoRALoader': _none_consumption_maker
+    'ADE_AnimateDiffLoRALoader': _none_consumption_maker,
+    'easy showTensorShape': _none_consumption_maker,
+    'ConditioningConcat': _none_consumption_maker,
+    'ConditioningAverage': _none_consumption_maker,
 }
 
 
