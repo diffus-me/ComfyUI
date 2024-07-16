@@ -253,7 +253,7 @@ def node_execution_monitor(get_output_data):
     def wrapper(obj, input_data_all, extra_data):
         node_class_name = type(obj).__name__
         for k, v in nodes.NODE_CLASS_MAPPINGS.items():
-            if isinstance(obj, v):
+            if type(obj) is v:
                 node_class_name = k
                 break
 

@@ -85,6 +85,46 @@ def _k_sampler_advanced_consumption(model,
     }
 
 
+def _tsc_ksampler_advanced_consumption(model, add_noise, noise_seed, steps, cfg, sampler_name, scheduler, positive, negative,
+                                       latent_image, start_at_step, end_at_step, return_with_leftover_noise, preview_method, vae_decode,
+                                       prompt=None, extra_pnginfo=None, my_unique_id=None, context: execution_context.ExecutionContext = None,
+                                       optional_vae=(None,), script=None):
+    n_iter = latent_image.get("batch_index", 1)
+
+    latent = latent_image["samples"]
+    latent_size = latent.size()
+    batch_size = latent_size[0]
+    image_height = latent_size[2] * 8
+    image_width = latent_size[3] * 8
+    return {
+        'width': image_width,
+        'height': image_height,
+        'steps': steps,
+        'n_iter': n_iter,
+        'batch_size': batch_size
+    }
+
+
+def _tsc_ksampler_sdxl_consumption(sdxl_tuple, noise_seed, steps, cfg, sampler_name, scheduler, latent_image,
+                                   start_at_step, refine_at_step, preview_method, vae_decode, prompt=None, extra_pnginfo=None,
+                                   my_unique_id=None, context: execution_context.ExecutionContext = None, optional_vae=(None,), refiner_extras=None,
+                                   script=None):
+    n_iter = latent_image.get("batch_index", 1)
+
+    latent = latent_image["samples"]
+    latent_size = latent.size()
+    batch_size = latent_size[0]
+    image_height = latent_size[2] * 8
+    image_width = latent_size[3] * 8
+    return {
+        'width': image_width,
+        'height': image_height,
+        'steps': steps,
+        'n_iter': n_iter,
+        'batch_size': batch_size
+    }
+
+
 def _tsc_k_sampler_consumption(model, seed, steps, cfg, sampler_name, scheduler, positive, negative, latent_image,
                                preview_method, vae_decode, denoise=1.0, prompt=None, extra_pnginfo=None, my_unique_id=None,
                                context: execution_context.ExecutionContext = None,
@@ -362,6 +402,8 @@ _NODE_CONSUMPTION_MAPPING = {
     'KSampler': _k_sampler_consumption,
     'KSamplerAdvanced': _k_sampler_advanced_consumption,
     'KSampler (Efficient)': _tsc_k_sampler_consumption,
+    'KSampler Adv. (Efficient)': _tsc_ksampler_advanced_consumption,
+    'KSampler SDXL (Eff.)': _tsc_ksampler_sdxl_consumption,
     'ImpactKSamplerBasicPipe': _impact_k_sampler_basic_pipe_consumption,
     'ReActorRestoreFace': _reactor_restore_face_consumption,
     'ReActorFaceSwap': _reactor_face_swap_consumption,
