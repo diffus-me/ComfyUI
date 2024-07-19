@@ -164,6 +164,23 @@ def _impact_k_sampler_basic_pipe_consumption(basic_pipe, seed, steps, cfg, sampl
     }
 
 
+def _sampler_custom_consumption(model, add_noise, noise_seed, cfg, positive, negative, sampler, sigmas, latent_image, context):
+    n_iter = latent_image.get("batch_index", 1)
+
+    latent = latent_image["samples"]
+    latent_size = latent.size()
+    batch_size = latent_size[0]
+    image_height = latent_size[2] * 8
+    image_width = latent_size[3] * 8
+    return {
+        'width': image_width,
+        'height': image_height,
+        'steps': len(sigmas) - 1,
+        'n_iter': n_iter,
+        'batch_size': batch_size
+    }
+
+
 def _ultimate_sd_upscale_consumption(image, model, positive, negative, vae, upscale_by, seed,
                                      steps, cfg, sampler_name, scheduler, denoise, upscale_model,
                                      mode_type, tile_width, tile_height, mask_blur, tile_padding,
@@ -414,6 +431,7 @@ _NODE_CONSUMPTION_MAPPING = {
     'VHS_VideoCombine': _vhs_video_combine_consumption,
     'FaceDetailer': _face_detailer_consumption,
     'FaceDetailerPipe': _face_detailer_pipe_consumption,
+    'SamplerCustom': _sampler_custom_consumption,
 
     'ADE_UseEvolvedSampling': _none_consumption_maker,
     'ModelSamplingSD3': _none_consumption_maker,
@@ -535,6 +553,22 @@ _NODE_CONSUMPTION_MAPPING = {
     'easy showTensorShape': _none_consumption_maker,
     'ConditioningConcat': _none_consumption_maker,
     'ConditioningAverage': _none_consumption_maker,
+    'KSamplerSelect': _none_consumption_maker,
+    'AlignYourStepsScheduler': _none_consumption_maker,
+    'BasicScheduler': _none_consumption_maker,
+    'ModelMergeSimple': _none_consumption_maker,
+    'CLIPMergeSimple': _none_consumption_maker,
+    'ControlNetApply': _none_consumption_maker,
+    'ADE_LoadAnimateDiffModel': _none_consumption_maker,
+    'LatentSwitch': _none_consumption_maker,
+    'ADE_ApplyAnimateDiffModelSimple': _none_consumption_maker,
+    'IPAdapterModelLoader': _none_consumption_maker,
+    'ImageCrop': _none_consumption_maker,
+    'CLIPSegDetectorProvider': _none_consumption_maker,
+    'PreviewImage': _none_consumption_maker,
+    'Eff. Loader SDXL': _none_consumption_maker,
+    'Unpack SDXL Tuple': _none_consumption_maker,
+    'Automatic CFG': _none_consumption_maker,
 }
 
 
