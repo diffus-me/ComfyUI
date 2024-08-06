@@ -2,7 +2,8 @@ import execution_context
 import math
 
 
-def _k_sampler_consumption(model, seed, steps, cfg, sampler_name, scheduler, positive, negative, latent_image, denoise=1.0, context=None):
+def _k_sampler_consumption(model, seed, steps, cfg, sampler_name, scheduler, positive, negative, latent_image,
+                           denoise=1.0, context=None):
     n_iter = latent_image.get("batch_index", 1)
 
     latent = latent_image["samples"]
@@ -19,7 +20,8 @@ def _k_sampler_consumption(model, seed, steps, cfg, sampler_name, scheduler, pos
     }
 
 
-def _reactor_restore_face_consumption(image, model, visibility, codeformer_weight, facedetection, context: execution_context.ExecutionContext):
+def _reactor_restore_face_consumption(image, model, visibility, codeformer_weight, facedetection,
+                                      context: execution_context.ExecutionContext):
     return {
         'width': image.shape[2],
         'height': image.shape[1],
@@ -85,9 +87,12 @@ def _k_sampler_advanced_consumption(model,
     }
 
 
-def _tsc_ksampler_advanced_consumption(model, add_noise, noise_seed, steps, cfg, sampler_name, scheduler, positive, negative,
-                                       latent_image, start_at_step, end_at_step, return_with_leftover_noise, preview_method, vae_decode,
-                                       prompt=None, extra_pnginfo=None, my_unique_id=None, context: execution_context.ExecutionContext = None,
+def _tsc_ksampler_advanced_consumption(model, add_noise, noise_seed, steps, cfg, sampler_name, scheduler, positive,
+                                       negative,
+                                       latent_image, start_at_step, end_at_step, return_with_leftover_noise,
+                                       preview_method, vae_decode,
+                                       prompt=None, extra_pnginfo=None, my_unique_id=None,
+                                       context: execution_context.ExecutionContext = None,
                                        optional_vae=(None,), script=None):
     n_iter = latent_image.get("batch_index", 1)
 
@@ -106,8 +111,10 @@ def _tsc_ksampler_advanced_consumption(model, add_noise, noise_seed, steps, cfg,
 
 
 def _tsc_ksampler_sdxl_consumption(sdxl_tuple, noise_seed, steps, cfg, sampler_name, scheduler, latent_image,
-                                   start_at_step, refine_at_step, preview_method, vae_decode, prompt=None, extra_pnginfo=None,
-                                   my_unique_id=None, context: execution_context.ExecutionContext = None, optional_vae=(None,), refiner_extras=None,
+                                   start_at_step, refine_at_step, preview_method, vae_decode, prompt=None,
+                                   extra_pnginfo=None,
+                                   my_unique_id=None, context: execution_context.ExecutionContext = None,
+                                   optional_vae=(None,), refiner_extras=None,
                                    script=None):
     n_iter = latent_image.get("batch_index", 1)
 
@@ -126,7 +133,8 @@ def _tsc_ksampler_sdxl_consumption(sdxl_tuple, noise_seed, steps, cfg, sampler_n
 
 
 def _tsc_k_sampler_consumption(model, seed, steps, cfg, sampler_name, scheduler, positive, negative, latent_image,
-                               preview_method, vae_decode, denoise=1.0, prompt=None, extra_pnginfo=None, my_unique_id=None,
+                               preview_method, vae_decode, denoise=1.0, prompt=None, extra_pnginfo=None,
+                               my_unique_id=None,
                                context: execution_context.ExecutionContext = None,
                                optional_vae=(None,), script=None, add_noise=None, start_at_step=None, end_at_step=None,
                                return_with_leftover_noise=None, sampler_type="regular"):
@@ -164,7 +172,45 @@ def _impact_k_sampler_basic_pipe_consumption(basic_pipe, seed, steps, cfg, sampl
     }
 
 
-def _sampler_custom_consumption(model, add_noise, noise_seed, cfg, positive, negative, sampler, sigmas, latent_image, context):
+def _tiled_k_sampler_consumption(model, seed, tile_width, tile_height, tiling_strategy, steps, cfg, sampler_name,
+                                 scheduler, positive, negative, latent_image, denoise, context=None):
+    n_iter = latent_image.get("batch_index", 1)
+
+    latent = latent_image["samples"]
+    latent_size = latent.size()
+    batch_size = latent_size[0]
+    image_height = latent_size[2] * 8
+    image_width = latent_size[3] * 8
+    return {
+        'width': image_width,
+        'height': image_height,
+        'steps': steps,
+        'n_iter': n_iter,
+        'batch_size': batch_size
+    }
+
+
+def _tiled_k_sampler_advanced_consumption(model, add_noise, noise_seed, tile_width, tile_height, tiling_strategy, steps,
+                                          cfg, sampler_name, scheduler, positive, negative, latent_image, start_at_step,
+                                          end_at_step, return_with_leftover_noise, preview, denoise=1.0):
+    n_iter = latent_image.get("batch_index", 1)
+
+    latent = latent_image["samples"]
+    latent_size = latent.size()
+    batch_size = latent_size[0]
+    image_height = latent_size[2] * 8
+    image_width = latent_size[3] * 8
+    return {
+        'width': image_width,
+        'height': image_height,
+        'steps': steps,
+        'n_iter': n_iter,
+        'batch_size': batch_size
+    }
+
+
+def _sampler_custom_consumption(model, add_noise, noise_seed, cfg, positive, negative, sampler, sigmas, latent_image,
+                                context):
     n_iter = latent_image.get("batch_index", 1)
 
     latent = latent_image["samples"]
@@ -181,11 +227,127 @@ def _sampler_custom_consumption(model, add_noise, noise_seed, cfg, positive, neg
     }
 
 
+def _k_sampler_inspire_consumption(model, seed, steps, cfg, sampler_name, scheduler, positive, negative, latent_image,
+                                   denoise, noise_mode, batch_seed_mode="comfy", variation_seed=None,
+                                   variation_strength=None, variation_method="linear",
+                                   context: execution_context.ExecutionContext = None):
+    n_iter = latent_image.get("batch_index", 1)
+
+    latent = latent_image["samples"]
+    latent_size = latent.size()
+    batch_size = latent_size[0]
+    image_height = latent_size[2] * 8
+    image_width = latent_size[3] * 8
+    return {
+        'width': image_width,
+        'height': image_height,
+        'steps': steps,
+        'n_iter': n_iter,
+        'batch_size': batch_size
+    }
+
+
+def _was_k_sampler_cycle_consumption(model, seed, steps, cfg, sampler_name, scheduler, positive, negative, latent_image,
+                                     tiled_vae, latent_upscale, upscale_factor,
+                                     upscale_cycles, starting_denoise, cycle_denoise, scale_denoise, scale_sampling,
+                                     vae, secondary_model=None, secondary_start_cycle=None,
+                                     pos_additive=None, pos_add_mode=None, pos_add_strength=None,
+                                     pos_add_strength_scaling=None, pos_add_strength_cutoff=None,
+                                     neg_additive=None, neg_add_mode=None, neg_add_strength=None,
+                                     neg_add_strength_scaling=None, neg_add_strength_cutoff=None,
+                                     upscale_model=None, processor_model=None, sharpen_strength=0, sharpen_radius=2,
+                                     steps_scaling=None, steps_control=None,
+                                     steps_scaling_value=None, steps_cutoff=None, denoise_cutoff=0.25,
+                                     context=None):
+    division_factor = upscale_cycles if steps >= upscale_cycles else steps
+
+    n_iter = latent_image.get("batch_index", 1)
+
+    latent = latent_image["samples"]
+    latent_size = latent.size()
+    batch_size = latent_size[0]
+    image_height = latent_size[2] * 8
+    image_width = latent_size[3] * 8
+    return {
+        'width': image_width,
+        'height': image_height,
+        'steps': steps,
+        'n_iter': n_iter,
+        'batch_size': batch_size,
+        'division_factor': division_factor,
+        'upscale_factor': upscale_factor,
+    }
+
+
+def _searge_sdxl_image2image_sampler2_consumption(base_model, base_positive, base_negative, refiner_model,
+                                                  refiner_positive, refiner_negative,
+                                                  image, vae, noise_seed, steps, cfg, sampler_name, scheduler,
+                                                  base_ratio, denoise, softness,
+                                                  upscale_model=None, scaled_width=None, scaled_height=None,
+                                                  noise_offset=None, refiner_strength=None,
+                                                  context: execution_context.ExecutionContext = None):
+    result = {
+        'upscale': [],
+        'sample': []
+    }
+
+    if steps < 1:
+        return result
+
+    if upscale_model is not None and softness < 0.9999:
+        use_upscale_model = True
+        model_scale = _get_upscale_model_size(context, upscale_model)
+    else:
+        use_upscale_model = False
+        model_scale = 1
+
+    image_width = image.shape[2]
+    image_height = image.shape[1]
+    batch_size = image.shape[0]
+    if use_upscale_model:
+        result['upscale'].append({
+            'resize_x': image_width * model_scale,
+            'resize_y': image_height * model_scale,
+            'batch_size': batch_size,
+        })
+
+    if use_upscale_model and softness > 0.0001:
+        result['upscale'].append({
+            'resize_x': image_width * model_scale,
+            'resize_y': image_height * model_scale,
+            'batch_size': batch_size
+        })
+
+    if denoise < 0.01:
+        return result
+
+    n_iter = 1
+    if scaled_width is not None and scaled_height is not None:
+        sample_height = scaled_height
+        sample_width = scaled_width
+    elif use_upscale_model:
+        sample_height = image_height * model_scale
+        sample_width = image_width * model_scale
+    else:
+        sample_height = image_height
+        sample_width = image_width
+
+    result['sample'].append({
+        'width': sample_width,
+        'height': sample_height,
+        'steps': steps,
+        'n_iter': n_iter,
+        'batch_size': batch_size,
+    })
+    return result
+
+
 def _ultimate_sd_upscale_consumption(image, model, positive, negative, vae, upscale_by, seed,
                                      steps, cfg, sampler_name, scheduler, denoise, upscale_model,
                                      mode_type, tile_width, tile_height, mask_blur, tile_padding,
                                      seam_fix_mode, seam_fix_denoise, seam_fix_mask_blur,
-                                     seam_fix_width, seam_fix_padding, force_uniform_tiles, tiled_decode, context: execution_context.ExecutionContext):
+                                     seam_fix_width, seam_fix_padding, force_uniform_tiles, tiled_decode,
+                                     context: execution_context.ExecutionContext):
     batch_size = image.shape[0]
     image_width = image.shape[2]
     image_height = image.shape[1]
@@ -268,10 +430,7 @@ model_upscale_cache = {
 }
 
 
-def _easy_hires_fix_consumption(
-        model_name, rescale_after_model, rescale_method, rescale, percent, width, height,
-        longer_side, crop, image_output, link_id, save_prefix, pipe=None, image=None, vae=None, prompt=None,
-        extra_pnginfo=None, my_unique_id=None, context: execution_context.ExecutionContext = None):
+def _get_upscale_model_size(context, model_name):
     if model_name not in model_upscale_cache:
         try:
             import folder_paths
@@ -284,10 +443,35 @@ def _easy_hires_fix_consumption(
             del upscale_model
         except Exception as e:
             model_upscale_cache[model_name] = 4
-    model_scale = model_upscale_cache[model_name]
+    return model_upscale_cache[model_name]
+
+
+def _easy_hires_fix_consumption(
+        model_name, rescale_after_model, rescale_method, rescale, percent, width, height,
+        longer_side, crop, image_output, link_id, save_prefix, pipe=None, image=None, vae=None, prompt=None,
+        extra_pnginfo=None, my_unique_id=None, context: execution_context.ExecutionContext = None):
+    model_scale = _get_upscale_model_size(context, model_name)
 
     if pipe is not None:
         image = image if image is not None else pipe["images"]
+    if image is not None:
+        return {
+            'resize_x': image.shape[2] * model_scale,
+            'resize_y': image.shape[1] * model_scale,
+            'batch_size': image.shape[0],
+        }
+    else:
+        return {
+            'resize_x': 1,
+            'resize_y': 1,
+            'batch_size': 0,
+        }
+
+
+def _cr_upscale_image_consumption(image, upscale_model, rounding_modulus=8, loops=1, mode="rescale", supersample='true',
+                                  resampling_method="lanczos", rescale_factor=2, resize_width=1024,
+                                  context: execution_context.ExecutionContext = None):
+    model_scale = _get_upscale_model_size(context, upscale_model)
     if image is not None:
         return {
             'resize_x': image.shape[2] * model_scale,
@@ -377,6 +561,16 @@ def _re_actor_build_face_model_consumption(image, det_size=(640, 640)):
     }
 
 
+def _sd_4x_upscale_conditioning_consumption(images, positive, negative, scale_ratio, noise_augmentation):
+    width = max(1, round(images.shape[-2] * scale_ratio))
+    height = max(1, round(images.shape[-3] * scale_ratio))
+    return {
+        'resize_x': width,
+        'resize_y': height,
+        'batch_size': images.shape[0],
+    }
+
+
 def _slice_dict(d, i):
     d_new = dict()
     for k, v in d.items():
@@ -407,6 +601,21 @@ def _map_node_consumption_over_list(obj, input_data_all, func):
             return results
 
 
+def _ultimate_sd_upscale_no_upscale_consumption(upscaled_image, model, positive, negative, vae, seed,
+                                                steps, cfg, sampler_name, scheduler, denoise,
+                                                mode_type, tile_width, tile_height, mask_blur, tile_padding,
+                                                seam_fix_mode, seam_fix_denoise, seam_fix_mask_blur,
+                                                seam_fix_width, seam_fix_padding, force_uniform_tiles, tiled_decode,
+                                                context: execution_context.ExecutionContext):
+    return {
+        'width': upscaled_image.shape[2],
+        'height': upscaled_image.shape[1],
+        'steps': steps,
+        'n_iter': 1,
+        'batch_size': 1,
+    }
+
+
 def _default_consumption_maker(*args, **kwargs):
     return {}
 
@@ -432,6 +641,14 @@ _NODE_CONSUMPTION_MAPPING = {
     'FaceDetailer': _face_detailer_consumption,
     'FaceDetailerPipe': _face_detailer_pipe_consumption,
     'SamplerCustom': _sampler_custom_consumption,
+    'SeargeSDXLImage2ImageSampler2': _searge_sdxl_image2image_sampler2_consumption,
+    'BNK_TiledKSamplerAdvanced': _tiled_k_sampler_advanced_consumption,
+    'BNK_TiledKSampler': _tiled_k_sampler_consumption,
+    'UltimateSDUpscaleNoUpscale': _ultimate_sd_upscale_no_upscale_consumption,
+    'CR Upscale Image': _cr_upscale_image_consumption,
+    'KSampler //Inspire': _k_sampler_inspire_consumption,
+    'SD_4XUpscale_Conditioning': _sd_4x_upscale_conditioning_consumption,
+    'KSampler Cycle': _was_k_sampler_cycle_consumption,
 
     'ADE_UseEvolvedSampling': _none_consumption_maker,
     'ModelSamplingSD3': _none_consumption_maker,
@@ -443,7 +660,6 @@ _NODE_CONSUMPTION_MAPPING = {
     'VideoLinearCFGGuidance': _none_consumption_maker,
     'ConstrainImage|pysssss': _none_consumption_maker,
     'MiDaS-DepthMapPreprocessor': _none_consumption_maker,
-    'ImageQuantize': _none_consumption_maker,
     'VHS_BatchManager': _none_consumption_maker,
     'easy ultralyticsDetectorPipe': _none_consumption_maker,
     'ColorPreprocessor': _none_consumption_maker,
@@ -456,7 +672,6 @@ _NODE_CONSUMPTION_MAPPING = {
     'CR Multi-ControlNet Stack': _none_consumption_maker,
     'AnimeLineArtPreprocessor': _none_consumption_maker,
     'InstantIDFaceAnalysis': _none_consumption_maker,
-    'ImageScaleToTotalPixels': _none_consumption_maker,
     'IPAdapterAdvanced': _none_consumption_maker,
     'IPAdapter': _none_consumption_maker,
     'RepeatLatentBatch': _none_consumption_maker,
@@ -472,7 +687,6 @@ _NODE_CONSUMPTION_MAPPING = {
     'Image Resize': _none_consumption_maker,
     'EmptyLatentImage': _none_consumption_maker,
     'ImageScale': _none_consumption_maker,
-    'Save Image w/Metadata': _none_consumption_maker,
     'CLIPSetLastLayer': _none_consumption_maker,
     'LoadImage': _none_consumption_maker,
     'easy promptReplace': _none_consumption_maker,
@@ -487,13 +701,10 @@ _NODE_CONSUMPTION_MAPPING = {
     'SDXLPromptStyler': _none_consumption_maker,
     'ConditioningCombine': _none_consumption_maker,
     'ConditioningZeroOut': _none_consumption_maker,
-    'CR SDXL Aspect Ratio': _none_consumption_maker,
     'TripleCLIPLoader': _none_consumption_maker,
     'LatentUpscale': _none_consumption_maker,
     'easy stylesSelector': _none_consumption_maker,
-    'Seed Generator': _none_consumption_maker,
     'ComfyUIStyler': _none_consumption_maker,
-    'String Literal': _none_consumption_maker,
     'CLIPTextEncodeSDXLRefiner': _none_consumption_maker,
     'easy ipadapterApply': _none_consumption_maker,
     'ArtistStyler': _none_consumption_maker,
@@ -569,6 +780,150 @@ _NODE_CONSUMPTION_MAPPING = {
     'Eff. Loader SDXL': _none_consumption_maker,
     'Unpack SDXL Tuple': _none_consumption_maker,
     'Automatic CFG': _none_consumption_maker,
+    'easy textSwitch': _none_consumption_maker,
+    'ApplyInstantIDAdvanced': _none_consumption_maker,
+    'easy a1111Loader': _none_consumption_maker,
+    'Text to Conditioning': _none_consumption_maker,
+    'SeargeSamplerInputs': _none_consumption_maker,
+    'LineArtPreprocessor': _none_consumption_maker,
+    'IPAdapterFaceID': _none_consumption_maker,
+    'unCLIPCheckpointLoader': _none_consumption_maker,
+    'UNETLoader': _none_consumption_maker,
+    'ControlNetLoaderAdvanced': _none_consumption_maker,
+    'EmptyImage': _none_consumption_maker,
+    'ACN_AdvancedControlNetApply': _none_consumption_maker,
+    'LoraLoaderModelOnly': _none_consumption_maker,
+    'LoadAnimateDiffModelNode': _none_consumption_maker,
+    'ADE_AnimateDiffKeyframe': _none_consumption_maker,
+    'DiffControlNetLoader': _none_consumption_maker,
+    'DiffControlNetLoaderAdvanced': _none_consumption_maker,
+    'SDTurboScheduler': _none_consumption_maker,
+    'Image Crop Face': _none_consumption_maker,
+    'IPAdapterTiled': _none_consumption_maker,
+    'CLIPVisionLoader': _none_consumption_maker,
+    'SeargeInput1': _none_consumption_maker,
+    'SeargeInput2': _none_consumption_maker,
+    'SeargeInput3': _none_consumption_maker,
+    'SeargeInput4': _none_consumption_maker,
+    'SeargeInput5': _none_consumption_maker,
+    'SeargeInput6': _none_consumption_maker,
+    'SeargeInput7': _none_consumption_maker,
+    'SeargeOutput1': _none_consumption_maker,
+    'SeargeOutput2': _none_consumption_maker,
+    'SeargeOutput3': _none_consumption_maker,
+    'SeargeOutput4': _none_consumption_maker,
+    'SeargeOutput5': _none_consumption_maker,
+    'SeargeOutput6': _none_consumption_maker,
+    'SeargeOutput7': _none_consumption_maker,
+    'SeargeGenerated1': _none_consumption_maker,
+    'SeargeVAELoader': _none_consumption_maker,
+    'TilePreprocessor': _none_consumption_maker,
+    'TTPlanet_TileGF_Preprocessor': _none_consumption_maker,
+    'TTPlanet_TileSimple_Preprocessor': _none_consumption_maker,
+    'IPAdapterNoise': _none_consumption_maker,
+    'SetLatentNoiseMask': _none_consumption_maker,
+    'easy loraStack': _none_consumption_maker,
+    'ScaledSoftControlNetWeights': _none_consumption_maker,
+    'ScaledSoftMaskedUniversalWeights': _none_consumption_maker,
+    'SoftControlNetWeights': _none_consumption_maker,
+    'CustomControlNetWeights': _none_consumption_maker,
+    'SoftT2IAdapterWeights': _none_consumption_maker,
+    'CustomT2IAdapterWeights': _none_consumption_maker,
+    'ACN_DefaultUniversalWeights': _none_consumption_maker,
+    'ACN_ReferencePreprocessor': _none_consumption_maker,
+    'ACN_ReferenceControlNet': _none_consumption_maker,
+    'ACN_ReferenceControlNetFnetune': _none_consumption_maker,
+    'easy controlnetStack': _none_consumption_maker,
+    'Control Net Stacker': _none_consumption_maker,
+    'easy globalSeed': _none_consumption_maker,
+    "easy positive": _none_consumption_maker,
+    "easy negative": _none_consumption_maker,
+    "easy wildcards": _none_consumption_maker,
+    "easy prompt": _none_consumption_maker,
+    "easy promptList": _none_consumption_maker,
+    "easy promptLine": _none_consumption_maker,
+    "easy promptConcat": _none_consumption_maker,
+    "easy portraitMaster": _none_consumption_maker,
+    'AIO_Preprocessor': _none_consumption_maker,
+    'ImageResizeKJ': _none_consumption_maker,
+    'ImagePadForOutpaint': _none_consumption_maker,
+    'CannyEdgePreprocessor': _none_consumption_maker,
+    'DepthAnythingPreprocessor': _none_consumption_maker,
+    'Zoe_DepthAnythingPreprocessor': _none_consumption_maker,
+    'IPAdapterInsightFaceLoader': _none_consumption_maker,
+    'ReActorMaskHelper': _none_consumption_maker,
+    'easy imageColorMatch': _none_consumption_maker,
+    'Checkpoint Selector': _none_consumption_maker,
+    'Save Image w/Metadata': _none_consumption_maker,
+    'Sampler Selector': _none_consumption_maker,
+    'Scheduler Selector': _none_consumption_maker,
+    'Seed Generator': _none_consumption_maker,
+    'String Literal': _none_consumption_maker,
+    'Width/Height Literal': _none_consumption_maker,
+    'Cfg Literal': _none_consumption_maker,
+    'Int Literal': _none_consumption_maker,
+    'ImpactImageBatchToImageList': _none_consumption_maker,
+    'ImpactMakeImageList': _none_consumption_maker,
+    'ImpactMakeImageBatch': _none_consumption_maker,
+    'PhotoMakerLoader': _none_consumption_maker,
+    'PhotoMakerEncode': _none_consumption_maker,
+    'ImpactSEGSToMaskList': _none_consumption_maker,
+    'GroundingDinoModelLoader (segment anything)': _none_consumption_maker,
+    'VAEEncodeForInpaint': _none_consumption_maker,
+    'ImpactWildcardProcessor': _none_consumption_maker,
+    'ImpactWildcardEncode': _none_consumption_maker,
+    'StringFunction|pysssss': _none_consumption_maker,
+    'SAMModelLoader (segment anything)': _none_consumption_maker,
+    "INTConstant": _none_consumption_maker,
+    "FloatConstant": _none_consumption_maker,
+    "StringConstant": _none_consumption_maker,
+    "StringConstantMultiline": _none_consumption_maker,
+    "CR Image Input Switch": _none_consumption_maker,
+    "CR Image Input Switch (4 way)": _none_consumption_maker,
+    "CR Latent Input Switch": _none_consumption_maker,
+    "CR Conditioning Input Switch": _none_consumption_maker,
+    "CR Clip Input Switch": _none_consumption_maker,
+    "CR Model Input Switch": _none_consumption_maker,
+    "CR ControlNet Input Switch": _none_consumption_maker,
+    "CR VAE Input Switch": _none_consumption_maker,
+    "CR Text Input Switch": _none_consumption_maker,
+    "CR Text Input Switch (4 way)": _none_consumption_maker,
+    "CR Switch Model and CLIP": _none_consumption_maker,
+    'SeargeFloatConstant': _none_consumption_maker,
+    "SeargeFloatPair": _none_consumption_maker,
+    "SeargeFloatMath": _none_consumption_maker,
+    'easy showAnything': _none_consumption_maker,
+    'CLIPVisionEncode': _none_consumption_maker,
+    'unCLIPConditioning': _none_consumption_maker,
+    'SeargeDebugPrinter': _none_consumption_maker,
+    'LayerUtility: SaveImagePlus': _none_consumption_maker,
+    'DetailerForEachDebug': _none_consumption_maker,
+    'GlobalSeed //Inspire': _none_consumption_maker,
+    'VAEDecodeTiled': _none_consumption_maker,
+    'VAEEncodeTiled': _none_consumption_maker,
+    'DualCLIPLoader': _none_consumption_maker,
+    'RandomNoise': _none_consumption_maker,
+    'BasicGuider': _none_consumption_maker,
+    'SDXLPromptStylerAdvanced': _none_consumption_maker,
+    'PerturbedAttentionGuidance': _none_consumption_maker,
+    'Anything Everywhere3': _none_consumption_maker,
+    "CR SD1.5 Aspect Ratio": _none_consumption_maker,
+    "CR SDXL Aspect Ratio": _none_consumption_maker,
+    "CR Aspect Ratio": _none_consumption_maker,
+    "CR Aspect Ratio Banners": _none_consumption_maker,
+    "CR Aspect Ratio Social Media": _none_consumption_maker,
+    "CR_Aspect Ratio For Print": _none_consumption_maker,
+    'Text Concatenate': _none_consumption_maker,
+    'ImageBatchMulti': _none_consumption_maker,
+    'MeshGraphormer-DepthMapPreprocessor': _none_consumption_maker,
+    'MeshGraphormer+ImpactDetector-DepthMapPreprocessor': _none_consumption_maker,
+    'LeReS-DepthMapPreprocessor': _none_consumption_maker,
+    'IPAdapterUnifiedLoaderFaceID': _none_consumption_maker,
+    "ImageBlend": _none_consumption_maker,
+    "ImageBlur": _none_consumption_maker,
+    "ImageQuantize": _none_consumption_maker,
+    "ImageSharpen": _none_consumption_maker,
+    "ImageScaleToTotalPixels": _none_consumption_maker,
 }
 
 
