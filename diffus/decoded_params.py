@@ -2,8 +2,7 @@ import execution_context
 import math
 
 
-def _k_sampler_consumption(model, seed, steps, cfg, sampler_name, scheduler, positive, negative, latent_image,
-                           denoise=1.0, context=None):
+def __sample_opt_from_latent(latent_image, steps, ):
     n_iter = latent_image.get("batch_index", 1)
 
     latent = latent_image["samples"]
@@ -20,15 +19,35 @@ def _k_sampler_consumption(model, seed, steps, cfg, sampler_name, scheduler, pos
     }
 
 
+def _k_sampler_consumption(model, seed, steps, cfg, sampler_name, scheduler, positive, negative, latent_image,
+                           denoise=1.0, context=None):
+    n_iter = latent_image.get("batch_index", 1)
+
+    latent = latent_image["samples"]
+    latent_size = latent.size()
+    batch_size = latent_size[0]
+    image_height = latent_size[2] * 8
+    image_width = latent_size[3] * 8
+    return [{
+        'opt_type': 'sample',
+        'width': image_width,
+        'height': image_height,
+        'steps': steps,
+        'n_iter': n_iter,
+        'batch_size': batch_size
+    }]
+
+
 def _reactor_restore_face_consumption(image, model, visibility, codeformer_weight, facedetection,
                                       context: execution_context.ExecutionContext):
-    return {
+    return [{
+        'opt_type': 'sample',
         'width': image.shape[2],
         'height': image.shape[1],
         'steps': 30,
         'n_iter': 0 if model == 'none' else 1,
         'batch_size': image.shape[0]
-    }
+    }]
 
 
 def _reactor_face_swap_consumption(enabled,
@@ -47,13 +66,14 @@ def _reactor_face_swap_consumption(enabled,
                                    face_model=None,
                                    faces_order=None,
                                    context: execution_context.ExecutionContext = None):
-    return {
+    return [{
+        'opt_type': 'sample',
         'width': input_image.shape[2],
         'height': input_image.shape[1],
         'steps': 30,
         'n_iter': 2,  # 1 for k_sampler, 1 for face detection
         'batch_size': input_image.shape[0],
-    }
+    }]
 
 
 def _k_sampler_advanced_consumption(model,
@@ -78,13 +98,14 @@ def _k_sampler_advanced_consumption(model,
     batch_size = latent_size[0]
     image_height = latent_size[2] * 8
     image_width = latent_size[3] * 8
-    return {
+    return [{
+        'opt_type': 'sample',
         'width': image_width,
         'height': image_height,
         'steps': steps,
         'n_iter': n_iter,
         'batch_size': batch_size
-    }
+    }]
 
 
 def _tsc_ksampler_advanced_consumption(model, add_noise, noise_seed, steps, cfg, sampler_name, scheduler, positive,
@@ -101,13 +122,14 @@ def _tsc_ksampler_advanced_consumption(model, add_noise, noise_seed, steps, cfg,
     batch_size = latent_size[0]
     image_height = latent_size[2] * 8
     image_width = latent_size[3] * 8
-    return {
+    return [{
+        'opt_type': 'sample',
         'width': image_width,
         'height': image_height,
         'steps': steps,
         'n_iter': n_iter,
         'batch_size': batch_size
-    }
+    }]
 
 
 def _tsc_ksampler_sdxl_consumption(sdxl_tuple, noise_seed, steps, cfg, sampler_name, scheduler, latent_image,
@@ -123,13 +145,14 @@ def _tsc_ksampler_sdxl_consumption(sdxl_tuple, noise_seed, steps, cfg, sampler_n
     batch_size = latent_size[0]
     image_height = latent_size[2] * 8
     image_width = latent_size[3] * 8
-    return {
+    return [{
+        'opt_type': 'sample',
         'width': image_width,
         'height': image_height,
         'steps': steps,
         'n_iter': n_iter,
         'batch_size': batch_size
-    }
+    }]
 
 
 def _tsc_k_sampler_consumption(model, seed, steps, cfg, sampler_name, scheduler, positive, negative, latent_image,
@@ -145,13 +168,14 @@ def _tsc_k_sampler_consumption(model, seed, steps, cfg, sampler_name, scheduler,
     batch_size = latent_size[0]
     image_height = latent_size[2] * 8
     image_width = latent_size[3] * 8
-    return {
+    return [{
+        'opt_type': 'sample',
         'width': image_width,
         'height': image_height,
         'steps': steps,
         'n_iter': n_iter,
         'batch_size': batch_size
-    }
+    }]
 
 
 def _impact_k_sampler_basic_pipe_consumption(basic_pipe, seed, steps, cfg, sampler_name, scheduler, latent_image,
@@ -163,13 +187,14 @@ def _impact_k_sampler_basic_pipe_consumption(basic_pipe, seed, steps, cfg, sampl
     batch_size = latent_size[0]
     image_height = latent_size[2] * 8
     image_width = latent_size[3] * 8
-    return {
+    return [{
+        'opt_type': 'sample',
         'width': image_width,
         'height': image_height,
         'steps': steps,
         'n_iter': n_iter,
         'batch_size': batch_size
-    }
+    }]
 
 
 def _tiled_k_sampler_consumption(model, seed, tile_width, tile_height, tiling_strategy, steps, cfg, sampler_name,
@@ -182,17 +207,21 @@ def _tiled_k_sampler_consumption(model, seed, tile_width, tile_height, tiling_st
     image_height = latent_size[2] * 8
     image_width = latent_size[3] * 8
     return {
-        'width': image_width,
-        'height': image_height,
-        'steps': steps,
-        'n_iter': n_iter,
-        'batch_size': batch_size
+        'opts': [{
+            'opt_type': 'sample',
+            'width': image_width,
+            'height': image_height,
+            'steps': steps,
+            'n_iter': n_iter,
+            'batch_size': batch_size
+        }]
     }
 
 
 def _tiled_k_sampler_advanced_consumption(model, add_noise, noise_seed, tile_width, tile_height, tiling_strategy, steps,
                                           cfg, sampler_name, scheduler, positive, negative, latent_image, start_at_step,
-                                          end_at_step, return_with_leftover_noise, preview, denoise=1.0):
+                                          end_at_step, return_with_leftover_noise, preview, denoise=1.0,
+                                          context: execution_context.ExecutionContext = None):
     n_iter = latent_image.get("batch_index", 1)
 
     latent = latent_image["samples"]
@@ -201,50 +230,27 @@ def _tiled_k_sampler_advanced_consumption(model, add_noise, noise_seed, tile_wid
     image_height = latent_size[2] * 8
     image_width = latent_size[3] * 8
     return {
-        'width': image_width,
-        'height': image_height,
-        'steps': steps,
-        'n_iter': n_iter,
-        'batch_size': batch_size
+        'opts': [{
+            'opt_type': 'sample',
+            'width': image_width,
+            'height': image_height,
+            'steps': steps,
+            'n_iter': n_iter,
+            'batch_size': batch_size
+        }]
     }
 
 
 def _sampler_custom_consumption(model, add_noise, noise_seed, cfg, positive, negative, sampler, sigmas, latent_image,
                                 context):
-    n_iter = latent_image.get("batch_index", 1)
-
-    latent = latent_image["samples"]
-    latent_size = latent.size()
-    batch_size = latent_size[0]
-    image_height = latent_size[2] * 8
-    image_width = latent_size[3] * 8
-    return {
-        'width': image_width,
-        'height': image_height,
-        'steps': len(sigmas) - 1,
-        'n_iter': n_iter,
-        'batch_size': batch_size
-    }
+    return {'opts': [__sample_opt_from_latent(latent_image, len(sigmas))]}
 
 
 def _k_sampler_inspire_consumption(model, seed, steps, cfg, sampler_name, scheduler, positive, negative, latent_image,
                                    denoise, noise_mode, batch_seed_mode="comfy", variation_seed=None,
                                    variation_strength=None, variation_method="linear",
                                    context: execution_context.ExecutionContext = None):
-    n_iter = latent_image.get("batch_index", 1)
-
-    latent = latent_image["samples"]
-    latent_size = latent.size()
-    batch_size = latent_size[0]
-    image_height = latent_size[2] * 8
-    image_width = latent_size[3] * 8
-    return {
-        'width': image_width,
-        'height': image_height,
-        'steps': steps,
-        'n_iter': n_iter,
-        'batch_size': batch_size
-    }
+    return {'opts': [__sample_opt_from_latent(latent_image, steps)]}
 
 
 def _was_k_sampler_cycle_consumption(model, seed, steps, cfg, sampler_name, scheduler, positive, negative, latent_image,
@@ -259,24 +265,64 @@ def _was_k_sampler_cycle_consumption(model, seed, steps, cfg, sampler_name, sche
                                      steps_scaling=None, steps_control=None,
                                      steps_scaling_value=None, steps_cutoff=None, denoise_cutoff=0.25,
                                      context=None):
-    division_factor = upscale_cycles if steps >= upscale_cycles else steps
-
+    result = []
+    upscale_steps = upscale_cycles
+    division_factor = upscale_steps if steps >= upscale_steps else steps
+    current_upscale_factor = upscale_factor ** (1 / (division_factor - 1))
     n_iter = latent_image.get("batch_index", 1)
 
     latent = latent_image["samples"]
     latent_size = latent.size()
     batch_size = latent_size[0]
-    image_height = latent_size[2] * 8
-    image_width = latent_size[3] * 8
-    return {
-        'width': image_width,
-        'height': image_height,
-        'steps': steps,
-        'n_iter': n_iter,
-        'batch_size': batch_size,
-        'division_factor': division_factor,
-        'upscale_factor': upscale_factor,
-    }
+    latent_image_height = latent_size[2] * 8
+    latent_image_width = latent_size[3] * 8
+
+    for i in range(division_factor):
+        if steps_scaling and i > 0:
+            steps = (
+                steps + steps_scaling_value
+                if steps_control == 'increment'
+                else steps - steps_scaling_value
+            )
+            steps = (
+                (steps
+                 if steps <= steps_cutoff
+                 else steps_cutoff)
+                if steps_control == 'increment'
+                else (steps
+                      if steps >= steps_cutoff
+                      else steps_cutoff)
+            )
+        result.append({
+            'opt_type': 'sample',
+            'width': latent_image_width,
+            'height': latent_image_height,
+            'steps': steps,
+            'n_iter': n_iter,
+            'batch_size': batch_size
+        })
+        if i < division_factor - 1 and latent_upscale == 'disable':
+            if processor_model:
+                scale_factor = _get_upscale_model_size(context, processor_model)
+                result.append({
+                    'opt_type': 'upscale',
+                    'width': latent_image_width * scale_factor,
+                    'height': latent_image_height * scale_factor,
+                })
+            if upscale_model:
+                scale_factor = _get_upscale_model_size(context, upscale_model)
+                result.append({
+                    'opt_type': 'upscale',
+                    'width': latent_image_width * scale_factor,
+                    'height': latent_image_height * scale_factor,
+                })
+                latent_image_width = int(round(round(latent_image_width * current_upscale_factor) / 32) * 32)
+                latent_image_height = int(round(round(latent_image_height * current_upscale_factor) / 32) * 32)
+        else:
+            latent_image_height *= current_upscale_factor
+            latent_image_width *= current_upscale_factor
+
+    return {'opts': result}
 
 
 def _searge_sdxl_image2image_sampler2_consumption(base_model, base_positive, base_negative, refiner_model,
@@ -286,10 +332,7 @@ def _searge_sdxl_image2image_sampler2_consumption(base_model, base_positive, bas
                                                   upscale_model=None, scaled_width=None, scaled_height=None,
                                                   noise_offset=None, refiner_strength=None,
                                                   context: execution_context.ExecutionContext = None):
-    result = {
-        'upscale': [],
-        'sample': []
-    }
+    result = []
 
     if steps < 1:
         return result
@@ -305,17 +348,11 @@ def _searge_sdxl_image2image_sampler2_consumption(base_model, base_positive, bas
     image_height = image.shape[1]
     batch_size = image.shape[0]
     if use_upscale_model:
-        result['upscale'].append({
-            'resize_x': image_width * model_scale,
-            'resize_y': image_height * model_scale,
+        result.append({
+            'opt_type': 'upscale',
+            'width': image_width * model_scale,
+            'height': image_height * model_scale,
             'batch_size': batch_size,
-        })
-
-    if use_upscale_model and softness > 0.0001:
-        result['upscale'].append({
-            'resize_x': image_width * model_scale,
-            'resize_y': image_height * model_scale,
-            'batch_size': batch_size
         })
 
     if denoise < 0.01:
@@ -332,14 +369,15 @@ def _searge_sdxl_image2image_sampler2_consumption(base_model, base_positive, bas
         sample_height = image_height
         sample_width = image_width
 
-    result['sample'].append({
+    result.append({
+        'opt': 'sample',
         'width': sample_width,
         'height': sample_height,
         'steps': steps,
         'n_iter': n_iter,
         'batch_size': batch_size,
     })
-    return result
+    return {'opts': result}
 
 
 def _ultimate_sd_upscale_consumption(image, model, positive, negative, vae, upscale_by, seed,
@@ -363,17 +401,21 @@ def _ultimate_sd_upscale_consumption(image, model, positive, negative, vae, upsc
 
     redraw_width = math.ceil((image_width * upscale_by) / 64) * 64
     redraw_height = math.ceil((image_height * upscale_by) / 64) * 64
-
-    return {
+    result = [{
+        'opt_type': 'sample',
         'width': redraw_width,
         'height': redraw_height,
-        'enable_hr': enable_hr,
-        'hr_resize_x': hr_resize_x,
-        'hr_resize_y': hr_resize_y,
         'steps': steps,
         'n_iter': 1,
         'batch_size': batch_size,
-    }
+    }]
+    if enable_hr:
+        result.append({
+            'opt_type': 'upscale',
+            'width': hr_resize_x,
+            'height': hr_resize_y,
+        })
+    return result
 
 
 def _image_upscale_with_model_consumption(upscale_model, image):
@@ -474,15 +516,14 @@ def _cr_upscale_image_consumption(image, upscale_model, rounding_modulus=8, loop
     model_scale = _get_upscale_model_size(context, upscale_model)
     if image is not None:
         return {
-            'resize_x': image.shape[2] * model_scale,
-            'resize_y': image.shape[1] * model_scale,
-            'batch_size': image.shape[0],
+            'opts': [{
+                'width': image.shape[2] * model_scale,
+                'height': image.shape[1] * model_scale,
+                'batch_size': image.shape[0],
+            }]
         }
     else:
         return {
-            'resize_x': 1,
-            'resize_y': 1,
-            'batch_size': 0,
         }
 
 
@@ -608,11 +649,13 @@ def _ultimate_sd_upscale_no_upscale_consumption(upscaled_image, model, positive,
                                                 seam_fix_width, seam_fix_padding, force_uniform_tiles, tiled_decode,
                                                 context: execution_context.ExecutionContext):
     return {
-        'width': upscaled_image.shape[2],
-        'height': upscaled_image.shape[1],
-        'steps': steps,
-        'n_iter': 1,
-        'batch_size': 1,
+        'opts': [{
+            'width': upscaled_image.shape[2],
+            'height': upscaled_image.shape[1],
+            'steps': steps,
+            'n_iter': 1,
+            'batch_size': 1,
+        }]
     }
 
 
@@ -640,6 +683,7 @@ _NODE_CONSUMPTION_MAPPING = {
     'VHS_VideoCombine': _vhs_video_combine_consumption,
     'FaceDetailer': _face_detailer_consumption,
     'FaceDetailerPipe': _face_detailer_pipe_consumption,
+
     'SamplerCustom': _sampler_custom_consumption,
     'SeargeSDXLImage2ImageSampler2': _searge_sdxl_image2image_sampler2_consumption,
     'BNK_TiledKSamplerAdvanced': _tiled_k_sampler_advanced_consumption,
@@ -647,7 +691,6 @@ _NODE_CONSUMPTION_MAPPING = {
     'UltimateSDUpscaleNoUpscale': _ultimate_sd_upscale_no_upscale_consumption,
     'CR Upscale Image': _cr_upscale_image_consumption,
     'KSampler //Inspire': _k_sampler_inspire_consumption,
-    'SD_4XUpscale_Conditioning': _sd_4x_upscale_conditioning_consumption,
     'KSampler Cycle': _was_k_sampler_cycle_consumption,
 
     'ADE_UseEvolvedSampling': _none_consumption_maker,
@@ -924,6 +967,7 @@ _NODE_CONSUMPTION_MAPPING = {
     "ImageQuantize": _none_consumption_maker,
     "ImageSharpen": _none_consumption_maker,
     "ImageScaleToTotalPixels": _none_consumption_maker,
+    'SD_4XUpscale_Conditioning': _none_consumption_maker,
 }
 
 
