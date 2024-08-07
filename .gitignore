@@ -19,3 +19,5 @@ venv/
 /user/
 *.log
 web_custom_versions/
+custom_nodes.bak*
+custom_nodes_builtin/

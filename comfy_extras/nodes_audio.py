@@ -1,6 +1,7 @@
 import torchaudio
 import torch
 import comfy.model_management
+import execution_context
 import folder_paths
 import os
 import io
@@ -186,8 +187,8 @@ class LoadAudio:
     SUPPORTED_FORMATS = ('.wav', '.mp3', '.ogg', '.flac', '.aiff', '.aif')
 
     @classmethod
-    def INPUT_TYPES(s):
-        input_dir = folder_paths.get_input_directory()
+    def INPUT_TYPES(s, context: execution_context.ExecutionContext):
+        input_dir = folder_paths.get_input_directory(context.user_hash)
         files = [
             f for f in os.listdir(input_dir)
             if (os.path.isfile(os.path.join(input_dir, f))

@@ -1,9 +1,12 @@
 import { api } from "./api.js";
 import { ComfyDialog as _ComfyDialog } from "./ui/dialog.js";
+import { ComfyConfirmDialog as _ComfyConfirmDialog } from "./ui/confirmDialog.js";
 import { toggleSwitch } from "./ui/toggleSwitch.js";
 import { ComfySettingsDialog } from "./ui/settings.js";
+import { initUserCenterMenu } from "./userCenter.js";
 
 export const ComfyDialog = _ComfyDialog;
+export const ComfyConfirmDialog = _ComfyConfirmDialog;
 
 /**
  * @template { string | (keyof HTMLElementTagNameMap) } K
@@ -300,6 +303,7 @@ export class ComfyUI {
 	constructor(app) {
 		this.app = app;
 		this.dialog = new ComfyDialog();
+		this.confirmDialog = new ComfyConfirmDialog();
 		this.settings = new ComfySettingsDialog(app);
 
 		this.batchCount = 1;
@@ -408,6 +412,38 @@ export class ComfyUI {
 			}
 		});
 
+		this.userMenu = $el(
+			"div.diffus-user-menu-anchor",
+			{
+        id: "diffus_user_menu_anchor",
+				parent: document.body,
+        style: {
+          position: "absolute",
+          left: "0px",
+          top: "0px",
+          width: "100%",
+          "z-index": 1000,
+        }
+			},
+      [$el("v-app",
+        {
+          id: "diffus_user_menu_app"
+        }, 
+        [$el("div.diffus-user-menu-container",
+          {
+            id: "diffus_user_menu_container",
+            style: {
+              display: "block",
+              position: "absolute",
+              right: "20px",
+              top: "20px",
+            },
+          }
+        )])],
+		);
+
+    initUserCenterMenu();
+
 		this.menuHamburger = $el(
 			"div.comfy-menu-hamburger",
 			{
@@ -432,10 +468,6 @@ export class ComfyUI {
 				$el("span.drag-handle"),
 				$el("span.comfy-menu-queue-size", { $: (q) => (this.queueSize = q) }),
 				$el("div.comfy-menu-actions", [
-					$el("button.comfy-settings-btn", {
-						textContent: "⚙️",
-						onclick: () => this.settings.show(),
-					}),
 					$el("button.comfy-close-menu-btn", {
 						textContent: "\u00d7",
 						onclick: () => {
@@ -472,6 +504,7 @@ export class ComfyUI {
 						type: "number",
 						value: this.batchCount,
 						min: "1",
+						max: "4",
 						style: {width: "35%", "margin-left": "0.4em"},
 						oninput: (i) => {
 							this.batchCount = i.target.value;
@@ -482,56 +515,14 @@ export class ComfyUI {
 						id: "batchCountInputRange",
 						type: "range",
 						min: "1",
-						max: "100",
+						max: "4",
 						value: this.batchCount,
 						oninput: (i) => {
 							this.batchCount = i.srcElement.value;
 							document.getElementById("batchCountInputNumber").value = i.srcElement.value;
 						},
-					}),		
+					}),
 				]),
-				$el("div",[
-					$el("label",{
-						for:"autoQueueCheckbox",
-						innerHTML: "Auto Queue"
-					}),
-					$el("input", {
-						id: "autoQueueCheckbox",
-						type: "checkbox",
-						checked: false,
-						title: "Automatically queue prompt when the queue size hits 0",
-						onchange: (e) => {
-							this.autoQueueEnabled = e.target.checked;
-							autoQueueModeEl.style.display = this.autoQueueEnabled ? "" : "none";
-						}
-					}),
-					autoQueueModeEl
-				])
-			]),
-			$el("div.comfy-menu-btns", [
-				$el("button", {
-					id: "queue-front-button",
-					textContent: "Queue Front",
-					onclick: () => app.queuePrompt(-1, this.batchCount)
-				}),
-				$el("button", {
-					$: (b) => (this.queue.button = b),
-					id: "comfy-view-queue-button",
-					textContent: "View Queue",
-					onclick: () => {
-						this.history.hide();
-						this.queue.toggle();
-					},
-				}),
-				$el("button", {
-					$: (b) => (this.history.button = b),
-					id: "comfy-view-history-button",
-					textContent: "View History",
-					onclick: () => {
-						this.queue.hide();
-						this.history.toggle();
-					},
-				}),
 			]),
 			this.queue.element,
 			this.history.element,
@@ -623,6 +614,17 @@ export class ComfyUI {
 			$el("button", {
 				id: "comfy-reset-view-button", textContent: "Reset View", onclick: async () => {
 					app.resetView();
+				}
+			}),
+			$el("button", {
+				id: "comfy-clear-input-folder-button", textContent: "Clear Input", onclick: async () => {
+					this.confirmDialog.show("Clear input folder?<br>All files you uploaded before will be deleted.<br>This CAN NOT be undone.", () => {
+                        // user clicked OK
+                        api.clearInput();
+                        this.confirmDialog.close();
+                    }, () => {
+                        this.confirmDialog.close();
+                    })
 				}
 			}),
 		]);

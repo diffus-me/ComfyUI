@@ -223,7 +223,7 @@ def save_checkpoint(model, clip=None, vae=None, clip_vision=None, filename_prefi
 
 class CheckpointSave:
     def __init__(self):
-        self.output_dir = folder_paths.get_output_directory()
+        pass
 
     @classmethod
     def INPUT_TYPES(s):
@@ -231,33 +231,33 @@ class CheckpointSave:
                               "clip": ("CLIP",),
                               "vae": ("VAE",),
                               "filename_prefix": ("STRING", {"default": "checkpoints/ComfyUI"}),},
-                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},}
+                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"}, "user_hash": "USER_HASH"}
     RETURN_TYPES = ()
     FUNCTION = "save"
     OUTPUT_NODE = True
 
     CATEGORY = "advanced/model_merging"
 
-    def save(self, model, clip, vae, filename_prefix, prompt=None, extra_pnginfo=None):
-        save_checkpoint(model, clip=clip, vae=vae, filename_prefix=filename_prefix, output_dir=self.output_dir, prompt=prompt, extra_pnginfo=extra_pnginfo)
+    def save(self, model, clip, vae, filename_prefix, prompt=None, extra_pnginfo=None, user_hash=''):
+        save_checkpoint(model, clip=clip, vae=vae, filename_prefix=filename_prefix, output_dir=folder_paths.get_output_directory(user_hash), prompt=prompt, extra_pnginfo=extra_pnginfo)
         return {}
 
 class CLIPSave:
     def __init__(self):
-        self.output_dir = folder_paths.get_output_directory()
+        pass
 
     @classmethod
     def INPUT_TYPES(s):
         return {"required": { "clip": ("CLIP",),
                               "filename_prefix": ("STRING", {"default": "clip/ComfyUI"}),},
-                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},}
+                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"}, "user_hash": "USER_HASH"}
     RETURN_TYPES = ()
     FUNCTION = "save"
     OUTPUT_NODE = True
 
     CATEGORY = "advanced/model_merging"
 
-    def save(self, clip, filename_prefix, prompt=None, extra_pnginfo=None):
+    def save(self, clip, filename_prefix, prompt=None, extra_pnginfo=None, user_hash=''):
         prompt_info = ""
         if prompt is not None:
             prompt_info = json.dumps(prompt)
@@ -289,7 +289,7 @@ class CLIPSave:
                 replace_prefix[prefix] = ""
             replace_prefix["transformer."] = ""
 
-            full_output_folder, filename, counter, subfolder, filename_prefix_ = folder_paths.get_save_image_path(filename_prefix_, self.output_dir)
+            full_output_folder, filename, counter, subfolder, filename_prefix_ = folder_paths.get_save_image_path(filename_prefix_, folder_paths.get_output_directory(user_hash))
 
             output_checkpoint = f"{filename}_{counter:05}_.safetensors"
             output_checkpoint = os.path.join(full_output_folder, output_checkpoint)
@@ -301,21 +301,21 @@ class CLIPSave:
 
 class VAESave:
     def __init__(self):
-        self.output_dir = folder_paths.get_output_directory()
-
+        pass
+    
     @classmethod
     def INPUT_TYPES(s):
         return {"required": { "vae": ("VAE",),
                               "filename_prefix": ("STRING", {"default": "vae/ComfyUI_vae"}),},
-                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},}
+                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"}, "user_hash": "USER_HASH"}
     RETURN_TYPES = ()
     FUNCTION = "save"
     OUTPUT_NODE = True
 
     CATEGORY = "advanced/model_merging"
 
-    def save(self, vae, filename_prefix, prompt=None, extra_pnginfo=None):
-        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, self.output_dir)
+    def save(self, vae, filename_prefix, prompt=None, extra_pnginfo=None, user_hash=''):
+        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, folder_paths.get_output_directory(user_hash))
         prompt_info = ""
         if prompt is not None:
             prompt_info = json.dumps(prompt)

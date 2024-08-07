@@ -3,6 +3,9 @@ import sys
 import asyncio
 import traceback
 
+import diffus.message
+import execution_context
+import node_helpers
 import nodes
 import folder_paths
 import execution
@@ -98,6 +101,8 @@ class PromptServer():
 
         self.on_prompt_handlers = []
 
+        self.dffis_message_queue = diffus.message.MessageQueue()
+
         @routes.get('/ws')
         async def websocket_handler(request):
             ws = web.WebSocketResponse()
@@ -125,6 +130,10 @@ class PromptServer():
                 self.sockets.pop(sid, None)
             return ws
 
+        @routes.get("/comfy")
+        async def get_root(request):
+            return web.FileResponse(os.path.join(self.web_root, "index.html"))
+
         @routes.get("/")
         async def get_root(request):
             response = web.FileResponse(os.path.join(self.web_root, "index.html"))
@@ -134,13 +143,19 @@ class PromptServer():
             return response
 
         @routes.get("/embeddings")
-        def get_embeddings(self):
-            embeddings = folder_paths.get_filename_list("embeddings")
+        async def get_embeddings(request):
+            embeddings = folder_paths.get_filename_list(execution_context.ExecutionContext(request), "embeddings")
             return web.json_response(list(map(lambda a: os.path.splitext(a)[0], embeddings)))
+
+        @routes.get("/health/check")
+        async def health_check(request):
+            return web.json_response({'message': 'OK'})
 
         @routes.get("/extensions")
         async def get_extensions(request):
             files = glob.glob(os.path.join(
+                glob.escape(self.web_root), 'extensions_builtin/**/*.js'), recursive=True)
+            files += glob.glob(os.path.join(
                 glob.escape(self.web_root), 'extensions/**/*.js'), recursive=True)
 
             extensions = list(map(lambda f: "/" + os.path.relpath(f, self.web_root).replace("\\", "/"), files))
@@ -152,16 +167,16 @@ class PromptServer():
 
             return web.json_response(extensions)
 
-        def get_dir_by_type(dir_type):
+        def get_dir_by_type(dir_type, user_hash):
             if dir_type is None:
                 dir_type = "input"
 
             if dir_type == "input":
-                type_dir = folder_paths.get_input_directory()
+                type_dir = folder_paths.get_input_directory(user_hash)
             elif dir_type == "temp":
                 type_dir = folder_paths.get_temp_directory()
             elif dir_type == "output":
-                type_dir = folder_paths.get_output_directory()
+                type_dir = folder_paths.get_output_directory(user_hash)
 
             return type_dir, dir_type
 
@@ -180,13 +195,13 @@ class PromptServer():
                 return a.hexdigest() == b.hexdigest()
             return False
 
-        def image_upload(post, image_save_function=None):
+        def image_upload(context: execution_context.ExecutionContext, post, image_save_function=None):
             image = post.get("image")
             overwrite = post.get("overwrite")
             image_is_duplicate = False
 
             image_upload_type = post.get("type")
-            upload_dir, image_upload_type = get_dir_by_type(image_upload_type)
+            upload_dir, image_upload_type = get_dir_by_type(image_upload_type, context.user_hash)
 
             if image and image.file:
                 filename = image.filename
@@ -231,16 +246,17 @@ class PromptServer():
         @routes.post("/upload/image")
         async def upload_image(request):
             post = await request.post()
-            return image_upload(post)
+            context = execution_context.ExecutionContext(request=request)
+            return image_upload(context, post)
 
 
         @routes.post("/upload/mask")
         async def upload_mask(request):
             post = await request.post()
-
+            context = execution_context.ExecutionContext(request=request)
             def image_save_function(image, post, filepath):
                 original_ref = json.loads(post.get("original_ref"))
-                filename, output_dir = folder_paths.annotated_filepath(original_ref['filename'])
+                filename, output_dir = folder_paths.annotated_filepath(original_ref['filename'], context.user_hash)
 
                 # validation for security: prevent accessing arbitrary path
                 if filename[0] == '/' or '..' in filename:
@@ -248,7 +264,7 @@ class PromptServer():
 
                 if output_dir is None:
                     type = original_ref.get("type", "output")
-                    output_dir = folder_paths.get_directory_by_type(type)
+                    output_dir = folder_paths.get_directory_by_type(type, context.user_hash)
 
                 if output_dir is None:
                     return web.Response(status=400)
@@ -275,13 +291,14 @@ class PromptServer():
                         original_pil.putalpha(new_alpha)
                         original_pil.save(filepath, compress_level=4, pnginfo=metadata)
 
-            return image_upload(post, image_save_function)
+            return image_upload(context, post, image_save_function)
 
         @routes.get("/view")
         async def view_image(request):
+            context = execution_context.ExecutionContext(request=request)
             if "filename" in request.rel_url.query:
                 filename = request.rel_url.query["filename"]
-                filename,output_dir = folder_paths.annotated_filepath(filename)
+                filename,output_dir = folder_paths.annotated_filepath(filename, context.user_hash)
 
                 # validation for security: prevent accessing arbitrary path
                 if filename[0] == '/' or '..' in filename:
@@ -289,8 +306,7 @@ class PromptServer():
 
                 if output_dir is None:
                     type = request.rel_url.query.get("type", "output")
-                    output_dir = folder_paths.get_directory_by_type(type)
-
+                    output_dir = folder_paths.get_directory_by_type(type, context.user_hash)
                 if output_dir is None:
                     return web.Response(status=400)
 
@@ -377,7 +393,8 @@ class PromptServer():
             if not filename.endswith(".safetensors"):
                 return web.Response(status=404)
 
-            safetensors_path = folder_paths.get_full_path(folder_name, filename)
+            context = execution_context.ExecutionContext(request)
+            safetensors_path = folder_paths.get_full_path(context, folder_name, filename)
             if safetensors_path is None:
                 return web.Response(status=404)
             out = comfy.utils.safetensors_header(safetensors_path, max_size=1024*1024)
@@ -418,12 +435,17 @@ class PromptServer():
         async def get_prompt(request):
             return web.json_response(self.get_queue_info())
 
-        def node_info(node_class):
+        def node_info(context: execution_context.ExecutionContext, node_class):
             obj_class = nodes.NODE_CLASS_MAPPINGS[node_class]
+            if callable(obj_class.RETURN_TYPES):
+                return_types = obj_class.RETURN_TYPES(context)
+            else:
+                return_types = obj_class.RETURN_TYPES
+
             info = {}
-            info['input'] = obj_class.INPUT_TYPES()
-            info['output'] = obj_class.RETURN_TYPES
-            info['output_is_list'] = obj_class.OUTPUT_IS_LIST if hasattr(obj_class, 'OUTPUT_IS_LIST') else [False] * len(obj_class.RETURN_TYPES)
+            info['input'] = node_helpers.get_node_input_types(context, obj_class)
+            info['output'] = return_types
+            info['output_is_list'] = obj_class.OUTPUT_IS_LIST if hasattr(obj_class, 'OUTPUT_IS_LIST') else [False] * len(return_types)
             info['output_name'] = obj_class.RETURN_NAMES if hasattr(obj_class, 'RETURN_NAMES') else info['output']
             info['name'] = node_class
             info['display_name'] = nodes.NODE_DISPLAY_NAME_MAPPINGS[node_class] if node_class in nodes.NODE_DISPLAY_NAME_MAPPINGS.keys() else node_class
@@ -442,9 +464,10 @@ class PromptServer():
         @routes.get("/object_info")
         async def get_object_info(request):
             out = {}
+            context = execution_context.ExecutionContext(request)
             for x in nodes.NODE_CLASS_MAPPINGS:
                 try:
-                    out[x] = node_info(x)
+                    out[x] = node_info(context, x)
                 except Exception as e:
                     logging.error(f"[ERROR] An error occurred while retrieving information for the '{x}' node.")
                     logging.error(traceback.format_exc())
@@ -453,30 +476,70 @@ class PromptServer():
         @routes.get("/object_info/{node_class}")
         async def get_object_info_node(request):
             node_class = request.match_info.get("node_class", None)
+            context = execution_context.ExecutionContext(request=request)
             out = {}
             if (node_class is not None) and (node_class in nodes.NODE_CLASS_MAPPINGS):
-                out[node_class] = node_info(node_class)
+                out[node_class] = node_info(context, node_class)
             return web.json_response(out)
 
         @routes.get("/history")
         async def get_history(request):
-            max_items = request.rel_url.query.get("max_items", None)
-            if max_items is not None:
-                max_items = int(max_items)
-            return web.json_response(self.prompt_queue.get_history(max_items=max_items))
+            # max_items = request.rel_url.query.get("max_items", None)
+            # if max_items is not None:
+            #     max_items = int(max_items)
+            # return web.json_response(self.prompt_queue.get_history(max_items=max_items))
+            return web.json_response([])
 
         @routes.get("/history/{prompt_id}")
         async def get_history(request):
-            prompt_id = request.match_info.get("prompt_id", None)
-            return web.json_response(self.prompt_queue.get_history(prompt_id=prompt_id))
+            # prompt_id = request.match_info.get("prompt_id", None)
+            # return web.json_response(self.prompt_queue.get_history(prompt_id=prompt_id))
+            return web.json_response({})
+
+        @routes.delete("/inputs")
+        async def clear_input(request):
+            context = execution_context.ExecutionContext(request=request)
+            folder_paths.clear_input_directory(context.user_hash)
+            await self.send("input_cleared", { "node": None, "user_id": context.user_id }, context.user_id)
+            return web.json_response({
+                "type": "input_cleared",
+                "data": {
+                    "user_id": context.user_id
+                }
+            })
 
         @routes.get("/queue")
         async def get_queue(request):
             queue_info = {}
-            current_queue = self.prompt_queue.get_current_queue()
-            queue_info['queue_running'] = current_queue[0]
-            queue_info['queue_pending'] = current_queue[1]
+            # current_queue = self.prompt_queue.get_current_queue()
+            queue_info['queue_running'] = []
+            queue_info['queue_pending'] = []
             return web.json_response(queue_info)
+
+        @routes.post("/prompt/valid")
+        async def post_prompt(request):
+            logging.info("got prompt")
+            json_data = await request.json()
+            json_data = self.trigger_on_prompt(json_data)
+            context = execution_context.ExecutionContext(request)
+            if "prompt" in json_data:
+                prompt = json_data["prompt"]
+                extra_data = {}
+                if "extra_data" in json_data:
+                    extra_data = json_data["extra_data"]
+
+                extra_data["client_id"] = context.user_id
+
+                context = execution_context.ExecutionContext(request=request, extra_data=extra_data)
+
+                valid = execution.validate_prompt(context, prompt)
+                if valid[0]:
+                    return web.json_response({}, status=200)
+                else:
+                    logging.warning("invalid prompt: {}".format(valid[1]))
+                    return web.json_response({"error": valid[1], "node_errors": valid[3]}, status=400)
+            else:
+                return web.json_response({"error": "no prompt", "node_errors": []}, status=400)
 
         @routes.post("/prompt")
         async def post_prompt(request):
@@ -485,30 +548,39 @@ class PromptServer():
             out_string = ""
             json_data =  await request.json()
             json_data = self.trigger_on_prompt(json_data)
+            context = execution_context.ExecutionContext(request)
 
             if "number" in json_data:
                 number = float(json_data['number'])
             else:
                 number = self.number
-                if "front" in json_data:
-                    if json_data['front']:
-                        number = -number
+                # if "front" in json_data:
+                #     if json_data['front']:
+                #         number = -number
 
                 self.number += 1
 
             if "prompt" in json_data:
                 prompt = json_data["prompt"]
-                valid = execution.validate_prompt(prompt)
                 extra_data = {}
                 if "extra_data" in json_data:
                     extra_data = json_data["extra_data"]
 
-                if "client_id" in json_data:
-                    extra_data["client_id"] = json_data["client_id"]
+                # if "client_id" in json_data:
+                #     extra_data["client_id"] = json_data["client_id"]
+                extra_data["client_id"] = context.user_id
+
+                context = execution_context.ExecutionContext(request=request, extra_data=extra_data)
+
+                valid = execution.validate_prompt(context, prompt)
                 if valid[0]:
-                    prompt_id = str(uuid.uuid4())
+                    if 'x-task-id' in request.headers:
+                        prompt_id = request.headers['x-task-id']
+                    else:
+                        prompt_id = str(uuid.uuid4())
                     outputs_to_execute = valid[2]
-                    self.prompt_queue.put((number, prompt_id, prompt, extra_data, outputs_to_execute))
+                    extra_data["prompt_id"] = prompt_id
+                    self.prompt_queue.put((number, prompt_id, prompt, extra_data, outputs_to_execute, context))
                     response = {"prompt_id": prompt_id, "number": number, "node_errors": valid[3]}
                     return web.json_response(response)
                 else:
@@ -519,22 +591,22 @@ class PromptServer():
 
         @routes.post("/queue")
         async def post_queue(request):
-            json_data =  await request.json()
-            if "clear" in json_data:
-                if json_data["clear"]:
-                    self.prompt_queue.wipe_queue()
-            if "delete" in json_data:
-                to_delete = json_data['delete']
-                for id_to_delete in to_delete:
-                    delete_func = lambda a: a[1] == id_to_delete
-                    self.prompt_queue.delete_queue_item(delete_func)
+            # json_data =  await request.json()
+            # if "clear" in json_data:
+            #     if json_data["clear"]:
+            #         self.prompt_queue.wipe_queue()
+            # if "delete" in json_data:
+            #     to_delete = json_data['delete']
+            #     for id_to_delete in to_delete:
+            #         delete_func = lambda a: a[1] == id_to_delete
+            #         self.prompt_queue.delete_queue_item(delete_func)
 
-            return web.Response(status=200)
+            return web.Response(status=403)
 
         @routes.post("/interrupt")
         async def post_interrupt(request):
-            nodes.interrupt_processing()
-            return web.Response(status=200)
+            # nodes.interrupt_processing()
+            return web.Response(status=403)
 
         @routes.post("/free")
         async def post_free(request):
@@ -549,17 +621,17 @@ class PromptServer():
 
         @routes.post("/history")
         async def post_history(request):
-            json_data =  await request.json()
-            if "clear" in json_data:
-                if json_data["clear"]:
-                    self.prompt_queue.wipe_history()
-            if "delete" in json_data:
-                to_delete = json_data['delete']
-                for id_to_delete in to_delete:
-                    self.prompt_queue.delete_history_item(id_to_delete)
+            # json_data =  await request.json()
+            # if "clear" in json_data:
+            #     if json_data["clear"]:
+            #         self.prompt_queue.wipe_history()
+            # if "delete" in json_data:
+            #     to_delete = json_data['delete']
+            #     for id_to_delete in to_delete:
+            #         self.prompt_queue.delete_history_item(id_to_delete)
 
-            return web.Response(status=200)
-
+            return web.Response(status=403)
+        
     def add_routes(self):
         self.user_manager.add_routes(self.routes)
 
@@ -580,6 +652,7 @@ class PromptServer():
         for name, dir in nodes.EXTENSION_WEB_DIRS.items():
             self.app.add_routes([
                 web.static('/extensions/' + urllib.parse.quote(name), dir),
+                web.static('/extensions_builtin/' + urllib.parse.quote(name), dir),
             ])
 
         self.app.add_routes([
@@ -636,6 +709,7 @@ class PromptServer():
 
     async def send_bytes(self, event, data, sid=None):
         message = self.encode_bytes(event, data)
+        self.dffis_message_queue.send_message(sid, bytes(message))
 
         if sid is None:
             sockets = list(self.sockets.values())
@@ -646,6 +720,7 @@ class PromptServer():
 
     async def send_json(self, event, data, sid=None):
         message = {"type": event, "data": data}
+        self.dffis_message_queue.send_message(sid, json.dumps(message))
 
         if sid is None:
             sockets = list(self.sockets.values())

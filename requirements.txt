@@ -18,3 +18,8 @@ psutil
 kornia>=0.7.1
 spandrel
 soundfile
+PyMySQL
+SQLAlchemy
+pydantic
+requests
+redis

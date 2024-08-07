@@ -145,6 +145,15 @@ class ComfyApi extends EventTarget {
 					    case "execution_cached":
 						    this.dispatchEvent(new CustomEvent("execution_cached", { detail: msg.data }));
 						    break;
+						case "finished":
+							this.dispatchEvent(new CustomEvent("finished", { detail: msg.data }));
+							break;
+						case "monitor_error":
+							this.dispatchEvent(new CustomEvent("monitor_error", { detail: msg.data }));
+							break;
+						case "input_cleared":
+							this.dispatchEvent(new CustomEvent("input_cleared", { detail: msg.data }));
+							break;
 					    default:
 						    if (this.#registered.has(msg.type)) {
 							    this.dispatchEvent(new CustomEvent(msg.type, { detail: msg.data }));
@@ -476,6 +485,14 @@ class ComfyApi extends EventTarget {
 			throw new Error(`Error getting user data list '${dir}': ${resp.status} ${resp.statusText}`);
 		}
 		return resp.json();
+	}
+
+	/**
+	 * Clear user input folder
+	 * @returns { Promise<void> }
+	 */
+	async clearInput() {
+		return this.fetchApi(`/inputs`, { method: "DELETE"});
 	}
 }
 

@@ -1,5 +1,6 @@
 import torch
 
+import inspect
 import os
 import sys
 import json
@@ -15,6 +16,8 @@ from PIL.PngImagePlugin import PngInfo
 
 import numpy as np
 import safetensors.torch
+
+import execution_context
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "comfy"))
 
@@ -41,6 +44,7 @@ def before_node_execution():
 
 def interrupt_processing(value=True):
     comfy.model_management.interrupt_current_processing(value)
+
 
 MAX_RESOLUTION=16384
 
@@ -403,13 +407,13 @@ class InpaintModelConditioning:
 
 class SaveLatent:
     def __init__(self):
-        self.output_dir = folder_paths.get_output_directory()
+        pass
 
     @classmethod
     def INPUT_TYPES(s):
         return {"required": { "samples": ("LATENT", ),
                               "filename_prefix": ("STRING", {"default": "latents/ComfyUI"})},
-                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
+                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO", "user_hash": "USER_HASH"},
                 }
     RETURN_TYPES = ()
     FUNCTION = "save"
@@ -418,8 +422,9 @@ class SaveLatent:
 
     CATEGORY = "_for_testing"
 
-    def save(self, samples, filename_prefix="ComfyUI", prompt=None, extra_pnginfo=None):
-        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, self.output_dir)
+    def save(self, samples, filename_prefix="ComfyUI", prompt=None, extra_pnginfo=None, user_hash=''):
+        output_dir = folder_paths.get_output_directory(user_hash)
+        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, output_dir)
 
         # support save metadata for latent sharing
         prompt_info = ""
@@ -454,18 +459,19 @@ class SaveLatent:
 
 class LoadLatent:
     @classmethod
-    def INPUT_TYPES(s):
-        input_dir = folder_paths.get_input_directory()
+    def INPUT_TYPES(s, user_hash: str = ''):
+        input_dir = folder_paths.get_input_directory(user_hash)
         files = [f for f in os.listdir(input_dir) if os.path.isfile(os.path.join(input_dir, f)) and f.endswith(".latent")]
-        return {"required": {"latent": [sorted(files), ]}, }
+        return {"required": {"latent": [sorted(files), ]},
+                "hidden": {"user_hash": "USER_HASH"}}
 
     CATEGORY = "_for_testing"
 
     RETURN_TYPES = ("LATENT", )
     FUNCTION = "load"
 
-    def load(self, latent):
-        latent_path = folder_paths.get_annotated_filepath(latent)
+    def load(self, latent, user_hash):
+        latent_path = folder_paths.get_annotated_filepath(latent, user_hash)
         latent = safetensors.torch.load_file(latent_path, device="cpu")
         multiplier = 1.0
         if "latent_format_version_0" not in latent:
@@ -474,47 +480,49 @@ class LoadLatent:
         return (samples, )
 
     @classmethod
-    def IS_CHANGED(s, latent):
-        image_path = folder_paths.get_annotated_filepath(latent)
+    def IS_CHANGED(s, latent, user_hash):
+        image_path = folder_paths.get_annotated_filepath(latent, user_hash)
         m = hashlib.sha256()
         with open(image_path, 'rb') as f:
             m.update(f.read())
         return m.digest().hex()
 
     @classmethod
-    def VALIDATE_INPUTS(s, latent):
-        if not folder_paths.exists_annotated_filepath(latent):
+    def VALIDATE_INPUTS(s, latent, user_hash):
+        if not folder_paths.exists_annotated_filepath(latent, user_hash):
             return "Invalid latent file: {}".format(latent)
         return True
 
 
 class CheckpointLoader:
     @classmethod
-    def INPUT_TYPES(s):
-        return {"required": { "config_name": (folder_paths.get_filename_list("configs"), ),
-                              "ckpt_name": (folder_paths.get_filename_list("checkpoints"), )}}
+    def INPUT_TYPES(s, context: execution_context.ExecutionContext):
+        return {"required": { "config_name": (folder_paths.get_filename_list(context, "configs"), ),
+                              "ckpt_name": (folder_paths.get_filename_list(context, "checkpoints"), )},
+                "hidden": {"context": "EXECUTION_CONTEXT"}}
     RETURN_TYPES = ("MODEL", "CLIP", "VAE")
     FUNCTION = "load_checkpoint"
 
     CATEGORY = "advanced/loaders"
 
-    def load_checkpoint(self, config_name, ckpt_name):
-        config_path = folder_paths.get_full_path("configs", config_name)
-        ckpt_path = folder_paths.get_full_path("checkpoints", ckpt_name)
+    def load_checkpoint(self, config_name, ckpt_name, context=None):
+        config_path = folder_paths.get_full_path(context, "configs", config_name)
+        ckpt_path = folder_paths.get_full_path(context, "checkpoints", ckpt_name)
         return comfy.sd.load_checkpoint(config_path, ckpt_path, output_vae=True, output_clip=True, embedding_directory=folder_paths.get_folder_paths("embeddings"))
 
 class CheckpointLoaderSimple:
     @classmethod
-    def INPUT_TYPES(s):
-        return {"required": { "ckpt_name": (folder_paths.get_filename_list("checkpoints"), ),
-                             }}
+    def INPUT_TYPES(s, context: execution_context.ExecutionContext):
+        return {"required": { "ckpt_name": (folder_paths.get_filename_list(context, "checkpoints"), ),
+                             },
+                "hidden": {"context": "EXECUTION_CONTEXT"}}
     RETURN_TYPES = ("MODEL", "CLIP", "VAE")
     FUNCTION = "load_checkpoint"
 
     CATEGORY = "loaders"
 
-    def load_checkpoint(self, ckpt_name):
-        ckpt_path = folder_paths.get_full_path("checkpoints", ckpt_name)
+    def load_checkpoint(self, ckpt_name, context: execution_context.ExecutionContext = None):
+        ckpt_path = folder_paths.get_full_path(context, "checkpoints", ckpt_name)
         out = comfy.sd.load_checkpoint_guess_config(ckpt_path, output_vae=True, output_clip=True, embedding_directory=folder_paths.get_folder_paths("embeddings"))
         return out[:3]
 
@@ -547,16 +555,17 @@ class DiffusersLoader:
 
 class unCLIPCheckpointLoader:
     @classmethod
-    def INPUT_TYPES(s):
-        return {"required": { "ckpt_name": (folder_paths.get_filename_list("checkpoints"), ),
-                             }}
+    def INPUT_TYPES(s, context: execution_context.ExecutionContext):
+        return {"required": { "ckpt_name": (folder_paths.get_filename_list(context, "checkpoints"), ),
+                             },
+                "hidden": {"context": "EXECUTION_CONTEXT"}}
     RETURN_TYPES = ("MODEL", "CLIP", "VAE", "CLIP_VISION")
     FUNCTION = "load_checkpoint"
 
     CATEGORY = "loaders"
 
-    def load_checkpoint(self, ckpt_name, output_vae=True, output_clip=True):
-        ckpt_path = folder_paths.get_full_path("checkpoints", ckpt_name)
+    def load_checkpoint(self, ckpt_name, output_vae=True, output_clip=True, context: execution_context.ExecutionContext=None):
+        ckpt_path = folder_paths.get_full_path(context, "checkpoints", ckpt_name)
         out = comfy.sd.load_checkpoint_guess_config(ckpt_path, output_vae=True, output_clip=True, output_clipvision=True, embedding_directory=folder_paths.get_folder_paths("embeddings"))
         return out
 
@@ -581,23 +590,24 @@ class LoraLoader:
         self.loaded_lora = None
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(s, context: execution_context.ExecutionContext):
         return {"required": { "model": ("MODEL",),
                               "clip": ("CLIP", ),
-                              "lora_name": (folder_paths.get_filename_list("loras"), ),
+                              "lora_name": (folder_paths.get_filename_list(context, "loras"), ),
                               "strength_model": ("FLOAT", {"default": 1.0, "min": -100.0, "max": 100.0, "step": 0.01}),
                               "strength_clip": ("FLOAT", {"default": 1.0, "min": -100.0, "max": 100.0, "step": 0.01}),
-                              }}
+                              },
+                "hidden": {"context": "EXECUTION_CONTEXT"}}
     RETURN_TYPES = ("MODEL", "CLIP")
     FUNCTION = "load_lora"
 
     CATEGORY = "loaders"
 
-    def load_lora(self, model, clip, lora_name, strength_model, strength_clip):
+    def load_lora(self, model, clip, lora_name, strength_model, strength_clip, context: execution_context.ExecutionContext):
         if strength_model == 0 and strength_clip == 0:
             return (model, clip)
 
-        lora_path = folder_paths.get_full_path("loras", lora_name)
+        lora_path = folder_paths.get_full_path(context, "loras", lora_name)
         lora = None
         if self.loaded_lora is not None:
             if self.loaded_lora[0] == lora_path:
@@ -616,22 +626,23 @@ class LoraLoader:
 
 class LoraLoaderModelOnly(LoraLoader):
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(s, context: execution_context.ExecutionContext):
         return {"required": { "model": ("MODEL",),
-                              "lora_name": (folder_paths.get_filename_list("loras"), ),
+                              "lora_name": (folder_paths.get_filename_list(context, "loras"), ),
                               "strength_model": ("FLOAT", {"default": 1.0, "min": -100.0, "max": 100.0, "step": 0.01}),
-                              }}
+                              },
+                "hidden": {"context": "EXECUTION_CONTEXT"}}
     RETURN_TYPES = ("MODEL",)
     FUNCTION = "load_lora_model_only"
 
-    def load_lora_model_only(self, model, lora_name, strength_model):
-        return (self.load_lora(model, None, lora_name, strength_model, 0)[0],)
+    def load_lora_model_only(self, model, lora_name, strength_model, context: execution_context.ExecutionContext):
+        return (self.load_lora(model, None, lora_name, strength_model, 0, context)[0],)
 
 class VAELoader:
     @staticmethod
-    def vae_list():
-        vaes = folder_paths.get_filename_list("vae")
-        approx_vaes = folder_paths.get_filename_list("vae_approx")
+    def vae_list(context: execution_context.ExecutionContext):
+        vaes = folder_paths.get_filename_list(context, "vae")
+        approx_vaes = folder_paths.get_filename_list(context, "vae_approx")
         sdxl_taesd_enc = False
         sdxl_taesd_dec = False
         sd1_taesd_enc = False
@@ -661,18 +672,18 @@ class VAELoader:
         return vaes
 
     @staticmethod
-    def load_taesd(name):
+    def load_taesd(context, name):
         sd = {}
-        approx_vaes = folder_paths.get_filename_list("vae_approx")
+        approx_vaes = folder_paths.get_filename_list(context, "vae_approx")
 
         encoder = next(filter(lambda a: a.startswith("{}_encoder.".format(name)), approx_vaes))
         decoder = next(filter(lambda a: a.startswith("{}_decoder.".format(name)), approx_vaes))
 
-        enc = comfy.utils.load_torch_file(folder_paths.get_full_path("vae_approx", encoder))
+        enc = comfy.utils.load_torch_file(folder_paths.get_full_path(context, "vae_approx", encoder))
         for k in enc:
             sd["taesd_encoder.{}".format(k)] = enc[k]
 
-        dec = comfy.utils.load_torch_file(folder_paths.get_full_path("vae_approx", decoder))
+        dec = comfy.utils.load_torch_file(folder_paths.get_full_path(context, "vae_approx", decoder))
         for k in dec:
             sd["taesd_decoder.{}".format(k)] = dec[k]
 
@@ -688,51 +699,54 @@ class VAELoader:
         return sd
 
     @classmethod
-    def INPUT_TYPES(s):
-        return {"required": { "vae_name": (s.vae_list(), )}}
+    def INPUT_TYPES(s, context: execution_context.ExecutionContext):
+        return {"required": { "vae_name": (s.vae_list(context), )},
+                "hidden": {"context": "EXECUTION_CONTEXT"}}
     RETURN_TYPES = ("VAE",)
     FUNCTION = "load_vae"
 
     CATEGORY = "loaders"
 
     #TODO: scale factor?
-    def load_vae(self, vae_name):
+    def load_vae(self, vae_name, context: execution_context.ExecutionContext):
         if vae_name in ["taesd", "taesdxl", "taesd3"]:
-            sd = self.load_taesd(vae_name)
+            sd = self.load_taesd(context, vae_name)
         else:
-            vae_path = folder_paths.get_full_path("vae", vae_name)
+            vae_path = folder_paths.get_full_path(context, "vae", vae_name)
             sd = comfy.utils.load_torch_file(vae_path)
         vae = comfy.sd.VAE(sd=sd)
         return (vae,)
 
 class ControlNetLoader:
     @classmethod
-    def INPUT_TYPES(s):
-        return {"required": { "control_net_name": (folder_paths.get_filename_list("controlnet"), )}}
+    def INPUT_TYPES(s, context: execution_context.ExecutionContext):
+        return {"required": { "control_net_name": (folder_paths.get_filename_list(context, "controlnet"), )},
+                "hidden": {"context": "EXECUTION_CONTEXT"}}
 
     RETURN_TYPES = ("CONTROL_NET",)
     FUNCTION = "load_controlnet"
 
     CATEGORY = "loaders"
 
-    def load_controlnet(self, control_net_name):
-        controlnet_path = folder_paths.get_full_path("controlnet", control_net_name)
+    def load_controlnet(self, control_net_name, context: execution_context.ExecutionContext):
+        controlnet_path = folder_paths.get_full_path(context, "controlnet", control_net_name)
         controlnet = comfy.controlnet.load_controlnet(controlnet_path)
         return (controlnet,)
 
 class DiffControlNetLoader:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(s, context: execution_context.ExecutionContext):
         return {"required": { "model": ("MODEL",),
-                              "control_net_name": (folder_paths.get_filename_list("controlnet"), )}}
+                              "control_net_name": (folder_paths.get_filename_list(context, "controlnet"), )},
+                "hidden": {"context": "EXECUTION_CONTEXT"}}
 
     RETURN_TYPES = ("CONTROL_NET",)
     FUNCTION = "load_controlnet"
 
     CATEGORY = "loaders"
 
-    def load_controlnet(self, model, control_net_name):
-        controlnet_path = folder_paths.get_full_path("controlnet", control_net_name)
+    def load_controlnet(self, model, control_net_name, context: execution_context.ExecutionContext):
+        controlnet_path = folder_paths.get_full_path(context, "controlnet", control_net_name)
         controlnet = comfy.controlnet.load_controlnet(controlnet_path, model)
         return (controlnet,)
 
@@ -816,38 +830,43 @@ class ControlNetApplyAdvanced:
 
 class UNETLoader:
     @classmethod
-    def INPUT_TYPES(s):
-        return {"required": { "unet_name": (folder_paths.get_filename_list("unet"), ),
-                              "weight_dtype": (["default", "fp8_e4m3fn", "fp8_e5m2"],)
-                             }}
+    def INPUT_TYPES(s, context: execution_context.ExecutionContext):
+        return {"required": { "unet_name": (folder_paths.get_filename_list(context, "unet"), ),
+                             "weight_dtype": (["default", "fp8_e4m3fn", "fp8_e5m2"],)
+                             },
+                "hidden": {"context": "EXECUTION_CONTEXT"}}
+
     RETURN_TYPES = ("MODEL",)
     FUNCTION = "load_unet"
 
     CATEGORY = "advanced/loaders"
 
-    def load_unet(self, unet_name, weight_dtype):
+
+    def load_unet(self, unet_name, weight_dtype, context: execution_context.ExecutionContext):
         dtype = None
         if weight_dtype == "fp8_e4m3fn":
             dtype = torch.float8_e4m3fn
         elif weight_dtype == "fp8_e5m2":
             dtype = torch.float8_e5m2
 
-        unet_path = folder_paths.get_full_path("unet", unet_name)
+        unet_path = folder_paths.get_full_path(context, "unet", unet_name)
         model = comfy.sd.load_unet(unet_path, dtype=dtype)
+
         return (model,)
 
 class CLIPLoader:
     @classmethod
-    def INPUT_TYPES(s):
-        return {"required": { "clip_name": (folder_paths.get_filename_list("clip"), ),
+    def INPUT_TYPES(s, context: execution_context.ExecutionContext):
+        return {"required": { "clip_name": (folder_paths.get_filename_list(context, "clip"), ),
                               "type": (["stable_diffusion", "stable_cascade", "sd3", "stable_audio"], ),
-                             }}
+                             },
+                "hidden": {"context": "EXECUTION_CONTEXT"}}
     RETURN_TYPES = ("CLIP",)
     FUNCTION = "load_clip"
 
     CATEGORY = "advanced/loaders"
 
-    def load_clip(self, clip_name, type="stable_diffusion"):
+    def load_clip(self, clip_name, type="stable_diffusion", context=None):
         if type == "stable_cascade":
             clip_type = comfy.sd.CLIPType.STABLE_CASCADE
         elif type == "sd3":
@@ -857,25 +876,27 @@ class CLIPLoader:
         else:
             clip_type = comfy.sd.CLIPType.STABLE_DIFFUSION
 
-        clip_path = folder_paths.get_full_path("clip", clip_name)
+        clip_path = folder_paths.get_full_path(context, "clip", clip_name)
         clip = comfy.sd.load_clip(ckpt_paths=[clip_path], embedding_directory=folder_paths.get_folder_paths("embeddings"), clip_type=clip_type)
         return (clip,)
 
 class DualCLIPLoader:
     @classmethod
-    def INPUT_TYPES(s):
-        return {"required": { "clip_name1": (folder_paths.get_filename_list("clip"), ),
-                              "clip_name2": (folder_paths.get_filename_list("clip"), ),
+    def INPUT_TYPES(s, context: execution_context.ExecutionContext):
+        return {"required": { "clip_name1": (folder_paths.get_filename_list(context, "clip"), ),
+                              "clip_name2": (folder_paths.get_filename_list(context, "clip"), ),
                               "type": (["sdxl", "sd3", "flux"], ),
-                             }}
+                             },
+                "hidden": {"context": "EXECUTION_CONTEXT"}}
+
     RETURN_TYPES = ("CLIP",)
     FUNCTION = "load_clip"
 
     CATEGORY = "advanced/loaders"
 
-    def load_clip(self, clip_name1, clip_name2, type):
-        clip_path1 = folder_paths.get_full_path("clip", clip_name1)
-        clip_path2 = folder_paths.get_full_path("clip", clip_name2)
+    def load_clip(self, clip_name1, clip_name2, type, context: execution_context.ExecutionContext):
+        clip_path1 = folder_paths.get_full_path(context, "clip", clip_name1)
+        clip_path2 = folder_paths.get_full_path(context, "clip", clip_name2)
         if type == "sdxl":
             clip_type = comfy.sd.CLIPType.STABLE_DIFFUSION
         elif type == "sd3":
@@ -888,16 +909,17 @@ class DualCLIPLoader:
 
 class CLIPVisionLoader:
     @classmethod
-    def INPUT_TYPES(s):
-        return {"required": { "clip_name": (folder_paths.get_filename_list("clip_vision"), ),
-                             }}
+    def INPUT_TYPES(s, context: execution_context.ExecutionContext):
+        return {"required": { "clip_name": (folder_paths.get_filename_list(context, "clip_vision"), ),
+                             },
+                "hidden": {"context": "EXECUTION_CONTEXT"}}
     RETURN_TYPES = ("CLIP_VISION",)
     FUNCTION = "load_clip"
 
     CATEGORY = "loaders"
 
-    def load_clip(self, clip_name):
-        clip_path = folder_paths.get_full_path("clip_vision", clip_name)
+    def load_clip(self, clip_name, context: execution_context.ExecutionContext):
+        clip_path = folder_paths.get_full_path(context, "clip_vision", clip_name)
         clip_vision = comfy.clip_vision.load(clip_path)
         return (clip_vision,)
 
@@ -918,16 +940,17 @@ class CLIPVisionEncode:
 
 class StyleModelLoader:
     @classmethod
-    def INPUT_TYPES(s):
-        return {"required": { "style_model_name": (folder_paths.get_filename_list("style_models"), )}}
+    def INPUT_TYPES(s, context: execution_context.ExecutionContext):
+        return {"required": { "style_model_name": (folder_paths.get_filename_list(context, "style_models"), )},
+                "hidden": {"context": "EXECUTION_CONTEXT"}}
 
     RETURN_TYPES = ("STYLE_MODEL",)
     FUNCTION = "load_style_model"
 
     CATEGORY = "loaders"
 
-    def load_style_model(self, style_model_name):
-        style_model_path = folder_paths.get_full_path("style_models", style_model_name)
+    def load_style_model(self, style_model_name, context):
+        style_model_path = folder_paths.get_full_path(context, "style_models", style_model_name)
         style_model = comfy.sd.load_style_model(style_model_path)
         return (style_model,)
 
@@ -983,16 +1006,17 @@ class unCLIPConditioning:
 
 class GLIGENLoader:
     @classmethod
-    def INPUT_TYPES(s):
-        return {"required": { "gligen_name": (folder_paths.get_filename_list("gligen"), )}}
+    def INPUT_TYPES(s, context: execution_context.ExecutionContext):
+        return {"required": { "gligen_name": (folder_paths.get_filename_list(context, "gligen"), )},
+                "hidden": {"context": "EXECUTION_CONTEXT"}}
 
     RETURN_TYPES = ("GLIGEN",)
     FUNCTION = "load_gligen"
 
     CATEGORY = "loaders"
 
-    def load_gligen(self, gligen_name):
-        gligen_path = folder_paths.get_full_path("gligen", gligen_name)
+    def load_gligen(self, gligen_name, context):
+        gligen_path = folder_paths.get_full_path(context, "gligen", gligen_name)
         gligen = comfy.sd.load_gligen(gligen_path)
         return (gligen,)
 
@@ -1333,7 +1357,7 @@ class SetLatentNoiseMask:
         s["noise_mask"] = mask.reshape((-1, 1, mask.shape[-2], mask.shape[-1]))
         return (s,)
 
-def common_ksampler(model, seed, steps, cfg, sampler_name, scheduler, positive, negative, latent, denoise=1.0, disable_noise=False, start_step=None, last_step=None, force_full_denoise=False):
+def common_ksampler(context, model, seed, steps, cfg, sampler_name, scheduler, positive, negative, latent, denoise=1.0, disable_noise=False, start_step=None, last_step=None, force_full_denoise=False):
     latent_image = latent["samples"]
     latent_image = comfy.sample.fix_empty_latent_channels(model, latent_image)
 
@@ -1347,7 +1371,7 @@ def common_ksampler(model, seed, steps, cfg, sampler_name, scheduler, positive, 
     if "noise_mask" in latent:
         noise_mask = latent["noise_mask"]
 
-    callback = latent_preview.prepare_callback(model, steps)
+    callback = latent_preview.prepare_callback(context, model, steps)
     disable_pbar = not comfy.utils.PROGRESS_BAR_ENABLED
     samples = comfy.sample.sample(model, noise, steps, cfg, sampler_name, scheduler, positive, negative, latent_image,
                                   denoise=denoise, disable_noise=disable_noise, start_step=start_step, last_step=last_step,
@@ -1370,7 +1394,8 @@ class KSampler:
                     "negative": ("CONDITIONING", ),
                     "latent_image": ("LATENT", ),
                     "denoise": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01}),
-                     }
+                     },
+                "hidden": {"context": "EXECUTION_CONTEXT"}
                 }
 
     RETURN_TYPES = ("LATENT",)
@@ -1378,8 +1403,8 @@ class KSampler:
 
     CATEGORY = "sampling"
 
-    def sample(self, model, seed, steps, cfg, sampler_name, scheduler, positive, negative, latent_image, denoise=1.0):
-        return common_ksampler(model, seed, steps, cfg, sampler_name, scheduler, positive, negative, latent_image, denoise=denoise)
+    def sample(self, model, seed, steps, cfg, sampler_name, scheduler, positive, negative, latent_image, denoise=1.0, context=None):
+        return common_ksampler(context, model, seed, steps, cfg, sampler_name, scheduler, positive, negative, latent_image, denoise=denoise)
 
 class KSamplerAdvanced:
     @classmethod
@@ -1398,7 +1423,8 @@ class KSamplerAdvanced:
                     "start_at_step": ("INT", {"default": 0, "min": 0, "max": 10000}),
                     "end_at_step": ("INT", {"default": 10000, "min": 0, "max": 10000}),
                     "return_with_leftover_noise": (["disable", "enable"], ),
-                     }
+                     },
+                "hidden": {"context": "EXECUTION_CONTEXT"}
                 }
 
     RETURN_TYPES = ("LATENT",)
@@ -1406,28 +1432,27 @@ class KSamplerAdvanced:
 
     CATEGORY = "sampling"
 
-    def sample(self, model, add_noise, noise_seed, steps, cfg, sampler_name, scheduler, positive, negative, latent_image, start_at_step, end_at_step, return_with_leftover_noise, denoise=1.0):
+    def sample(self, model, add_noise, noise_seed, steps, cfg, sampler_name, scheduler, positive, negative, latent_image, start_at_step, end_at_step, return_with_leftover_noise, denoise=1.0, context=None):
         force_full_denoise = True
         if return_with_leftover_noise == "enable":
             force_full_denoise = False
         disable_noise = False
         if add_noise == "disable":
             disable_noise = True
-        return common_ksampler(model, noise_seed, steps, cfg, sampler_name, scheduler, positive, negative, latent_image, denoise=denoise, disable_noise=disable_noise, start_step=start_at_step, last_step=end_at_step, force_full_denoise=force_full_denoise)
+        return common_ksampler(context, model, noise_seed, steps, cfg, sampler_name, scheduler, positive, negative, latent_image, denoise=denoise, disable_noise=disable_noise, start_step=start_at_step, last_step=end_at_step, force_full_denoise=force_full_denoise)
 
 class SaveImage:
     def __init__(self):
-        self.output_dir = folder_paths.get_output_directory()
         self.type = "output"
         self.prefix_append = ""
         self.compress_level = 4
 
     @classmethod
     def INPUT_TYPES(s):
-        return {"required": 
+        return {"required":
                     {"images": ("IMAGE", ),
                      "filename_prefix": ("STRING", {"default": "ComfyUI"})},
-                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
+                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO", "context": "EXECUTION_CONTEXT", "user_hash": "USER_HASH"},
                 }
 
     RETURN_TYPES = ()
@@ -1437,10 +1462,14 @@ class SaveImage:
 
     CATEGORY = "image"
 
-    def save_images(self, images, filename_prefix="ComfyUI", prompt=None, extra_pnginfo=None):
+    def save_images(self, images, filename_prefix="ComfyUI", prompt=None, extra_pnginfo=None, context: execution_context.ExecutionContext = None, user_hash: str = ''):
         filename_prefix += self.prefix_append
-        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, self.output_dir, images[0].shape[1], images[0].shape[0])
+        if not user_hash:
+            user_hash = context.user_hash
+        output_dir = folder_paths.get_output_directory(user_hash)
+        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, output_dir, images[0].shape[1], images[0].shape[0])
         results = list()
+        ts = time.time()
         for (batch_number, image) in enumerate(images):
             i = 255. * image.cpu().numpy()
             img = Image.fromarray(np.clip(i, 0, 255).astype(np.uint8))
@@ -1454,7 +1483,7 @@ class SaveImage:
                         metadata.add_text(x, json.dumps(extra_pnginfo[x]))
 
             filename_with_batch_num = filename.replace("%batch_num%", str(batch_number))
-            file = f"{filename_with_batch_num}_{counter:05}_.png"
+            file = f"{filename_with_batch_num}_{counter:05}_{ts}.png"
             img.save(os.path.join(full_output_folder, file), pnginfo=metadata, compress_level=self.compress_level)
             results.append({
                 "filename": file,
@@ -1467,7 +1496,6 @@ class SaveImage:
 
 class PreviewImage(SaveImage):
     def __init__(self):
-        self.output_dir = folder_paths.get_temp_directory()
         self.type = "temp"
         self.prefix_append = "_temp_" + ''.join(random.choice("abcdefghijklmnopqrstupvxyz") for x in range(5))
         self.compress_level = 1
@@ -1476,24 +1504,26 @@ class PreviewImage(SaveImage):
     def INPUT_TYPES(s):
         return {"required":
                     {"images": ("IMAGE", ), },
-                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
+                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO", "user_hash": "USER_HASH"},
                 }
 
 class LoadImage:
     @classmethod
-    def INPUT_TYPES(s):
-        input_dir = folder_paths.get_input_directory()
+    def INPUT_TYPES(s, user_hash: str):
+        input_dir = folder_paths.get_input_directory(user_hash)
         files = [f for f in os.listdir(input_dir) if os.path.isfile(os.path.join(input_dir, f))]
         return {"required":
                     {"image": (sorted(files), {"image_upload": True})},
+                "hidden": {
+                    "context": "EXECUTION_CONTEXT"},
                 }
 
     CATEGORY = "image"
 
     RETURN_TYPES = ("IMAGE", "MASK")
     FUNCTION = "load_image"
-    def load_image(self, image):
-        image_path = folder_paths.get_annotated_filepath(image)
+    def load_image(self, image, context: execution_context.ExecutionContext):
+        image_path = folder_paths.get_annotated_filepath(image, context.user_hash)
         
         img = node_helpers.pillow(Image.open, image_path)
         
@@ -1537,16 +1567,16 @@ class LoadImage:
         return (output_image, output_mask)
 
     @classmethod
-    def IS_CHANGED(s, image):
-        image_path = folder_paths.get_annotated_filepath(image)
+    def IS_CHANGED(s, image, context: execution_context.ExecutionContext):
+        image_path = folder_paths.get_annotated_filepath(image, context.user_hash)
         m = hashlib.sha256()
         with open(image_path, 'rb') as f:
             m.update(f.read())
         return m.digest().hex()
 
     @classmethod
-    def VALIDATE_INPUTS(s, image):
-        if not folder_paths.exists_annotated_filepath(image):
+    def VALIDATE_INPUTS(s, image, context: execution_context.ExecutionContext):
+        if not folder_paths.exists_annotated_filepath(image, context.user_hash):
             return "Invalid image file: {}".format(image)
 
         return True
@@ -1554,20 +1584,22 @@ class LoadImage:
 class LoadImageMask:
     _color_channels = ["alpha", "red", "green", "blue"]
     @classmethod
-    def INPUT_TYPES(s):
-        input_dir = folder_paths.get_input_directory()
+    def INPUT_TYPES(s, context: execution_context.ExecutionContext):
+        input_dir = folder_paths.get_input_directory(context.user_hash)
         files = [f for f in os.listdir(input_dir) if os.path.isfile(os.path.join(input_dir, f))]
         return {"required":
                     {"image": (sorted(files), {"image_upload": True}),
-                     "channel": (s._color_channels, ), }
+                     "channel": (s._color_channels, ), },
+                "hidden":
+                    {"user_hash": "USER_HASH"},
                 }
 
     CATEGORY = "mask"
 
     RETURN_TYPES = ("MASK",)
     FUNCTION = "load_image"
-    def load_image(self, image, channel):
-        image_path = folder_paths.get_annotated_filepath(image)
+    def load_image(self, image, channel, user_hash):
+        image_path = folder_paths.get_annotated_filepath(image, user_hash)
         i = node_helpers.pillow(Image.open, image_path)
         i = node_helpers.pillow(ImageOps.exif_transpose, i)
         if i.getbands() != ("R", "G", "B", "A"):
@@ -1586,16 +1618,16 @@ class LoadImageMask:
         return (mask.unsqueeze(0),)
 
     @classmethod
-    def IS_CHANGED(s, image, channel):
-        image_path = folder_paths.get_annotated_filepath(image)
+    def IS_CHANGED(s, image, channel, user_hash):
+        image_path = folder_paths.get_annotated_filepath(image, user_hash)
         m = hashlib.sha256()
         with open(image_path, 'rb') as f:
             m.update(f.read())
         return m.digest().hex()
 
     @classmethod
-    def VALIDATE_INPUTS(s, image):
-        if not folder_paths.exists_annotated_filepath(image):
+    def VALIDATE_INPUTS(s, image, user_hash):
+        if not folder_paths.exists_annotated_filepath(image, user_hash):
             return "Invalid image file: {}".format(image)
 
         return True
