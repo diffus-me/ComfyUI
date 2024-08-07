@@ -18,6 +18,6 @@ venv/
 /tests-ui/data/object_info.json
 /user/
 *.log
-*.log
 custom_nodes.bak*
 custom_nodes_builtin/
+web_custom_versions/

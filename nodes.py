@@ -762,7 +762,7 @@ class ControlNetApply:
     RETURN_TYPES = ("CONDITIONING",)
     FUNCTION = "apply_controlnet"
 
-    CATEGORY = "conditioning"
+    CATEGORY = "conditioning/controlnet"
 
     def apply_controlnet(self, conditioning, control_net, image, strength):
         if strength == 0:
@@ -797,7 +797,7 @@ class ControlNetApplyAdvanced:
     RETURN_NAMES = ("positive", "negative")
     FUNCTION = "apply_controlnet"
 
-    CATEGORY = "conditioning"
+    CATEGORY = "conditioning/controlnet"
 
     def apply_controlnet(self, positive, negative, control_net, image, strength, start_percent, end_percent, vae=None):
         if strength == 0:
@@ -832,16 +832,26 @@ class UNETLoader:
     @classmethod
     def INPUT_TYPES(s, context: execution_context.ExecutionContext):
         return {"required": { "unet_name": (folder_paths.get_filename_list(context, "unet"), ),
+                             "weight_dtype": (["default", "fp8_e4m3fn", "fp8_e5m2"],)
                              },
                 "hidden": {"context": "EXECUTION_CONTEXT"}}
+
     RETURN_TYPES = ("MODEL",)
     FUNCTION = "load_unet"
 
     CATEGORY = "advanced/loaders"
 
-    def load_unet(self, unet_name, context: execution_context.ExecutionContext):
-        unet_path = folder_paths.get_full_path(context, "unet", unet_name)
-        model = comfy.sd.load_unet(unet_path)
+
+    def load_unet(self, unet_name, weight_dtype, context: execution_context.ExecutionContext):
+        dtype = None
+        if weight_dtype == "fp8_e4m3fn":
+            dtype = torch.float8_e4m3fn
+        elif weight_dtype == "fp8_e5m2":
+            dtype = torch.float8_e5m2
+
+        unet_path = folder_paths.get_full_path("unet", unet_name)
+        model = comfy.sd.load_unet(unet_path, dtype=dtype)
+
         return (model,)
 
 class CLIPLoader:
@@ -875,9 +885,10 @@ class DualCLIPLoader:
     def INPUT_TYPES(s, context: execution_context.ExecutionContext):
         return {"required": { "clip_name1": (folder_paths.get_filename_list(context, "clip"), ),
                               "clip_name2": (folder_paths.get_filename_list(context, "clip"), ),
-                              "type": (["sdxl", "sd3"], ),
+                              "type": (["sdxl", "sd3", "flux"], ),
                              },
                 "hidden": {"context": "EXECUTION_CONTEXT"}}
+
     RETURN_TYPES = ("CLIP",)
     FUNCTION = "load_clip"
 
@@ -890,6 +901,8 @@ class DualCLIPLoader:
             clip_type = comfy.sd.CLIPType.STABLE_DIFFUSION
         elif type == "sd3":
             clip_type = comfy.sd.CLIPType.SD3
+        elif type == "flux":
+            clip_type = comfy.sd.CLIPType.FLUX
 
         clip = comfy.sd.load_clip(ckpt_paths=[clip_path1, clip_path2], embedding_directory=folder_paths.get_folder_paths("embeddings"), clip_type=clip_type)
         return (clip,)
@@ -1871,6 +1884,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "StyleModelLoader": "Load Style Model",
     "CLIPVisionLoader": "Load CLIP Vision",
     "UpscaleModelLoader": "Load Upscale Model",
+    "UNETLoader": "Load Diffusion Model",
     # Conditioning
     "CLIPVisionEncode": "CLIP Vision Encode",
     "StyleModelApply": "Apply Style Model",
@@ -1918,29 +1932,29 @@ NODE_DISPLAY_NAME_MAPPINGS = {
 EXTENSION_WEB_DIRS = {}
 
 
-def get_relative_module_name(module_path: str) -> str:
+def get_module_name(module_path: str) -> str:
     """
     Returns the module name based on the given module path.
     Examples:
-        get_module_name("C:/Users/username/ComfyUI/custom_nodes/my_custom_node.py") -> "custom_nodes.my_custom_node"
-        get_module_name("C:/Users/username/ComfyUI/custom_nodes/my_custom_node") -> "custom_nodes.my_custom_node"
-        get_module_name("C:/Users/username/ComfyUI/custom_nodes/my_custom_node/") -> "custom_nodes.my_custom_node"
-        get_module_name("C:/Users/username/ComfyUI/custom_nodes/my_custom_node/__init__.py") -> "custom_nodes.my_custom_node"
-        get_module_name("C:/Users/username/ComfyUI/custom_nodes/my_custom_node/__init__") -> "custom_nodes.my_custom_node"
-        get_module_name("C:/Users/username/ComfyUI/custom_nodes/my_custom_node/__init__/") -> "custom_nodes.my_custom_node"
-        get_module_name("C:/Users/username/ComfyUI/custom_nodes/my_custom_node.disabled") -> "custom_nodes.my
+        get_module_name("C:/Users/username/ComfyUI/custom_nodes/my_custom_node.py") -> "my_custom_node"
+        get_module_name("C:/Users/username/ComfyUI/custom_nodes/my_custom_node") -> "my_custom_node"
+        get_module_name("C:/Users/username/ComfyUI/custom_nodes/my_custom_node/") -> "my_custom_node"
+        get_module_name("C:/Users/username/ComfyUI/custom_nodes/my_custom_node/__init__.py") -> "my_custom_node"
+        get_module_name("C:/Users/username/ComfyUI/custom_nodes/my_custom_node/__init__") -> "my_custom_node"
+        get_module_name("C:/Users/username/ComfyUI/custom_nodes/my_custom_node/__init__/") -> "my_custom_node"
+        get_module_name("C:/Users/username/ComfyUI/custom_nodes/my_custom_node.disabled") -> "custom_nodes
     Args:
         module_path (str): The path of the module.
     Returns:
         str: The module name.
     """
-    relative_path = os.path.relpath(module_path, folder_paths.base_path)
+    base_path = os.path.basename(module_path)
     if os.path.isfile(module_path):
-        relative_path = os.path.splitext(relative_path)[0]
-    return relative_path.replace(os.sep, '.')
+        base_path = os.path.splitext(base_path)[0]
+    return base_path
 
 
-def load_custom_node(module_path: str, ignore=set()) -> bool:
+def load_custom_node(module_path: str, ignore=set(), module_parent="custom_nodes") -> bool:
     module_name = os.path.basename(module_path)
     if os.path.isfile(module_path):
         sp = os.path.splitext(module_path)
@@ -1967,7 +1981,7 @@ def load_custom_node(module_path: str, ignore=set()) -> bool:
             for name, node_cls in module.NODE_CLASS_MAPPINGS.items():
                 if name not in ignore:
                     NODE_CLASS_MAPPINGS[name] = node_cls
-                    node_cls.RELATIVE_PYTHON_MODULE = get_relative_module_name(module_path)
+                    node_cls.RELATIVE_PYTHON_MODULE = "{}.{}".format(module_parent, get_module_name(module_path))
             if hasattr(module, "NODE_DISPLAY_NAME_MAPPINGS") and getattr(module, "NODE_DISPLAY_NAME_MAPPINGS") is not None:
                 NODE_DISPLAY_NAME_MAPPINGS.update(module.NODE_DISPLAY_NAME_MAPPINGS)
             return True
@@ -2002,7 +2016,7 @@ def init_external_custom_nodes():
             if os.path.isfile(module_path) and os.path.splitext(module_path)[1] != ".py": continue
             if module_path.endswith(".disabled"): continue
             time_before = time.perf_counter()
-            success = load_custom_node(module_path, base_node_names)
+            success = load_custom_node(module_path, base_node_names, module_parent="custom_nodes")
             node_import_times.append((time.perf_counter() - time_before, module_path, success))
 
     if len(node_import_times) > 0:
@@ -2064,11 +2078,14 @@ def init_builtin_extra_nodes():
         "nodes_audio.py",
         "nodes_sd3.py",
         "nodes_gits.py",
+        "nodes_controlnet.py",
+        "nodes_hunyuan.py",
+        "nodes_flux.py",
     ]
 
     import_failed = []
     for node_file in extras_files:
-        if not load_custom_node(os.path.join(extras_dir, node_file)):
+        if not load_custom_node(os.path.join(extras_dir, node_file), module_parent="comfy_extras"):
             import_failed.append(node_file)
 
     return import_failed

@@ -1,4 +1,8 @@
 import inspect
+import hashlib
+
+from comfy.cli_args import args
+
 
 from PIL import ImageFile, UnidentifiedImageError
 
@@ -50,3 +54,15 @@ def get_node_input_types(context: execution_context.ExecutionContext, node_class
         else:
             inputs.append(param.default)
     return node_class.INPUT_TYPES(*inputs)
+
+    return x
+
+def hasher():
+    hashfuncs = {
+        "md5": hashlib.md5,
+        "sha1": hashlib.sha1,
+        "sha256": hashlib.sha256,
+        "sha512": hashlib.sha512
+    }
+    return hashfuncs[args.default_hashing_function]
+
