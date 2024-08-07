@@ -114,7 +114,7 @@ def clear_input_directory(user_hash):
 
 
 #NOTE: used in http server so don't put folders that should not be accessed remotely
-def get_directory_by_type(type_name, user_hash):
+def get_directory_by_type(type_name: str, user_hash: str) -> str | None:
     if type_name == "output":
         return get_output_directory(user_hash)
     if type_name == "temp":
@@ -126,7 +126,7 @@ def get_directory_by_type(type_name, user_hash):
 
 # determine base_dir rely on annotation if name is 'filename.ext [annotation]' format
 # otherwise use default_path as base_dir
-def annotated_filepath(name, user_hash) -> tuple[str, str | None]:
+def annotated_filepath(name: str, user_hash) -> tuple[str, str | None]:
     if name.endswith("[output]"):
         base_dir = get_output_directory(user_hash)
         name = name[:-9]
@@ -215,7 +215,7 @@ def filter_files_extensions(files: Collection[str], extensions: Collection[str])
 
 
 
-def get_full_path(context: execution_context.ExecutionContext, folder_name, filename):
+def get_full_path(context: execution_context.ExecutionContext, folder_name: str, filename: str) -> str | None:
     if folder_name in diffus.models.FAVORITE_MODEL_TYPES:
         return diffus.repository.get_favorite_model_full_path(context.user_id, folder_name, filename)
     else:
@@ -279,8 +279,7 @@ def get_filename_list(context: execution_context.ExecutionContext, folder_name: 
 
 
 def get_save_image_path(filename_prefix: str, output_dir: str, image_width=0, image_height=0) -> tuple[str, str, int, str, str]:
-    def map_filename(filename):
-
+    def map_filename(filename: str) -> tuple[int, str]:
         prefix_len = len(os.path.basename(filename_prefix))
         prefix = filename[:prefix_len + 1]
         try:

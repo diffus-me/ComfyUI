@@ -55,7 +55,6 @@ def get_node_input_types(context: execution_context.ExecutionContext, node_class
             inputs.append(param.default)
     return node_class.INPUT_TYPES(*inputs)
 
-    return x
 
 def hasher():
     hashfuncs = {
