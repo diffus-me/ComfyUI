@@ -303,7 +303,7 @@ def _ultimate_sd_upscale_consumption(image, model, positive, negative, vae, upsc
     }]
     if enable_hr:
         result.append({
-            'opt_type': 'upscale',
+            'opt_type': 'hires_fix',
             'width': hr_width,
             'height': hr_height,
         })
@@ -313,6 +313,7 @@ def _ultimate_sd_upscale_consumption(image, model, positive, negative, vae, upsc
 def _image_upscale_with_model_consumption(upscale_model, image):
     return {
         'opts': [{
+            'opt_type': 'upscale',
             'width': image.shape[2] * upscale_model.scale,
             'height': image.shape[1] * upscale_model.scale,
             'batch_size': image.shape[0],
@@ -393,6 +394,7 @@ def _easy_hires_fix_consumption(
     if image is not None:
         return {
             'opts': {
+                'opt_type': 'hires_fix',
                 'width': image.shape[2] * model_scale,
                 'height': image.shape[1] * model_scale,
                 'batch_size': image.shape[0],
@@ -410,6 +412,7 @@ def _cr_upscale_image_consumption(image, upscale_model, rounding_modulus=8, loop
     if image is not None:
         return {
             'opts': [{
+                'opt_type': 'upscale',
                 'width': image.shape[2] * model_scale,
                 'height': image.shape[1] * model_scale,
                 'batch_size': image.shape[0],
@@ -438,6 +441,7 @@ def _vhs_video_combine_consumption(
 ):
     return {
         'opts': [{
+            'opt_type': 'generate',
             'width': images.shape[2],
             'height': images.shape[1],
             'batch_size': images.shape[0],
@@ -549,6 +553,7 @@ def _face_detailer_consumption(image, model, clip, vae, guide_size, guide_size_f
 def _re_actor_build_face_model_consumption(image, det_size=(640, 640)):
     return {
         'opts': [{
+            'opt_type': 'build_face_model',
             'width': det_size[0],
             'height': det_size[1],
             'steps': 1,
@@ -596,6 +601,7 @@ def _ultimate_sd_upscale_no_upscale_consumption(upscaled_image, model, positive,
                                                 context: execution_context.ExecutionContext):
     return {
         'opts': [{
+            'opt_type': 'upscale',
             'width': upscaled_image.shape[2],
             'height': upscaled_image.shape[1],
             'steps': steps,
