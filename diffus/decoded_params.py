@@ -26,16 +26,25 @@ def _k_sampler_consumption(model, seed, steps, cfg, sampler_name, scheduler, pos
 
 def _reactor_restore_face_consumption(image, model, visibility, codeformer_weight, facedetection,
                                       context: execution_context.ExecutionContext):
-    return {
-        'opts': [{
-            'opt_type': 'sample',
+    if model != 'none':
+        opts = [{
+            'opt_type': 'detect_face',
             'width': image.shape[2],
             'height': image.shape[1],
             'steps': 30,
-            'n_iter': 0 if model == 'none' else 1,
+            'n_iter': 1,
+            'batch_size': image.shape[0]
+        }, {
+            'opt_type': 'restore_face',
+            'width': image.shape[2],
+            'height': image.shape[1],
+            'steps': 30,
+            'n_iter': 1,
             'batch_size': image.shape[0]
         }]
-    }
+    else:
+        opts = []
+    return {'opts': opts}
 
 
 def _reactor_face_swap_consumption(enabled,
@@ -56,12 +65,15 @@ def _reactor_face_swap_consumption(enabled,
                                    context: execution_context.ExecutionContext = None):
     return {
         'opts': [{
-            'opt_type': 'sample',
+            'opt_type': 'detect_face',
             'width': input_image.shape[2],
             'height': input_image.shape[1],
-            'steps': 30,
-            'n_iter': 2,  # 1 for k_sampler, 1 for face detection
-            'batch_size': input_image.shape[0],
+            'batch_size': input_image.shape[0]
+        }, {
+            'opt_type': 'restore_face',
+            'width': input_image.shape[2],
+            'height': input_image.shape[1],
+            'batch_size': input_image.shape[0]
         }]
     }
 
@@ -550,6 +562,76 @@ def _face_detailer_consumption(image, model, clip, vae, guide_size, guide_size_f
     return {'opts': opts}
 
 
+def _detailer_for_each_consumption(image, segs, model, clip, vae, guide_size, guide_size_for, max_size, seed, steps,
+                                   cfg, sampler_name,
+                                   scheduler, positive, negative, denoise, feather, noise_mask, force_inpaint, wildcard,
+                                   cycle=1,
+                                   detailer_hook=None, inpaint_model=False, noise_mask_feather=0):
+    image_width = image.shape[2]
+    image_height = image.shape[1]
+    batch_size = image.shape[0]
+    opts = [{
+        'opt_type': 'enhance_detail',
+        'width': image_width,
+        'height': image_height,
+        'steps': steps,
+        'n_iter': cycle,
+        'batch_size': batch_size,
+    }]
+    return {'opts': opts}
+
+
+def _detailer_for_each_pipe_consumption(image, segs, guide_size, guide_size_for, max_size, seed, steps, cfg,
+                                        sampler_name, scheduler,
+                                        denoise, feather, noise_mask, force_inpaint, basic_pipe, wildcard,
+                                        refiner_ratio=None, detailer_hook=None, refiner_basic_pipe_opt=None,
+                                        cycle=1, inpaint_model=False, noise_mask_feather=0):
+    image_width = image.shape[2]
+    image_height = image.shape[1]
+    batch_size = image.shape[0]
+    opts = [{
+        'opt_type': 'enhance_detail',
+        'width': image_width,
+        'height': image_height,
+        'steps': steps,
+        'n_iter': cycle,
+        'batch_size': batch_size,
+    }]
+    return {'opts': opts}
+
+
+def _impact_simple_detector_segs_for_ad_consumption(bbox_detector, image_frames, bbox_threshold, bbox_dilation,
+                                                    crop_factor, drop_size,
+                                                    sub_threshold, sub_dilation, sub_bbox_expansion,
+                                                    sam_mask_hint_threshold,
+                                                    masking_mode="Pivot SEGS", segs_pivot="Combined mask",
+                                                    sam_model_opt=None, segm_detector_opt=None):
+    image_width = image_frames.shape[2]
+    image_height = image_frames.shape[1]
+    batch_size = image_frames.shape[0]
+    opts = [{
+        'opt_type': 'detect_box',
+        'width': image_width,
+        'height': image_height,
+        'batch_size': batch_size,
+    }]
+    if sam_model_opt is not None:
+        opts.append({
+            'opt_type': 'sam',
+            'width': image_width,
+            'height': image_height,
+            'batch_size': batch_size,
+        })
+    elif segm_detector_opt is not None:
+        opts.append({
+            'opt_type': 'detect_seg',
+            'width': image_width,
+            'height': image_height,
+            'batch_size': batch_size,
+        })
+    return {'opts': opts}
+
+
 def _re_actor_build_face_model_consumption(image, det_size=(640, 640)):
     return {
         'opts': [{
@@ -635,7 +717,6 @@ _NODE_CONSUMPTION_MAPPING = {
     'VHS_VideoCombine': _vhs_video_combine_consumption,
     'FaceDetailer': _face_detailer_consumption,
     'FaceDetailerPipe': _face_detailer_pipe_consumption,
-
     'SamplerCustom': _sampler_custom_consumption,
     'SamplerCustomAdvanced': _sampler_custom_advanced_consumption,
     'SeargeSDXLImage2ImageSampler2': _searge_sdxl_image2image_sampler2_consumption,
@@ -645,6 +726,9 @@ _NODE_CONSUMPTION_MAPPING = {
     'CR Upscale Image': _cr_upscale_image_consumption,
     'KSampler //Inspire': _k_sampler_inspire_consumption,
     'KSampler Cycle': _was_k_sampler_cycle_consumption,
+    'ImpactSimpleDetectorSEGS_for_AD': _impact_simple_detector_segs_for_ad_consumption,
+    'DetailerForEach': _detailer_for_each_consumption,
+    'DetailerForEachPipe': _detailer_for_each_pipe_consumption,
 
     'ADE_UseEvolvedSampling': _none_consumption_maker,
     'ModelSamplingSD3': _none_consumption_maker,
@@ -927,7 +1011,9 @@ _NODE_CONSUMPTION_MAPPING = {
     "Logic Comparison OR": _none_consumption_maker,
     "Logic Comparison AND": _none_consumption_maker,
     "Logic Comparison XOR": _none_consumption_maker,
-
+    'ImpactControlNetApplySEGS': _none_consumption_maker,
+    'DWPreprocessor_Provider_for_SEGS //Inspire': _none_consumption_maker,
+    'CLIPVisionLoader': _none_consumption_maker,
 }
 
 
