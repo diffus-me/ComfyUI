@@ -921,6 +921,13 @@ _NODE_CONSUMPTION_MAPPING = {
     "ImageSharpen": _none_consumption_maker,
     "ImageScaleToTotalPixels": _none_consumption_maker,
     'SD_4XUpscale_Conditioning': _none_consumption_maker,
+    'Latent Input Switch': _none_consumption_maker,
+    'FluxGuidance': _none_consumption_maker,
+    'VAE Input Switch': _none_consumption_maker,
+    "Logic Comparison OR": _none_consumption_maker,
+    "Logic Comparison AND": _none_consumption_maker,
+    "Logic Comparison XOR": _none_consumption_maker,
+
 }
 
 
