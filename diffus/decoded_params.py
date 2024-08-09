@@ -21,23 +21,7 @@ def __sample_opt_from_latent(latent_image, steps, ):
 
 def _k_sampler_consumption(model, seed, steps, cfg, sampler_name, scheduler, positive, negative, latent_image,
                            denoise=1.0, context=None):
-    n_iter = latent_image.get("batch_index", 1)
-
-    latent = latent_image["samples"]
-    latent_size = latent.size()
-    batch_size = latent_size[0]
-    image_height = latent_size[2] * 8
-    image_width = latent_size[3] * 8
-    return {
-        'opts': [{
-            'opt_type': 'sample',
-            'width': image_width,
-            'height': image_height,
-            'steps': steps,
-            'n_iter': n_iter,
-            'batch_size': batch_size
-        }]
-    }
+    return {'opts': [__sample_opt_from_latent(latent_image, steps, )]}
 
 
 def _reactor_restore_face_consumption(image, model, visibility, codeformer_weight, facedetection,
@@ -97,23 +81,7 @@ def _k_sampler_advanced_consumption(model,
                                     return_with_leftover_noise,
                                     denoise=1.0,
                                     context=None):
-    n_iter = latent_image.get("batch_index", 1)
-
-    latent = latent_image["samples"]
-    latent_size = latent.size()
-    batch_size = latent_size[0]
-    image_height = latent_size[2] * 8
-    image_width = latent_size[3] * 8
-    return {
-        'opts': [{
-            'opt_type': 'sample',
-            'width': image_width,
-            'height': image_height,
-            'steps': steps,
-            'n_iter': n_iter,
-            'batch_size': batch_size
-        }]
-    }
+    return {'opts': [__sample_opt_from_latent(latent_image, steps, )]}
 
 
 def _tsc_ksampler_advanced_consumption(model, add_noise, noise_seed, steps, cfg, sampler_name, scheduler, positive,
@@ -123,23 +91,7 @@ def _tsc_ksampler_advanced_consumption(model, add_noise, noise_seed, steps, cfg,
                                        prompt=None, extra_pnginfo=None, my_unique_id=None,
                                        context: execution_context.ExecutionContext = None,
                                        optional_vae=(None,), script=None):
-    n_iter = latent_image.get("batch_index", 1)
-
-    latent = latent_image["samples"]
-    latent_size = latent.size()
-    batch_size = latent_size[0]
-    image_height = latent_size[2] * 8
-    image_width = latent_size[3] * 8
-    return {
-        'opts': [{
-            'opt_type': 'sample',
-            'width': image_width,
-            'height': image_height,
-            'steps': steps,
-            'n_iter': n_iter,
-            'batch_size': batch_size
-        }]
-    }
+    return {'opts': [__sample_opt_from_latent(latent_image, steps, )]}
 
 
 def _tsc_ksampler_sdxl_consumption(sdxl_tuple, noise_seed, steps, cfg, sampler_name, scheduler, latent_image,
@@ -148,23 +100,7 @@ def _tsc_ksampler_sdxl_consumption(sdxl_tuple, noise_seed, steps, cfg, sampler_n
                                    my_unique_id=None, context: execution_context.ExecutionContext = None,
                                    optional_vae=(None,), refiner_extras=None,
                                    script=None):
-    n_iter = latent_image.get("batch_index", 1)
-
-    latent = latent_image["samples"]
-    latent_size = latent.size()
-    batch_size = latent_size[0]
-    image_height = latent_size[2] * 8
-    image_width = latent_size[3] * 8
-    return {
-        'opts': [{
-            'opt_type': 'sample',
-            'width': image_width,
-            'height': image_height,
-            'steps': steps,
-            'n_iter': n_iter,
-            'batch_size': batch_size
-        }]
-    }
+    return {'opts': [__sample_opt_from_latent(latent_image, steps, )]}
 
 
 def _tsc_k_sampler_consumption(model, seed, steps, cfg, sampler_name, scheduler, positive, negative, latent_image,
@@ -173,92 +109,32 @@ def _tsc_k_sampler_consumption(model, seed, steps, cfg, sampler_name, scheduler,
                                context: execution_context.ExecutionContext = None,
                                optional_vae=(None,), script=None, add_noise=None, start_at_step=None, end_at_step=None,
                                return_with_leftover_noise=None, sampler_type="regular"):
-    n_iter = latent_image.get("batch_index", 1)
-
-    latent = latent_image["samples"]
-    latent_size = latent.size()
-    batch_size = latent_size[0]
-    image_height = latent_size[2] * 8
-    image_width = latent_size[3] * 8
-    return {
-        'opts': [{
-            'opt_type': 'sample',
-            'width': image_width,
-            'height': image_height,
-            'steps': steps,
-            'n_iter': n_iter,
-            'batch_size': batch_size
-        }]
-    }
+    return {'opts': [__sample_opt_from_latent(latent_image, steps, )]}
 
 
 def _impact_k_sampler_basic_pipe_consumption(basic_pipe, seed, steps, cfg, sampler_name, scheduler, latent_image,
                                              denoise=1.0, context: execution_context.ExecutionContext = None):
-    n_iter = latent_image.get("batch_index", 1)
-
-    latent = latent_image["samples"]
-    latent_size = latent.size()
-    batch_size = latent_size[0]
-    image_height = latent_size[2] * 8
-    image_width = latent_size[3] * 8
-    return {
-        'opts': [{
-            'opt_type': 'sample',
-            'width': image_width,
-            'height': image_height,
-            'steps': steps,
-            'n_iter': n_iter,
-            'batch_size': batch_size
-        }]
-    }
+    return {'opts': [__sample_opt_from_latent(latent_image, steps, )]}
 
 
 def _tiled_k_sampler_consumption(model, seed, tile_width, tile_height, tiling_strategy, steps, cfg, sampler_name,
                                  scheduler, positive, negative, latent_image, denoise, context=None):
-    n_iter = latent_image.get("batch_index", 1)
-
-    latent = latent_image["samples"]
-    latent_size = latent.size()
-    batch_size = latent_size[0]
-    image_height = latent_size[2] * 8
-    image_width = latent_size[3] * 8
-    return {
-        'opts': [{
-            'opt_type': 'sample',
-            'width': image_width,
-            'height': image_height,
-            'steps': steps,
-            'n_iter': n_iter,
-            'batch_size': batch_size
-        }]
-    }
+    return {'opts': [__sample_opt_from_latent(latent_image, steps, )]}
 
 
 def _tiled_k_sampler_advanced_consumption(model, add_noise, noise_seed, tile_width, tile_height, tiling_strategy, steps,
                                           cfg, sampler_name, scheduler, positive, negative, latent_image, start_at_step,
                                           end_at_step, return_with_leftover_noise, preview, denoise=1.0,
                                           context: execution_context.ExecutionContext = None):
-    n_iter = latent_image.get("batch_index", 1)
-
-    latent = latent_image["samples"]
-    latent_size = latent.size()
-    batch_size = latent_size[0]
-    image_height = latent_size[2] * 8
-    image_width = latent_size[3] * 8
-    return {
-        'opts': [{
-            'opt_type': 'sample',
-            'width': image_width,
-            'height': image_height,
-            'steps': steps,
-            'n_iter': n_iter,
-            'batch_size': batch_size
-        }]
-    }
+    return {'opts': [__sample_opt_from_latent(latent_image, steps, )]}
 
 
 def _sampler_custom_consumption(model, add_noise, noise_seed, cfg, positive, negative, sampler, sigmas, latent_image,
                                 context):
+    return {'opts': [__sample_opt_from_latent(latent_image, len(sigmas))]}
+
+
+def _sampler_custom_advanced_consumption(noise, guider, sampler, sigmas, latent_image, context):
     return {'opts': [__sample_opt_from_latent(latent_image, len(sigmas))]}
 
 
@@ -682,18 +558,6 @@ def _re_actor_build_face_model_consumption(image, det_size=(640, 640)):
     }
 
 
-def _sd_4x_upscale_conditioning_consumption(images, positive, negative, scale_ratio, noise_augmentation):
-    width = max(1, round(images.shape[-2] * scale_ratio))
-    height = max(1, round(images.shape[-3] * scale_ratio))
-    return {
-        'opts': [{
-            'width': width,
-            'height': height,
-            'batch_size': images.shape[0],
-        }]
-    }
-
-
 def _slice_dict(d, i):
     d_new = dict()
     for k, v in d.items():
@@ -767,6 +631,7 @@ _NODE_CONSUMPTION_MAPPING = {
     'FaceDetailerPipe': _face_detailer_pipe_consumption,
 
     'SamplerCustom': _sampler_custom_consumption,
+    'SamplerCustomAdvanced': _sampler_custom_advanced_consumption,
     'SeargeSDXLImage2ImageSampler2': _searge_sdxl_image2image_sampler2_consumption,
     'BNK_TiledKSamplerAdvanced': _tiled_k_sampler_advanced_consumption,
     'BNK_TiledKSampler': _tiled_k_sampler_consumption,
