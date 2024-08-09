@@ -10,7 +10,7 @@ import comfy_extras.nodes_model_merging
 class ImageOnlyCheckpointLoader:
     @classmethod
     def INPUT_TYPES(s, context: execution_context.ExecutionContext):
-        return {"required": { "ckpt_name": (folder_paths.get_filename_list(context, "checkpoints"), ),
+        return {"required": { "ckpt_name": (folder_paths.get_filename_list(context, "svd"), ),
                              },
                 "hidden": {"context": "EXECUTION_CONTEXT"}}
     RETURN_TYPES = ("MODEL", "CLIP_VISION", "VAE")
@@ -19,7 +19,7 @@ class ImageOnlyCheckpointLoader:
     CATEGORY = "loaders/video_models"
 
     def load_checkpoint(self, ckpt_name, output_vae=True, output_clip=True, context: execution_context.ExecutionContext=None):
-        ckpt_path = folder_paths.get_full_path(context, "checkpoints", ckpt_name)
+        ckpt_path = folder_paths.get_full_path(context, "svd", ckpt_name)
         out = comfy.sd.load_checkpoint_guess_config(ckpt_path, output_vae=True, output_clip=False, output_clipvision=True, embedding_directory=folder_paths.get_folder_paths("embeddings"))
         return (out[0], out[3], out[2])
 
