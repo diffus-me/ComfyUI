@@ -645,6 +645,48 @@ def _re_actor_build_face_model_consumption(image, det_size=(640, 640)):
     }
 
 
+def _supir_decode_consumption(SUPIR_VAE, latents, use_tiled_vae, decoder_tile_size):
+    opt = __sample_opt_from_latent(latents, 30)
+    opt['opt_type'] = 'supir_decode'
+    del opt['steps']
+    return {'opts': [opt, ]}
+
+
+def _supir_encode_consumption(SUPIR_VAE, image, encoder_dtype, use_tiled_vae, encoder_tile_size):
+    image_width = image.shape[2]
+    image_height = image.shape[1]
+    batch_size = image.shape[0]
+    opts = [{
+        'opt_type': 'supir_encode',
+        'width': image_width,
+        'height': image_height,
+        'batch_size': batch_size,
+    }]
+    return {'opts': opts}
+
+
+def _supir_sample_consumption(SUPIR_model, latents, steps, seed, cfg_scale_end, EDM_s_churn, s_noise, positive,
+                              negative,
+                              cfg_scale_start, control_scale_start, control_scale_end, restore_cfg, keep_model_loaded,
+                              DPMPP_eta,
+                              sampler, sampler_tile_size=1024, sampler_tile_stride=512):
+    return {'opts': [__sample_opt_from_latent(latents, steps, )]}
+
+
+def _supir_first_stage_consumption(SUPIR_VAE, image, encoder_dtype, use_tiled_vae, encoder_tile_size,
+                                   decoder_tile_size):
+    image_width = image.shape[2]
+    image_height = image.shape[1]
+    batch_size = image.shape[0]
+    opts = [{
+        'opt_type': 'supir_first_stage',
+        'width': image_width,
+        'height': image_height,
+        'batch_size': batch_size,
+    }]
+    return {'opts': opts}
+
+
 def _slice_dict(d, i):
     d_new = dict()
     for k, v in d.items():
@@ -729,6 +771,10 @@ _NODE_CONSUMPTION_MAPPING = {
     'ImpactSimpleDetectorSEGS_for_AD': _impact_simple_detector_segs_for_ad_consumption,
     'DetailerForEach': _detailer_for_each_consumption,
     'DetailerForEachPipe': _detailer_for_each_pipe_consumption,
+    'SUPIR_decode': _supir_decode_consumption,
+    'SUPIR_encode': _supir_encode_consumption,
+    'SUPIR_sample': _supir_sample_consumption,
+    'SUPIR_first_stage': _supir_first_stage_consumption,
 
     'ADE_UseEvolvedSampling': _none_consumption_maker,
     'ModelSamplingSD3': _none_consumption_maker,
@@ -880,7 +926,6 @@ _NODE_CONSUMPTION_MAPPING = {
     'SDTurboScheduler': _none_consumption_maker,
     'Image Crop Face': _none_consumption_maker,
     'IPAdapterTiled': _none_consumption_maker,
-    'CLIPVisionLoader': _none_consumption_maker,
     'SeargeInput1': _none_consumption_maker,
     'SeargeInput2': _none_consumption_maker,
     'SeargeInput3': _none_consumption_maker,
@@ -1014,6 +1059,14 @@ _NODE_CONSUMPTION_MAPPING = {
     'ImpactControlNetApplySEGS': _none_consumption_maker,
     'DWPreprocessor_Provider_for_SEGS //Inspire': _none_consumption_maker,
     'CLIPVisionLoader': _none_consumption_maker,
+    'SUPIR_conditioner': _none_consumption_maker,
+    'ImageResize+': _none_consumption_maker,
+    'SUPIR_model_loader_v2': _none_consumption_maker,
+    "SUPIR_Upscale": _none_consumption_maker,
+    "SUPIR_model_loader": _none_consumption_maker,
+    "SUPIR_tiles": _none_consumption_maker,
+    "SUPIR_model_loader_v2_clip": _none_consumption_maker,
+    'ColorMatch': _none_consumption_maker,
 }
 
 
