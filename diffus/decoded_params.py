@@ -134,6 +134,23 @@ def _tiled_k_sampler_consumption(model, seed, tile_width, tile_height, tiling_st
     return {'opts': [__sample_opt_from_latent(latent_image, steps, )]}
 
 
+def _easy_full_k_sampler_consumption(pipe, steps, cfg, sampler_name, scheduler, denoise, image_output, link_id,
+                                     save_prefix, seed=None, model=None, positive=None, negative=None, latent=None,
+                                     vae=None, clip=None, xyPlot=None, tile_size=None, prompt=None, extra_pnginfo=None,
+                                     my_unique_id=None, context: execution_context.ExecutionContext = None,
+                                     force_full_denoise=False, disable_noise=False, downscale_options=None, image=None):
+    samp_samples = latent if latent is not None else pipe["samples"]
+    samp_vae = vae if vae is not None else pipe["vae"]
+    if image is not None and latent is None:
+        samp_samples = {"samples": samp_vae.encode(image[:, :, :, :3])}
+
+    return {'opts': [__sample_opt_from_latent(samp_samples, steps, )]}
+
+
+def _model_sampling_flux_consumption():
+    pass
+
+
 def _tiled_k_sampler_advanced_consumption(model, add_noise, noise_seed, tile_width, tile_height, tiling_strategy, steps,
                                           cfg, sampler_name, scheduler, positive, negative, latent_image, start_at_step,
                                           end_at_step, return_with_leftover_noise, preview, denoise=1.0,
@@ -461,13 +478,14 @@ def _vhs_video_combine_consumption(
     }
 
 
-def _face_detailer_pipe_consumption(
-        image, detailer_pipe, guide_size, guide_size_for, max_size, seed, steps, cfg, sampler_name, scheduler,
-        denoise, feather, noise_mask, force_inpaint, bbox_threshold, bbox_dilation, bbox_crop_factor,
-        sam_detection_hint, sam_dilation, sam_threshold, sam_bbox_expansion,
-        sam_mask_hint_threshold, sam_mask_hint_use_negative, drop_size, refiner_ratio=None,
-        cycle=1, inpaint_model=False, noise_mask_feather=0
-):
+def _face_detailer_pipe_consumption(image, detailer_pipe, guide_size, guide_size_for, max_size, seed, steps, cfg,
+                                    sampler_name, scheduler,
+                                    denoise, feather, noise_mask, force_inpaint, bbox_threshold, bbox_dilation,
+                                    bbox_crop_factor,
+                                    sam_detection_hint, sam_dilation, sam_threshold, sam_bbox_expansion,
+                                    sam_mask_hint_threshold, sam_mask_hint_use_negative, drop_size, refiner_ratio=None,
+                                    cycle=1, inpaint_model=False, noise_mask_feather=0,
+                                    context: execution_context.ExecutionContext = None, ):
     model, clip, vae, positive, negative, wildcard, bbox_detector, segm_detector_opt, sam_model_opt, detailer_hook, \
         refiner_model, refiner_clip, refiner_positive, refiner_negative = detailer_pipe
 
@@ -520,7 +538,8 @@ def _face_detailer_consumption(image, model, clip, vae, guide_size, guide_size_f
                                sam_mask_hint_threshold,
                                sam_mask_hint_use_negative, drop_size, bbox_detector, wildcard, cycle=1,
                                sam_model_opt=None, segm_detector_opt=None, detailer_hook=None, inpaint_model=False,
-                               noise_mask_feather=0):
+                               noise_mask_feather=0,
+                               context: execution_context.ExecutionContext = None):
     image_width = image.shape[2]
     image_height = image.shape[1]
     batch_size = image.shape[0]
@@ -566,7 +585,8 @@ def _detailer_for_each_consumption(image, segs, model, clip, vae, guide_size, gu
                                    cfg, sampler_name,
                                    scheduler, positive, negative, denoise, feather, noise_mask, force_inpaint, wildcard,
                                    cycle=1,
-                                   detailer_hook=None, inpaint_model=False, noise_mask_feather=0):
+                                   detailer_hook=None, inpaint_model=False, noise_mask_feather=0,
+                                   context: execution_context.ExecutionContext = None):
     image_width = image.shape[2]
     image_height = image.shape[1]
     batch_size = image.shape[0]
@@ -585,7 +605,8 @@ def _detailer_for_each_pipe_consumption(image, segs, guide_size, guide_size_for,
                                         sampler_name, scheduler,
                                         denoise, feather, noise_mask, force_inpaint, basic_pipe, wildcard,
                                         refiner_ratio=None, detailer_hook=None, refiner_basic_pipe_opt=None,
-                                        cycle=1, inpaint_model=False, noise_mask_feather=0):
+                                        cycle=1, inpaint_model=False, noise_mask_feather=0,
+                                        context: execution_context.ExecutionContext = None):
     image_width = image.shape[2]
     image_height = image.shape[1]
     batch_size = image.shape[0]
@@ -687,6 +708,79 @@ def _supir_first_stage_consumption(SUPIR_VAE, image, encoder_dtype, use_tiled_va
     return {'opts': opts}
 
 
+def _bbox_detector_segs_consumption(bbox_detector, image, threshold, dilation, crop_factor, drop_size, labels=None,
+                                    detailer_hook=None):
+    image_width = image.shape[2]
+    image_height = image.shape[1]
+    batch_size = image.shape[0]
+    opts = [{
+        'opt_type': 'bbox_detector',
+        'width': image_width,
+        'height': image_height,
+        'batch_size': batch_size,
+    }]
+    return {'opts': opts}
+
+
+def _segm_detector_for_each_consumption(segm_detector, image, threshold, dilation, crop_factor, drop_size, labels=None,
+                                        detailer_hook=None):
+    image_width = image.shape[2]
+    image_height = image.shape[1]
+    batch_size = image.shape[0]
+    opts = [{
+        'opt_type': 'segm_detector',
+        'width': image_width,
+        'height': image_height,
+        'batch_size': batch_size,
+    }]
+    return {'opts': opts}
+
+
+def _impact_simple_detector_segs_consumption(bbox_detector, image, bbox_threshold, bbox_dilation, crop_factor,
+                                             drop_size,
+                                             sub_threshold, sub_dilation, sub_bbox_expansion,
+                                             sam_mask_hint_threshold, post_dilation=0, sam_model_opt=None,
+                                             segm_detector_opt=None):
+    image_width = image.shape[2]
+    image_height = image.shape[1]
+    batch_size = image.shape[0]
+    opts = [{
+        'opt_type': 'detector_segs',
+        'width': image_width,
+        'height': image_height,
+        'batch_size': batch_size,
+    }]
+    return {'opts': opts}
+
+
+def _clip_seg_masking_consumption(image, text=None, clipseg_model=None):
+    image_width = image.shape[2]
+    image_height = image.shape[1]
+    batch_size = image.shape[0]
+    opts = [{
+        'opt_type': 'clip_seg_masking',
+        'width': image_width,
+        'height': image_height,
+        'batch_size': batch_size,
+    }]
+    return {'opts': opts}
+
+
+def _layermask_person_mask_ultra_consumption(images, face, hair, body, clothes,
+                                             accessories, background, confidence,
+                                             detail_range, black_point, white_point, process_detail):
+    image_width = images.shape[2]
+    image_height = images.shape[1]
+    batch_size = images.shape[0]
+    opts = [{
+        'opt_type': 'layermask_person_mask_ultra',
+        'width': image_width,
+        'height': image_height,
+        'batch_size': batch_size,
+    }]
+    return {'opts': opts}
+
+
 def _slice_dict(d, i):
     d_new = dict()
     for k, v in d.items():
@@ -764,6 +858,8 @@ _NODE_CONSUMPTION_MAPPING = {
     'SeargeSDXLImage2ImageSampler2': _searge_sdxl_image2image_sampler2_consumption,
     'BNK_TiledKSamplerAdvanced': _tiled_k_sampler_advanced_consumption,
     'BNK_TiledKSampler': _tiled_k_sampler_consumption,
+    'easy fullkSampler': _easy_full_k_sampler_consumption,
+
     'UltimateSDUpscaleNoUpscale': _ultimate_sd_upscale_no_upscale_consumption,
     'CR Upscale Image': _cr_upscale_image_consumption,
     'KSampler //Inspire': _k_sampler_inspire_consumption,
@@ -775,6 +871,12 @@ _NODE_CONSUMPTION_MAPPING = {
     'SUPIR_encode': _supir_encode_consumption,
     'SUPIR_sample': _supir_sample_consumption,
     'SUPIR_first_stage': _supir_first_stage_consumption,
+    'BboxDetectorSEGS': _bbox_detector_segs_consumption,
+    'ONNXDetectorSEGS': _bbox_detector_segs_consumption,
+    'SegmDetectorSEGS': _segm_detector_for_each_consumption,
+    'ImpactSimpleDetectorSEGS': _impact_simple_detector_segs_consumption,
+    'CLIPSeg Masking': _clip_seg_masking_consumption,
+    'LayerMask: PersonMaskUltra': _layermask_person_mask_ultra_consumption,
 
     'ADE_UseEvolvedSampling': _none_consumption_maker,
     'ModelSamplingSD3': _none_consumption_maker,
@@ -1067,6 +1169,38 @@ _NODE_CONSUMPTION_MAPPING = {
     "SUPIR_tiles": _none_consumption_maker,
     "SUPIR_model_loader_v2_clip": _none_consumption_maker,
     'ColorMatch': _none_consumption_maker,
+    'EmptySegs': _none_consumption_maker,
+    'VHS_VideoInfo': _none_consumption_maker,
+    'ModelSamplingFlux': _none_consumption_maker,
+    'SplitSigmas': _none_consumption_maker,
+    'SegsToCombinedMask': _none_consumption_maker,
+    'VHS_DuplicateImages': _none_consumption_maker,
+    'CLIPTextEncodeFlux': _none_consumption_maker,
+    'GetImageSize+': _none_consumption_maker,
+    'MathExpression|pysssss': _none_consumption_maker,
+    'SeargeIntegerConstant': _none_consumption_maker,
+    "SeargeIntegerPair": _none_consumption_maker,
+    "SeargeIntegerMath": _none_consumption_maker,
+    "SeargeIntegerScaler": _none_consumption_maker,
+    'Seed': _none_consumption_maker,
+    'FeatherMask': _none_consumption_maker,
+    'CheckpointLoader|pysssss': _none_consumption_maker,
+    'ImageColorMatch+': _none_consumption_maker,
+    'PreviewDetailerHookProvider': _none_consumption_maker,
+    'Image Analyze': _none_consumption_maker,
+    'easy comfyLoader': _none_consumption_maker,
+    'easy controlnetLoaderADV': _none_consumption_maker,
+    'LoRALoader': _none_consumption_maker,
+    'LoadCLIPSegModels+': _none_consumption_maker,
+    'ApplyCLIPSeg+': _none_consumption_maker,
+    'LayerMask: MaskPreview': _none_consumption_maker,
+    'CLIPSeg Model Loader': _none_consumption_maker,
+    'Text to Console': _none_consumption_maker,
+    'FromBasicPipe': _none_consumption_maker,
+    'Lora Loader': _none_consumption_maker,
+    'SDXLEmptyLatentSizePicker+': _none_consumption_maker,
+    'LayerColor: AutoAdjust': _none_consumption_maker,
+    'LayerUtility: PurgeVRAM': _none_consumption_maker,
 }
 
 
