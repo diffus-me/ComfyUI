@@ -1466,7 +1466,10 @@ class SaveImage:
         filename_prefix += self.prefix_append
         if not user_hash:
             user_hash = context.user_hash
-        output_dir = folder_paths.get_output_directory(user_hash)
+        if self.type == 'temp':
+            output_dir = folder_paths.get_temp_directory(user_hash)
+        else:
+            output_dir = folder_paths.get_output_directory(user_hash)
         full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, output_dir, images[0].shape[1], images[0].shape[0])
         results = list()
         ts = time.time()
