@@ -78,6 +78,24 @@ def _reactor_face_swap_consumption(enabled,
     }
 
 
+def _reactor_face_swap_opt_consumption(enabled, input_image, swap_model, facedetection, face_restore_model,
+                                       face_restore_visibility, codeformer_weight, source_image=None, face_model=None,
+                                       options=None, context: execution_context.ExecutionContext = None):
+    return {
+        'opts': [{
+            'opt_type': 'detect_face',
+            'width': input_image.shape[2],
+            'height': input_image.shape[1],
+            'batch_size': input_image.shape[0]
+        }, {
+            'opt_type': 'restore_face',
+            'width': input_image.shape[2],
+            'height': input_image.shape[1],
+            'batch_size': input_image.shape[0]
+        }]
+    }
+
+
 def _k_sampler_advanced_consumption(model,
                                     add_noise,
                                     noise_seed,
@@ -121,6 +139,13 @@ def _tsc_k_sampler_consumption(model, seed, steps, cfg, sampler_name, scheduler,
                                context: execution_context.ExecutionContext = None,
                                optional_vae=(None,), script=None, add_noise=None, start_at_step=None, end_at_step=None,
                                return_with_leftover_noise=None, sampler_type="regular"):
+    return {'opts': [__sample_opt_from_latent(latent_image, steps, )]}
+
+
+def _xlabs_sampler_consumption(model, conditioning, neg_conditioning,
+                               noise_seed, steps, timestep_to_start_cfg, true_gs,
+                               image_to_image_strength, denoise_strength,
+                               latent_image=None, controlnet_condition=None):
     return {'opts': [__sample_opt_from_latent(latent_image, steps, )]}
 
 
@@ -843,9 +868,11 @@ _NODE_CONSUMPTION_MAPPING = {
     'KSampler (Efficient)': _tsc_k_sampler_consumption,
     'KSampler Adv. (Efficient)': _tsc_ksampler_advanced_consumption,
     'KSampler SDXL (Eff.)': _tsc_ksampler_sdxl_consumption,
+    'XlabsSampler': _xlabs_sampler_consumption,
     'ImpactKSamplerBasicPipe': _impact_k_sampler_basic_pipe_consumption,
     'ReActorRestoreFace': _reactor_restore_face_consumption,
     'ReActorFaceSwap': _reactor_face_swap_consumption,
+    'ReActorFaceSwapOpt': _reactor_face_swap_opt_consumption,
     'ReActorBuildFaceModel': _re_actor_build_face_model_consumption,
     'ImageUpscaleWithModel': _image_upscale_with_model_consumption,
     'UltimateSDUpscale': _ultimate_sd_upscale_consumption,
@@ -1201,6 +1228,12 @@ _NODE_CONSUMPTION_MAPPING = {
     'SDXLEmptyLatentSizePicker+': _none_consumption_maker,
     'LayerColor: AutoAdjust': _none_consumption_maker,
     'LayerUtility: PurgeVRAM': _none_consumption_maker,
+    'LoRA Stacker': _none_consumption_maker,
+    'Text Parse A1111 Embeddings': _none_consumption_maker,
+    'easy showSpentTime': _none_consumption_maker,
+    'Latent Upscale by Factor (WAS)': _none_consumption_maker,
+    'ImpactControlBridge': _none_consumption_maker,
+    'LoRA Stack to String converter': _none_consumption_maker,
 }
 
 
