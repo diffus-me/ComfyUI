@@ -849,9 +849,61 @@ def _ultimate_sd_upscale_no_upscale_consumption(upscaled_image, model, positive,
             'height': upscaled_image.shape[1],
             'steps': steps,
             'n_iter': 1,
-            'batch_size': 1,
+            'batch_size': upscaled_image.shape[0],
         }]
     }
+
+
+def image_rembg_consumption(
+        images,
+        transparency=True,
+        model="u2net",
+        alpha_matting=False,
+        alpha_matting_foreground_threshold=240,
+        alpha_matting_background_threshold=10,
+        alpha_matting_erode_size=10,
+        post_processing=False,
+        only_mask=False,
+        background_color="none",
+):
+    image_width = images.shape[2]
+    image_height = images.shape[1]
+    batch_size = images.shape[0]
+    opts = [{
+        'opt_type': 'rembg',
+        'width': image_width,
+        'height': image_height,
+        'batch_size': batch_size,
+    }]
+    return {'opts': opts}
+
+
+def _sam_detector_combined_consumption(
+        sam_model, segs, image, detection_hint, dilation,
+        threshold, bbox_expansion, mask_hint_threshold, mask_hint_use_negative):
+    image_width = image.shape[2]
+    image_height = image.shape[1]
+    batch_size = image.shape[0]
+    opts = [{
+        'opt_type': 'segm_detector_combined',
+        'width': image_width,
+        'height': image_height,
+        'batch_size': batch_size,
+    }]
+    return {'opts': opts}
+
+
+def was_remove_background_consumption(images, mode='background', threshold=127, threshold_tolerance=2):
+    image_width = images.shape[2]
+    image_height = images.shape[1]
+    batch_size = images.shape[0]
+    opts = [{
+        'opt_type': 'was_remove_background',
+        'width': image_width,
+        'height': image_height,
+        'batch_size': batch_size,
+    }]
+    return {'opts': opts}
 
 
 def _default_consumption_maker(*args, **kwargs):
@@ -904,6 +956,9 @@ _NODE_CONSUMPTION_MAPPING = {
     'ImpactSimpleDetectorSEGS': _impact_simple_detector_segs_consumption,
     'CLIPSeg Masking': _clip_seg_masking_consumption,
     'LayerMask: PersonMaskUltra': _layermask_person_mask_ultra_consumption,
+    'Image Rembg (Remove Background)': image_rembg_consumption,
+    'SAMDetectorCombined': _sam_detector_combined_consumption,
+    'Image Remove Background (Alpha)': was_remove_background_consumption,
 
     'ADE_UseEvolvedSampling': _none_consumption_maker,
     'ModelSamplingSD3': _none_consumption_maker,
@@ -1234,6 +1289,51 @@ _NODE_CONSUMPTION_MAPPING = {
     'Latent Upscale by Factor (WAS)': _none_consumption_maker,
     'ImpactControlBridge': _none_consumption_maker,
     'LoRA Stack to String converter': _none_consumption_maker,
+    'LatentFromBatch': _none_consumption_maker,
+    'AnimateDiffModuleLoader': _none_consumption_maker,
+    'Image Size to Number': _none_consumption_maker,
+    'Constant Number': _none_consumption_maker,
+    'Number Operation': _none_consumption_maker,
+    'Image Bounds': _none_consumption_maker,
+    'Inset Image Bounds': _none_consumption_maker,
+    'Bounded Image Crop': _none_consumption_maker,
+    'PreviewBridge': _none_consumption_maker,
+    'ImageToMask': _none_consumption_maker,
+    'ToBinaryMask': _none_consumption_maker,
+    'Mask Smooth Region': _none_consumption_maker,
+    'Mask Erode Region': _none_consumption_maker,
+    'Mask Dilate Region': _none_consumption_maker,
+    'MaskToSEGS': _none_consumption_maker,
+    'ImpactSEGSOrderedFilter': _none_consumption_maker,
+    'Image Blank': _none_consumption_maker,
+    'Image Blend by Mask': _none_consumption_maker,
+    'SubtractMask': _none_consumption_maker,
+    'InvertMask': _none_consumption_maker,
+    'ImpactDilateMask': _none_consumption_maker,
+    'BitwiseAndMask': _none_consumption_maker,
+    'Mask Crop Region': _none_consumption_maker,
+    'Image Crop Location': _none_consumption_maker,
+    'Image Select Channel': _none_consumption_maker,
+    'Image Levels Adjustment': _none_consumption_maker,
+    'Image Mix RGB Channels': _none_consumption_maker,
+    'Image Filter Adjustments': _none_consumption_maker,
+    'Image to Noise': _none_consumption_maker,
+    'AnimateDiffSlidingWindowOptions': _none_consumption_maker,
+    'CR Seed': _none_consumption_maker,
+    'LayerFilter: SoftLight': _none_consumption_maker,
+    'LayerColor: Color of Shadow & Highlight': _none_consumption_maker,
+    'easy imageSize': _none_consumption_maker,
+    'easy imageScaleDownBy': _none_consumption_maker,
+    'CFGGuider': _none_consumption_maker,
+    'SolidMask': _none_consumption_maker,
+    'MaskComposite': _none_consumption_maker,
+    'ConditioningSetMask': _none_consumption_maker,
+    'Image Blending Mode': _none_consumption_maker,
+    'MaskBlur+': _none_consumption_maker,
+    'SamplerDPMPP_3M_SDE': _none_consumption_maker,
+    'KarrasScheduler': _none_consumption_maker,
+    'SamplerEulerCFGpp': _none_consumption_maker,
+    'ADE_AnimateDiffCombine': _none_consumption_maker,
 }
 
 
