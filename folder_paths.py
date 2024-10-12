@@ -1,13 +1,21 @@
 from __future__ import annotations
-
+import datetime
 import os
+import shutil
 import time
 import mimetypes
 import logging
 from typing import Set, List, Dict, Tuple, Literal
 from collections.abc import Collection
 
+
+import diffus.repository
+import diffus.models
+import execution_context
+
+
 supported_pt_extensions: set[str] = {'.ckpt', '.pt', '.bin', '.pth', '.safetensors', '.pkl', '.sft'}
+
 
 folder_names_and_paths: dict[str, tuple[list[str], set[str]]] = {}
 
@@ -27,11 +35,12 @@ folder_names_and_paths["diffusers"] = ([os.path.join(models_dir, "diffusers")], 
 folder_names_and_paths["vae_approx"] = ([os.path.join(models_dir, "vae_approx")], supported_pt_extensions)
 
 folder_names_and_paths["controlnet"] = ([os.path.join(models_dir, "controlnet"), os.path.join(models_dir, "t2i_adapter")], supported_pt_extensions)
+folder_names_and_paths["ipadapter"] = ([os.path.join(models_dir, "controlnet"), os.path.join(models_dir, "t2i_adapter")], supported_pt_extensions)
 folder_names_and_paths["gligen"] = ([os.path.join(models_dir, "gligen")], supported_pt_extensions)
 
 folder_names_and_paths["upscale_models"] = ([os.path.join(models_dir, "upscale_models")], supported_pt_extensions)
 
-folder_names_and_paths["custom_nodes"] = ([os.path.join(base_path, "custom_nodes")], set())
+folder_names_and_paths["custom_nodes"] = ([os.path.join(base_path, "custom_nodes"), os.path.join(base_path, "custom_nodes_builtin")], set())
 
 folder_names_and_paths["hypernetworks"] = ([os.path.join(models_dir, "hypernetworks")], supported_pt_extensions)
 
@@ -58,7 +67,7 @@ class CacheHelper:
         if not self.active:
             return default
         return self.cache.get(key, default)
-    
+
     def set(self, key: str, value: tuple[list[str], dict[str, float], float]) -> None:
         if self.active:
             self.cache[key] = value
@@ -90,6 +99,9 @@ if not os.path.exists(input_directory):
     except:
         logging.error("Failed to create input directory")
 
+def get_models_dir(user_hash):
+    return models_dir
+
 def set_output_directory(output_dir: str) -> None:
     global output_directory
     output_directory = output_dir
@@ -102,20 +114,55 @@ def set_input_directory(input_dir: str) -> None:
     global input_directory
     input_directory = input_dir
 
-def get_output_directory() -> str:
-    global output_directory
-    return output_directory
 
-def get_temp_directory() -> str:
-    global temp_directory
-    return temp_directory
+def get_output_directory(user_hash):
+    if not user_hash:
+        import traceback
+        import sys
+        traceback.print_stack(file=sys.stdout)
+        raise Exception("missed user_hash from get_output_directory")
+    return os.path.join(output_directory, user_hash, "output", "comfyui", datetime.datetime.now().strftime("%Y-%m-%d"))
 
-def get_input_directory() -> str:
-    global input_directory
-    return input_directory
+def get_relative_output_directory(user_hash):
+    return os.path.join(user_hash, "output", "comfyui", datetime.datetime.now().strftime("%Y-%m-%d"))
 
-def get_user_directory() -> str:
-    return user_directory
+def get_temp_directory(user_hash):
+    if not user_hash:
+        import traceback
+        import sys
+        traceback.print_stack(file=sys.stdout)
+        raise Exception("missed user_hash from get_temp_directory")
+    return os.path.join(output_directory, user_hash, "comfyui", "temp")
+
+
+def get_input_directory(user_hash):
+    if not user_hash:
+        import traceback
+        import sys
+        traceback.print_stack(file=sys.stdout)
+        raise Exception("missed user_hash from get_input_directory")
+    d = os.path.join(output_directory, user_hash, "comfyui", "input")
+    if not os.path.exists(d):
+        os.makedirs(d, exist_ok=True)
+    return d
+
+
+def clear_input_directory(user_hash):
+    if not user_hash:
+        import traceback
+        import sys
+        traceback.print_stack(file=sys.stdout)
+        raise Exception("missed user_hash from clear_input_directory")
+    d = os.path.join(output_directory, user_hash, "comfyui", "input")
+    if os.path.exists(d):
+        shutil.rmtree(d, ignore_errors=True)
+    return d
+
+def get_user_directory(user_hash) -> str:
+    d = os.path.join(output_directory, user_hash, "comfyui", "user")
+    if not os.path.exists(d):
+        os.makedirs(d, exist_ok=True)
+    return d
 
 def set_user_directory(user_dir: str) -> None:
     global user_directory
@@ -123,13 +170,13 @@ def set_user_directory(user_dir: str) -> None:
 
 
 #NOTE: used in http server so don't put folders that should not be accessed remotely
-def get_directory_by_type(type_name: str) -> str | None:
+def get_directory_by_type(type_name: str, user_hash: str) -> str | None:
     if type_name == "output":
-        return get_output_directory()
+        return get_output_directory(user_hash)
     if type_name == "temp":
-        return get_temp_directory()
+        return get_temp_directory(user_hash)
     if type_name == "input":
-        return get_input_directory()
+        return get_input_directory(user_hash)
     return None
 
 def filter_files_content_types(files: List[str], content_types: Literal["image", "video", "audio"]) -> List[str]:
@@ -157,15 +204,15 @@ def filter_files_content_types(files: List[str], content_types: Literal["image",
 
 # determine base_dir rely on annotation if name is 'filename.ext [annotation]' format
 # otherwise use default_path as base_dir
-def annotated_filepath(name: str) -> tuple[str, str | None]:
+def annotated_filepath(name: str, user_hash) -> tuple[str, str | None]:
     if name.endswith("[output]"):
-        base_dir = get_output_directory()
+        base_dir = get_output_directory(user_hash)
         name = name[:-9]
     elif name.endswith("[input]"):
-        base_dir = get_input_directory()
+        base_dir = get_input_directory(user_hash)
         name = name[:-8]
     elif name.endswith("[temp]"):
-        base_dir = get_temp_directory()
+        base_dir = get_temp_directory(user_hash)
         name = name[:-7]
     else:
         return name, None
@@ -173,23 +220,22 @@ def annotated_filepath(name: str) -> tuple[str, str | None]:
     return name, base_dir
 
 
-def get_annotated_filepath(name: str, default_dir: str | None=None) -> str:
-    name, base_dir = annotated_filepath(name)
-
+def get_annotated_filepath(name: str, user_hash, default_dir: str | None=None) -> str:
+    name, base_dir = annotated_filepath(name, user_hash)
     if base_dir is None:
         if default_dir is not None:
             base_dir = default_dir
         else:
-            base_dir = get_input_directory()  # fallback path
+            base_dir = get_input_directory(user_hash)  # fallback path
 
     return os.path.join(base_dir, name)
 
 
-def exists_annotated_filepath(name) -> bool:
-    name, base_dir = annotated_filepath(name)
+def exists_annotated_filepath(name, user_hash) -> bool:
+    name, base_dir = annotated_filepath(name, user_hash)
 
     if base_dir is None:
-        base_dir = get_input_directory()  # fallback path
+        base_dir = get_input_directory(user_hash)  # fallback path
 
     filepath = os.path.join(base_dir, name)
     return os.path.exists(filepath)
@@ -256,9 +302,12 @@ def filter_files_extensions(files: Collection[str], extensions: Collection[str])
 
 
 
-def get_full_path(folder_name: str, filename: str) -> str | None:
-    global folder_names_and_paths
-    folder_name = map_legacy(folder_name)
+def get_full_path(context: execution_context.ExecutionContext, folder_name: str, filename: str) -> str | None:
+    if folder_name in diffus.models.FAVORITE_MODEL_TYPES:
+        return diffus.repository.get_favorite_model_full_path(context.user_id, folder_name, filename)
+    else:
+        global folder_names_and_paths
+        folder_name = map_legacy(folder_name)
     if folder_name not in folder_names_and_paths:
         return None
     folders = folder_names_and_paths[folder_name]
@@ -273,8 +322,8 @@ def get_full_path(folder_name: str, filename: str) -> str | None:
     return None
 
 
-def get_full_path_or_raise(folder_name: str, filename: str) -> str:
-    full_path = get_full_path(folder_name, filename)
+def get_full_path_or_raise(context: execution_context.ExecutionContext, folder_name: str, filename: str) -> str:
+    full_path = get_full_path(context, folder_name, filename)
     if full_path is None:
         raise FileNotFoundError(f"Model in folder '{folder_name}' with filename '{filename}' not found.")
     return full_path
@@ -297,7 +346,7 @@ def cached_filename_list_(folder_name: str) -> tuple[list[str], dict[str, float]
     strong_cache = cache_helper.get(folder_name)
     if strong_cache is not None:
         return strong_cache
-    
+
     global filename_list_cache
     global folder_names_and_paths
     folder_name = map_legacy(folder_name)
@@ -319,8 +368,11 @@ def cached_filename_list_(folder_name: str) -> tuple[list[str], dict[str, float]
 
     return out
 
-def get_filename_list(folder_name: str) -> list[str]:
-    folder_name = map_legacy(folder_name)
+def get_filename_list(context: execution_context.ExecutionContext, folder_name: str) -> list[str]:
+    if folder_name in diffus.models.FAVORITE_MODEL_TYPES:
+        return diffus.repository.list_favorite_model_by_model_type(context.user_id, folder_name)
+    else:
+        folder_name = map_legacy(folder_name)
     out = cached_filename_list_(folder_name)
     if out is None:
         out = get_filename_list_(folder_name)
@@ -328,6 +380,7 @@ def get_filename_list(folder_name: str) -> list[str]:
         filename_list_cache[folder_name] = out
     cache_helper.set(folder_name, out)
     return list(out[0])
+
 
 def get_save_image_path(filename_prefix: str, output_dir: str, image_width=0, image_height=0) -> tuple[str, str, int, str, str]:
     def map_filename(filename: str) -> tuple[int, str]:

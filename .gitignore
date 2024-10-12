@@ -21,3 +21,5 @@ venv/
 *.log
 web_custom_versions/
 .DS_Store
+
+custom_nodes.bak*
