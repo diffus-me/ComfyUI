@@ -220,6 +220,10 @@ class PromptServer():
         async def get_root(request):
             return web.FileResponse(os.path.join(self.web_root, "index.html"))
 
+        @routes.get("/comfy/")
+        async def get_root_slash(request):
+            raise web.HTTPFound('../comfy')
+
         @routes.get("/")
         async def get_root(request):
             response = web.FileResponse(os.path.join(self.web_root, "index.html"))
@@ -233,19 +237,20 @@ class PromptServer():
             embeddings = folder_paths.get_filename_list(execution_context.ExecutionContext(request), "embeddings")
             return web.json_response(list(map(lambda a: os.path.splitext(a)[0], embeddings)))
 
-        # @routes.get("/models")
-        # def list_model_types(request):
-        #     model_types = list(folder_paths.folder_names_and_paths.keys())
-        #
-        #     return web.json_response(model_types)
-        #
-        # @routes.get("/models/{folder}")
-        # async def get_models(request):
-        #     folder = request.match_info.get("folder", None)
-        #     if not folder in folder_paths.folder_names_and_paths:
-        #         return web.Response(status=404)
-        #     files = folder_paths.get_filename_list(folder)
-        #     return web.json_response(files)
+        @routes.get("/models")
+        def list_model_types(request):
+            model_types = list(folder_paths.folder_names_and_paths.keys())
+
+            return web.json_response(model_types)
+
+        @routes.get("/models/{folder}")
+        async def get_models(request):
+            folder = request.match_info.get("folder", None)
+            if folder not in folder_paths.folder_names_and_paths:
+                return web.Response(status=404)
+            context = execution_context.ExecutionContext(request)
+            files = folder_paths.get_filename_list(context, folder)
+            return web.json_response(files)
 
         @routes.get("/extensions")
         async def get_extensions(request):

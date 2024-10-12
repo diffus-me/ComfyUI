@@ -1,6 +1,9 @@
 import os
-
+import time
 import redis
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def get_redis_client() -> redis.Redis:

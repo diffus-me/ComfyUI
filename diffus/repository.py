@@ -23,65 +23,34 @@ def get_config_path(sha256: str) -> pathlib.Path:
 
 class ModelInfo(BaseModel):
     model_type: Literal["checkpoint", "embedding", "hypernetwork", "lora", "lycoris"]
-    source: str | None
-    name: str
+    base: str | None
+    stem: str
+    extension: str
     sha256: str
     config_sha256: str | None
 
     @property
-    def name_for_extra(self) -> str:
-        return os.path.splitext(self.name)[0]
+    def name(self):
+        return f'{self.stem}.{self.extension}'
 
     @property
-    def model_name(self) -> str:
-        return self.name_for_extra
-
-    @property
-    def title(self) -> str:
-        return f"{self.name} [{self.shorthash}]"
-
-    @property
-    def short_title(self) -> str:
-        return f"{self.name_for_extra} [{self.shorthash}]"
+    def is_safetensors(self) -> bool:
+        return self.extension in ("safetensors", "sft")
 
     @property
     def filename(self) -> str:
         return str(get_binary_path(self.sha256))
 
-    @property
-    def shorthash(self) -> str:
-        return self.sha256[:10]
-
-    @property
-    def config_filename(self) -> str | None:
-        if not self.config_sha256:
-            return None
-
-        return str(get_config_path(self.config_sha256))
-
-    @property
-    def is_safetensors(self) -> bool:
-        suffix = os.path.splitext(self.name)[-1].lower()
-        return suffix == ".safetensors" or suffix == ".sft"
-
-    def calculate_shorthash(self) -> str:
-        return self.shorthash
-
-    def check_file_existence(self) -> None:
-        assert os.path.exists(self.filename), f"Model '{self.title}' does not exist"
-        assert self.config_filename is None or os.path.exists(
-            self.config_filename
-        ), f"Config '{self.config_sha256}' for model '{self.title}' does not exist"
-
     def __str__(self):
-        return self.name
+        return self.filename
 
 
 def create_model_info(record: models.Model) -> ModelInfo:
     return ModelInfo(
-        model_type=record.model_type,
-        source=None,
-        name=record.name,
+        model_type=str(record.model_type).lower(),
+        base=record.base,
+        stem=record.stem,
+        extension=record.extension,
         sha256=record.sha256,
         config_sha256=record.config_sha256,
     )
@@ -97,17 +66,17 @@ def list_favorite_model_by_model_type(user_id: str, folder_name: str):
         return [create_model_info(ckpt).name for ckpt in session.scalars(query)]
 
 
-def get_favorite_model_full_path(user_id: str, folder_name: str, name: str):
+def get_favorite_model_full_path(user_id: str, folder_name: str, filename: str):
     if folder_name not in models.FAVORITE_MODEL_TYPES:
         return []
     model_type = models.FAVORITE_MODEL_TYPES[folder_name]
     with database.Database() as session:
         query = _make_favorite_model_query(session)
         query = _filter_favorite_model_by_model_type(query, user_id, model_type)
-        query = _filter_model_by_name(query, name)
+        query = _filter_model_by_name(query, filename)
         record = session.scalar(query)
         if not record:
-            raise Exception(f"model is not found, [{folder_name}]{name}")
+            raise Exception(f"model is not found, [{folder_name}]/{filename}")
         return create_model_info(record)
 
 
@@ -126,13 +95,22 @@ def _filter_model_by_sha256(query: Query, sha256: str) -> Query:
 
 
 def _filter_model_by_name(query: Query, name: str) -> Query:
-    return query.filter(models.Model.name == name)
+    filename = pathlib.Path(name)
+    suffix = filename.suffix
+    if suffix:
+        suffix = suffix[1:]
+    return query.filter(
+        models.Model.stem == filename.stem,
+        models.Model.extension == suffix,
+    )
 
 
 def _filter_favorite_model_by_model_type(query: Query, user_id: str, model_type: str) -> Query:
-    query = query.filter(models.FavoriteModel.user_id == user_id)
-    if model_type in {"lora", "lycoris"}:
-        query = query.filter(models.Model.model_type.in_(["lora", "lycoris"]))
+    query = query.filter(
+        models.FavoriteModel.favorited_by == user_id
+    )
+    if model_type in {"LORA", "LYCORIS"}:
+        query = query.filter(models.Model.model_type.in_(["LORA", "LYCORIS"]))
     else:
         query = query.filter(models.Model.model_type == model_type)
 

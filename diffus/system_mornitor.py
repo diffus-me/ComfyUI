@@ -10,7 +10,8 @@ import requests
 
 import diffus.decoded_params
 import diffus.task_queue
-import execution_context
+from diffus.redis_client import get_redis_client
+from diffus.service_registrar import get_service_node
 import folder_paths
 
 logger = logging.getLogger(__name__)
@@ -91,7 +92,7 @@ def before_task_started(
     deduct_flag = header_dict.get('x-deduct-credits', None)
     deduct_flag = not (deduct_flag == 'false')
     if only_available_for:
-        user_tier = header_dict.get('user-tire', None) or header_dict.get('user-tier', None)
+        user_tier = header_dict.get('user-tire', '') or header_dict.get('user-tier', '')
         if not user_tier or user_tier.lower() not in [item.lower() for item in only_available_for]:
             raise MonitorTierMismatchedException(
                 f'This feature is available for {only_available_for} only. The current user tier is {user_tier}.',
@@ -115,11 +116,13 @@ def before_task_started(
     else:
         request_data['task_id'] = job_id
     request_data['decoded_params'] = decoded_params if decoded_params is not None else {}
-    resp = requests.post(monitor_addr,
-                         headers={
-                             'Api-Secret': system_monitor_api_secret,
-                         },
-                         json=request_data)
+    resp = requests.post(
+        monitor_addr,
+        headers={
+            'Api-Secret': system_monitor_api_secret,
+        },
+        json=request_data
+    )
     logger.info(json.dumps(request_data, ensure_ascii=False, sort_keys=True))
 
     # check response, raise exception if status code is not 2xx
@@ -173,11 +176,13 @@ def after_task_finished(
         request_body['task_id'] = task_id
     else:
         request_body['task_id'] = job_id
-    resp = requests.post(request_url,
-                         headers={
-                             'Api-Secret': system_monitor_api_secret,
-                         },
-                         json=request_body)
+    resp = requests.post(
+        request_url,
+        headers={
+            'Api-Secret': system_monitor_api_secret,
+        },
+        json=request_body
+    )
 
     # log the response if request failed
     if resp.status_code < 200 or resp.status_code > 299:
@@ -209,8 +214,8 @@ def monitor_call_context(
             nonlocal task_is_failed
             message = json.dumps(result, ensure_ascii=False, sort_keys=True)
             task_is_failed = not success
-        except Exception as e:
-            logger.error(f'{task_id}: Json encode result failed {str(e)}.')
+        except Exception as ex:
+            logger.error(f'{task_id}: Json encode result failed {ex}.')
 
     try:
         if not is_intermediate and queue_dispatcher:
@@ -253,6 +258,8 @@ def monitor_call_context(
 def node_execution_monitor(get_output_data):
     import nodes
 
+    redis_client = get_redis_client()
+
     def wrapper(obj, input_data_all, extra_data, execution_block_cb=None, pre_execute_cb=None):
         node_class_name = type(obj).__name__
         for k, v in nodes.NODE_CLASS_MAPPINGS.items():
@@ -271,7 +278,7 @@ def node_execution_monitor(get_output_data):
             try:
                 output_data = get_output_data(obj, input_data_all, extra_data, execution_block_cb, pre_execute_cb)
                 result_encoder(True, None)
-                post_output_to_image_gallery(obj, _make_headers(extra_data), input_data_all, output_data)
+                post_output_to_image_gallery(redis_client, obj, _make_headers(extra_data), input_data_all, output_data)
                 return output_data
             except Exception as ex:
                 result_encoder(False, ex)
@@ -295,20 +302,29 @@ def _find_extra_pnginfo_from_input_data(input_data):
     if not isinstance(input_data, dict):
         return ""
     for key, value in input_data.items():
-        if key == "extra_pnginfo":
-            return json.dumps(value)
+        if key == "extra_pnginfo" and value:
+            return json.dumps(value[0])
     return ""
 
 
-def _do_post_image_to_gallery(task_id, user_id, user_hash, image_type, image_subfolder, image_filename, pnginfo):
+def _do_post_image_to_gallery(
+        post_url,
+        task_id,
+        user_id,
+        user_hash,
+        image_type,
+        image_subfolder,
+        image_filename,
+        pnginfo
+):
     if image_type != "output":
         return
-    post_url = "http://10.10.24.46:7070/gallery-api/v1/images"
     post_json = {
         "task_id": task_id,
         "path": os.path.join(
-            "comfyui",
-            folder_paths.get_relative_output_directory(user_hash), image_subfolder, image_filename,
+            folder_paths.get_relative_output_directory(user_hash),
+            image_subfolder,
+            image_filename,
         ),
         "feature": "COMFYUI",
         "pnginfo": pnginfo,
@@ -333,7 +349,7 @@ def _do_post_image_to_gallery(task_id, user_id, user_hash, image_type, image_sub
         )
 
 
-def post_output_to_image_gallery(node_obj, header_dict, input_data, output_data):
+def post_output_to_image_gallery(redis_client, node_obj, header_dict, input_data, output_data):
     if not output_data:
         return
 
@@ -353,13 +369,18 @@ def post_output_to_image_gallery(node_obj, header_dict, input_data, output_data)
     proceeded_files = set()
 
     task_id = header_dict.get('x-task-id', str(uuid.uuid4()))
+    gallery_service_node = get_service_node(redis_client, "gallery")
+    if not gallery_service_node:
+        logger.warning("no gallery service node is found")
+        return
+    image_server_endpoint = f"{gallery_service_node.host_url}/gallery-api/v1/images"
+
     for images_key in ("images", "gifs", "video"):
         if images_key not in ui_data:
             continue
 
         if not isinstance(ui_data[images_key], Iterable):
             continue
-
         for image in ui_data[images_key]:
             if not isinstance(image, dict):
                 logger.error("image is not a dict, do nothing")
@@ -371,7 +392,16 @@ def post_output_to_image_gallery(node_obj, header_dict, input_data, output_data)
 
             if image_filename in proceeded_files:
                 continue
-            _do_post_image_to_gallery(task_id, user_id, user_hash, image_type, image_subfolder, image_filename, pnginfo)
+            _do_post_image_to_gallery(
+                image_server_endpoint,
+                task_id,
+                user_id,
+                user_hash,
+                image_type,
+                image_subfolder,
+                image_filename,
+                pnginfo,
+            )
             proceeded_files.add(image_filename)
 
     if hasattr(node_obj, "RETURN_TYPES") and "VHS_FILENAMES" in node_obj.RETURN_TYPES:
@@ -379,10 +409,11 @@ def post_output_to_image_gallery(node_obj, header_dict, input_data, output_data)
             if node_result[0]:
                 for filepath in node_result[1]:
                     output_directory_len = len(folder_paths.get_output_directory(user_hash))
-                    filename = filepath[output_directory_len+1:]
+                    filename = filepath[output_directory_len + 1:]
                     if filename in proceeded_files:
                         continue
                     _do_post_image_to_gallery(
+                        image_server_endpoint,
                         task_id,
                         user_id,
                         user_hash,

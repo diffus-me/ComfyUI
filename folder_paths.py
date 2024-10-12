@@ -49,9 +49,9 @@ folder_names_and_paths["photomaker"] = ([os.path.join(models_dir, "photomaker")]
 folder_names_and_paths["classifiers"] = ([os.path.join(models_dir, "classifiers")], {""})
 
 output_directory = os.path.join(os.path.dirname(os.path.realpath(__file__)), "output")
-temp_directory = os.path.join(os.path.dirname(os.path.realpath(__file__)), "temp")
-input_directory = os.path.join(os.path.dirname(os.path.realpath(__file__)), "input")
-user_directory = os.path.join(os.path.dirname(os.path.realpath(__file__)), "user")
+# temp_directory = os.path.join(os.path.dirname(os.path.realpath(__file__)), "temp")
+# input_directory = os.path.join(os.path.dirname(os.path.realpath(__file__)), "input")
+# user_directory = os.path.join(os.path.dirname(os.path.realpath(__file__)), "user")
 
 filename_list_cache: dict[str, tuple[list[str], dict[str, float], float]] = {}
 
@@ -93,11 +93,11 @@ def map_legacy(folder_name: str) -> str:
     legacy = {"unet": "diffusion_models"}
     return legacy.get(folder_name, folder_name)
 
-if not os.path.exists(input_directory):
-    try:
-        os.makedirs(input_directory)
-    except:
-        logging.error("Failed to create input directory")
+# if not os.path.exists(input_directory):
+#     try:
+#         os.makedirs(input_directory)
+#     except:
+#         logging.error("Failed to create input directory")
 
 def get_models_dir(user_hash):
     return models_dir
@@ -105,14 +105,17 @@ def get_models_dir(user_hash):
 def set_output_directory(output_dir: str) -> None:
     global output_directory
     output_directory = output_dir
+    raise Exception("unsupported")
 
 def set_temp_directory(temp_dir: str) -> None:
     global temp_directory
     temp_directory = temp_dir
+    raise Exception("unsupported")
 
 def set_input_directory(input_dir: str) -> None:
     global input_directory
     input_directory = input_dir
+    raise Exception("unsupported")
 
 
 def get_output_directory(user_hash):
@@ -121,10 +124,16 @@ def get_output_directory(user_hash):
         import sys
         traceback.print_stack(file=sys.stdout)
         raise Exception("missed user_hash from get_output_directory")
-    return os.path.join(output_directory, user_hash, "output", "comfyui", datetime.datetime.now().strftime("%Y-%m-%d"))
+    return os.path.join(output_directory, get_relative_output_directory(user_hash))
+
 
 def get_relative_output_directory(user_hash):
-    return os.path.join(user_hash, "output", "comfyui", datetime.datetime.now().strftime("%Y-%m-%d"))
+    return os.path.join(user_hash, "outputs", "comfyui", datetime.datetime.now().strftime("%Y-%m-%d"))
+
+
+def _get_comfyui_user_data_base(user_hash):
+    return os.path.join(output_directory, user_hash, "comfyui")
+
 
 def get_temp_directory(user_hash):
     if not user_hash:
@@ -132,7 +141,7 @@ def get_temp_directory(user_hash):
         import sys
         traceback.print_stack(file=sys.stdout)
         raise Exception("missed user_hash from get_temp_directory")
-    return os.path.join(output_directory, user_hash, "comfyui", "temp")
+    return os.path.join(_get_comfyui_user_data_base(user_hash), "temp")
 
 
 def get_input_directory(user_hash):
@@ -141,25 +150,20 @@ def get_input_directory(user_hash):
         import sys
         traceback.print_stack(file=sys.stdout)
         raise Exception("missed user_hash from get_input_directory")
-    d = os.path.join(output_directory, user_hash, "comfyui", "input")
+    d = os.path.join(_get_comfyui_user_data_base(user_hash), "input")
     if not os.path.exists(d):
         os.makedirs(d, exist_ok=True)
     return d
 
 
 def clear_input_directory(user_hash):
-    if not user_hash:
-        import traceback
-        import sys
-        traceback.print_stack(file=sys.stdout)
-        raise Exception("missed user_hash from clear_input_directory")
-    d = os.path.join(output_directory, user_hash, "comfyui", "input")
+    d = get_input_directory(user_hash)
     if os.path.exists(d):
         shutil.rmtree(d, ignore_errors=True)
     return d
 
 def get_user_directory(user_hash) -> str:
-    d = os.path.join(output_directory, user_hash, "comfyui", "user")
+    d = os.path.join(_get_comfyui_user_data_base(user_hash), "user")
     if not os.path.exists(d):
         os.makedirs(d, exist_ok=True)
     return d
@@ -167,6 +171,7 @@ def get_user_directory(user_hash) -> str:
 def set_user_directory(user_dir: str) -> None:
     global user_directory
     user_directory = user_dir
+    raise Exception("unsupported")
 
 
 #NOTE: used in http server so don't put folders that should not be accessed remotely
