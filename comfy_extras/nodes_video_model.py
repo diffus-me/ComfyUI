@@ -1,3 +1,4 @@
+import execution_context
 import nodes
 import torch
 import comfy.utils
@@ -8,16 +9,17 @@ import comfy_extras.nodes_model_merging
 
 class ImageOnlyCheckpointLoader:
     @classmethod
-    def INPUT_TYPES(s):
-        return {"required": { "ckpt_name": (folder_paths.get_filename_list("checkpoints"), ),
-                             }}
+    def INPUT_TYPES(s, context: execution_context.ExecutionContext):
+        return {"required": { "ckpt_name": (folder_paths.get_filename_list(context, "checkpoints"), ),
+                             },
+                "hidden": {"context": "EXECUTION_CONTEXT"}}
     RETURN_TYPES = ("MODEL", "CLIP_VISION", "VAE")
     FUNCTION = "load_checkpoint"
 
     CATEGORY = "loaders/video_models"
 
-    def load_checkpoint(self, ckpt_name, output_vae=True, output_clip=True):
-        ckpt_path = folder_paths.get_full_path_or_raise("checkpoints", ckpt_name)
+    def load_checkpoint(self, ckpt_name, output_vae=True, output_clip=True, context: execution_context.ExecutionContext=None):
+        ckpt_path = folder_paths.get_full_path_or_raise(context, "checkpoints", ckpt_name)
         out = comfy.sd.load_checkpoint_guess_config(ckpt_path, output_vae=True, output_clip=False, output_clipvision=True, embedding_directory=folder_paths.get_folder_paths("embeddings"))
         return (out[0], out[3], out[2])
 
@@ -115,10 +117,10 @@ class ImageOnlyCheckpointSave(comfy_extras.nodes_model_merging.CheckpointSave):
                               "clip_vision": ("CLIP_VISION",),
                               "vae": ("VAE",),
                               "filename_prefix": ("STRING", {"default": "checkpoints/ComfyUI"}),},
-                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},}
+                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO", "user_hash": "USER_HASH"}}
 
-    def save(self, model, clip_vision, vae, filename_prefix, prompt=None, extra_pnginfo=None):
-        comfy_extras.nodes_model_merging.save_checkpoint(model, clip_vision=clip_vision, vae=vae, filename_prefix=filename_prefix, output_dir=self.output_dir, prompt=prompt, extra_pnginfo=extra_pnginfo)
+    def save(self, model, clip_vision, vae, filename_prefix, prompt=None, extra_pnginfo=None, user_hash=''):
+        comfy_extras.nodes_model_merging.save_checkpoint(model, clip_vision=clip_vision, vae=vae, filename_prefix=filename_prefix, output_dir=folder_paths.get_output_directory(user_hash), prompt=prompt, extra_pnginfo=extra_pnginfo)
         return {}
 
 NODE_CLASS_MAPPINGS = {

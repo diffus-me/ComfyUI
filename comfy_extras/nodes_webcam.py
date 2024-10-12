@@ -13,6 +13,9 @@ class WebcamCapture(nodes.LoadImage):
                 "width": ("INT", {"default": 0, "min": 0, "max": MAX_RESOLUTION, "step": 1}),
                 "height": ("INT", {"default": 0, "min": 0, "max": MAX_RESOLUTION, "step": 1}),
                 "capture_on_queue": ("BOOLEAN", {"default": True}),
+            },
+            "hidden": {
+                "context": "EXECUTION_CONTEXT"
             }
         }
     RETURN_TYPES = ("IMAGE",)
@@ -21,7 +24,8 @@ class WebcamCapture(nodes.LoadImage):
     CATEGORY = "image"
 
     def load_capture(s, image, **kwargs):
-        return super().load_image(folder_paths.get_annotated_filepath(image))
+        context = kwargs["context"]
+        return super().load_image(folder_paths.get_annotated_filepath(image, context.user_hash))
 
 
 NODE_CLASS_MAPPINGS = {
