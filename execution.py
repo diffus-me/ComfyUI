@@ -427,12 +427,14 @@ class PromptExecutor:
     def __init__(self, server, lru_size=None):
         self.lru_size = lru_size
         self.server = server
+        self.history_result = {}
         self.reset()
 
     def reset(self):
         self.caches = CacheSet(self.lru_size)
         self.status_messages = []
         self.success = True
+        self.history_result = {}
 
     def add_message(self, event, data: dict, broadcast: bool):
         data = {
@@ -480,6 +482,7 @@ class PromptExecutor:
             self.server.client_id = None
 
         self.status_messages = []
+        self.history_result = {}
         self.add_message("execution_start", { "prompt_id": prompt_id}, broadcast=False)
 
         with torch.inference_mode():
