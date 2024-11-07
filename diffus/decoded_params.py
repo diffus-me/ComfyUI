@@ -2,6 +2,10 @@ import execution_context
 import math
 
 
+def __model_based_steps(context: execution_context.ExecutionContext, steps: int):
+    return steps if not context.has_flux_model else steps * 3
+
+
 def __sample_opt_from_latent(latent_image, steps, ):
     n_iter = latent_image.get("batch_index", 1)
 
@@ -21,7 +25,7 @@ def __sample_opt_from_latent(latent_image, steps, ):
 
 def _k_sampler_consumption(model, seed, steps, cfg, sampler_name, scheduler, positive, negative, latent_image,
                            denoise=1.0, context=None):
-    return {'opts': [__sample_opt_from_latent(latent_image, steps, )]}
+    return {'opts': [__sample_opt_from_latent(latent_image, __model_based_steps(context, steps), )]}
 
 
 def _reactor_restore_face_consumption(image, model, visibility, codeformer_weight, facedetection,
@@ -41,7 +45,7 @@ def _reactor_restore_face_consumption(image, model, visibility, codeformer_weigh
             'steps': 30,
             'n_iter': 1,
             'batch_size': image.shape[0]
-        },{
+        }, {
             'opt_type': 'restore_face',
             'width': image.shape[2],
             'height': image.shape[1],
@@ -118,7 +122,7 @@ def _k_sampler_advanced_consumption(model,
                                     return_with_leftover_noise,
                                     denoise=1.0,
                                     context=None):
-    return {'opts': [__sample_opt_from_latent(latent_image, steps, )]}
+    return {'opts': [__sample_opt_from_latent(latent_image, __model_based_steps(context, steps), )]}
 
 
 def _tsc_ksampler_advanced_consumption(model, add_noise, noise_seed, steps, cfg, sampler_name, scheduler, positive,
@@ -128,7 +132,7 @@ def _tsc_ksampler_advanced_consumption(model, add_noise, noise_seed, steps, cfg,
                                        prompt=None, extra_pnginfo=None, my_unique_id=None,
                                        context: execution_context.ExecutionContext = None,
                                        optional_vae=(None,), script=None):
-    return {'opts': [__sample_opt_from_latent(latent_image, steps, )]}
+    return {'opts': [__sample_opt_from_latent(latent_image, __model_based_steps(context, steps), )]}
 
 
 def _tsc_ksampler_sdxl_consumption(sdxl_tuple, noise_seed, steps, cfg, sampler_name, scheduler, latent_image,
@@ -137,7 +141,7 @@ def _tsc_ksampler_sdxl_consumption(sdxl_tuple, noise_seed, steps, cfg, sampler_n
                                    my_unique_id=None, context: execution_context.ExecutionContext = None,
                                    optional_vae=(None,), refiner_extras=None,
                                    script=None):
-    return {'opts': [__sample_opt_from_latent(latent_image, steps, )]}
+    return {'opts': [__sample_opt_from_latent(latent_image, __model_based_steps(context, steps), )]}
 
 
 def _tsc_k_sampler_consumption(model, seed, steps, cfg, sampler_name, scheduler, positive, negative, latent_image,
@@ -146,24 +150,25 @@ def _tsc_k_sampler_consumption(model, seed, steps, cfg, sampler_name, scheduler,
                                context: execution_context.ExecutionContext = None,
                                optional_vae=(None,), script=None, add_noise=None, start_at_step=None, end_at_step=None,
                                return_with_leftover_noise=None, sampler_type="regular"):
-    return {'opts': [__sample_opt_from_latent(latent_image, steps, )]}
+    return {'opts': [__sample_opt_from_latent(latent_image, __model_based_steps(context, steps), )]}
 
 
 def _xlabs_sampler_consumption(model, conditioning, neg_conditioning,
                                noise_seed, steps, timestep_to_start_cfg, true_gs,
                                image_to_image_strength, denoise_strength,
-                               latent_image=None, controlnet_condition=None):
-    return {'opts': [__sample_opt_from_latent(latent_image, steps, )]}
+                               latent_image=None, controlnet_condition=None,
+                               context=None):
+    return {'opts': [__sample_opt_from_latent(latent_image, __model_based_steps(context, steps), )]}
 
 
 def _impact_k_sampler_basic_pipe_consumption(basic_pipe, seed, steps, cfg, sampler_name, scheduler, latent_image,
-                                             denoise=1.0, context: execution_context.ExecutionContext = None):
-    return {'opts': [__sample_opt_from_latent(latent_image, steps, )]}
+                                             denoise=1.0, context=None):
+    return {'opts': [__sample_opt_from_latent(latent_image, __model_based_steps(context, steps), )]}
 
 
 def _tiled_k_sampler_consumption(model, seed, tile_width, tile_height, tiling_strategy, steps, cfg, sampler_name,
                                  scheduler, positive, negative, latent_image, denoise, context=None):
-    return {'opts': [__sample_opt_from_latent(latent_image, steps, )]}
+    return {'opts': [__sample_opt_from_latent(latent_image, __model_based_steps(context, steps), )]}
 
 
 def _easy_full_k_sampler_consumption(pipe, steps, cfg, sampler_name, scheduler, denoise, image_output, link_id,
@@ -176,7 +181,7 @@ def _easy_full_k_sampler_consumption(pipe, steps, cfg, sampler_name, scheduler, 
     if image is not None and latent is None:
         samp_samples = {"samples": samp_vae.encode(image[:, :, :, :3])}
 
-    return {'opts': [__sample_opt_from_latent(samp_samples, steps, )]}
+    return {'opts': [__sample_opt_from_latent(samp_samples, __model_based_steps(context, steps), )]}
 
 
 def _model_sampling_flux_consumption():
@@ -187,23 +192,25 @@ def _tiled_k_sampler_advanced_consumption(model, add_noise, noise_seed, tile_wid
                                           cfg, sampler_name, scheduler, positive, negative, latent_image, start_at_step,
                                           end_at_step, return_with_leftover_noise, preview, denoise=1.0,
                                           context: execution_context.ExecutionContext = None):
-    return {'opts': [__sample_opt_from_latent(latent_image, steps, )]}
+    return {'opts': [__sample_opt_from_latent(latent_image, __model_based_steps(context, steps), )]}
 
 
 def _sampler_custom_consumption(model, add_noise, noise_seed, cfg, positive, negative, sampler, sigmas, latent_image,
                                 context):
-    return {'opts': [__sample_opt_from_latent(latent_image, len(sigmas))]}
+    steps = len(sigmas)
+    return {'opts': [__sample_opt_from_latent(latent_image, __model_based_steps(context, steps))]}
 
 
 def _sampler_custom_advanced_consumption(noise, guider, sampler, sigmas, latent_image, context):
-    return {'opts': [__sample_opt_from_latent(latent_image, len(sigmas))]}
+    steps = len(sigmas)
+    return {'opts': [__sample_opt_from_latent(latent_image, __model_based_steps(context, steps))]}
 
 
 def _k_sampler_inspire_consumption(model, seed, steps, cfg, sampler_name, scheduler, positive, negative, latent_image,
                                    denoise, noise_mode, batch_seed_mode="comfy", variation_seed=None,
                                    variation_strength=None, variation_method="linear",
-                                   context: execution_context.ExecutionContext = None):
-    return {'opts': [__sample_opt_from_latent(latent_image, steps)]}
+                                   context = None):
+    return {'opts': [__sample_opt_from_latent(latent_image, __model_based_steps(context, steps))]}
 
 
 def _was_k_sampler_cycle_consumption(model, seed, steps, cfg, sampler_name, scheduler, positive, negative, latent_image,
@@ -250,7 +257,7 @@ def _was_k_sampler_cycle_consumption(model, seed, steps, cfg, sampler_name, sche
             'opt_type': 'sample',
             'width': latent_image_width,
             'height': latent_image_height,
-            'steps': steps,
+            'steps': __model_based_steps(context, steps),
             'n_iter': n_iter,
             'batch_size': batch_size
         })
@@ -326,7 +333,7 @@ def _searge_sdxl_image2image_sampler2_consumption(base_model, base_positive, bas
         'opt': 'sample',
         'width': sample_width,
         'height': sample_height,
-        'steps': steps,
+        'steps': __model_based_steps(context, steps),
         'n_iter': n_iter,
         'batch_size': batch_size,
     })
@@ -358,7 +365,7 @@ def _ultimate_sd_upscale_consumption(image, model, positive, negative, vae, upsc
         'opt_type': 'sample',
         'width': redraw_width,
         'height': redraw_height,
-        'steps': steps,
+        'steps': __model_based_steps(context, steps),
         'n_iter': 1,
         'batch_size': batch_size,
     }]
@@ -854,7 +861,7 @@ def _ultimate_sd_upscale_no_upscale_consumption(upscaled_image, model, positive,
             'opt_type': 'upscale',
             'width': upscaled_image.shape[2],
             'height': upscaled_image.shape[1],
-            'steps': steps,
+            'steps': __model_based_steps(context, steps),
             'n_iter': 1,
             'batch_size': upscaled_image.shape[0],
         }]
@@ -1347,4 +1354,9 @@ _NODE_CONSUMPTION_MAPPING = {
 
 def get_monitor_params(obj, obj_type, input_data_all):
     func = _NODE_CONSUMPTION_MAPPING.get(obj_type, _default_consumption_maker)
-    return _map_node_consumption_over_list(obj, input_data_all, func)
+    consumption = _map_node_consumption_over_list(obj, input_data_all, func)
+    if consumption and 'opts' in consumption:
+        for opt in consumption['opts']:
+            opt["ratio"] = 1.2
+
+    return consumption

@@ -22,6 +22,7 @@ def get_config_path(sha256: str) -> pathlib.Path:
 
 
 class ModelInfo(BaseModel):
+    id: int
     model_type: Literal["checkpoint", "embedding", "hypernetwork", "lora", "lycoris"]
     base: str | None
     stem: str
@@ -47,6 +48,7 @@ class ModelInfo(BaseModel):
 
 def create_model_info(record: models.Model) -> ModelInfo:
     return ModelInfo(
+        id=record.id,
         model_type=str(record.model_type).lower(),
         base=record.base,
         stem=record.stem,
@@ -68,7 +70,7 @@ def list_favorite_model_by_model_type(user_id: str, folder_name: str):
 
 def get_favorite_model_full_path(user_id: str, folder_name: str, filename: str):
     if folder_name not in models.FAVORITE_MODEL_TYPES:
-        return []
+        return None
     model_type = models.FAVORITE_MODEL_TYPES[folder_name]
     with database.Database() as session:
         query = _make_favorite_model_query(session)
