@@ -11,7 +11,7 @@ from typing import List, Literal, NamedTuple, Optional
 
 import torch
 
-import diffus.system_mornitor
+import diffus.system_monitor
 import execution_context
 import node_helpers
 import nodes
@@ -198,7 +198,7 @@ def merge_result_data(results, obj):
             output.append([o[i] for o in results])
     return output
 
-@diffus.system_mornitor.node_execution_monitor
+@diffus.system_monitor.node_execution_monitor
 def get_output_data(obj, input_data_all, extra_data, execution_block_cb=None, pre_execute_cb=None):
 
     results = []
@@ -380,7 +380,7 @@ def execute(server, context: execution_context.ExecutionContext, dynprompt, cach
             pending_subgraph_results[unique_id] = cached_outputs
             return (ExecutionResult.PENDING, None, None)
         caches.outputs.set(unique_id, output_data)
-    except diffus.system_mornitor.MonitorTierMismatchedException:
+    except diffus.system_monitor.MonitorTierMismatchedException:
         raise
     except comfy.model_management.InterruptProcessingException as iex:
         logging.info("Processing interrupted")
@@ -391,8 +391,8 @@ def execute(server, context: execution_context.ExecutionContext, dynprompt, cach
         }
 
         return (ExecutionResult.FAILURE, error_details, iex)
-    except (diffus.system_mornitor.MonitorException, Exception) as ex:
-        upgrade_info = diffus.system_mornitor.make_monitor_error_message(ex)
+    except (diffus.system_monitor.MonitorException, Exception) as ex:
+        upgrade_info = diffus.system_monitor.make_monitor_error_message(ex)
         if upgrade_info['need_upgrade']:
             raise
         typ, _, tb = sys.exc_info()
