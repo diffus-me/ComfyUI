@@ -3,8 +3,8 @@ from sqlalchemy import Column, Integer, String
 from diffus import database
 
 FAVORITE_MODEL_TYPES = {
-    'loras': 'LORA',
     'checkpoints': 'CHECKPOINT',
+    'loras': 'LORA',
     'lycoris': 'LYCORIS',
 }
 

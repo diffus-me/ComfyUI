@@ -68,7 +68,7 @@ def list_favorite_model_by_model_type(user_id: str, folder_name: str):
         return [create_model_info(ckpt).name for ckpt in session.scalars(query)]
 
 
-def get_favorite_model_full_path(user_id: str, folder_name: str, filename: str):
+def get_favorite_model_full_path(user_id: str, folder_name: str, filename: str) -> ModelInfo | None:
     if folder_name not in models.FAVORITE_MODEL_TYPES:
         return None
     model_type = models.FAVORITE_MODEL_TYPES[folder_name]

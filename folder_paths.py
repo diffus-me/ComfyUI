@@ -309,9 +309,10 @@ def filter_files_extensions(files: Collection[str], extensions: Collection[str])
 
 def get_full_path(context: execution_context.ExecutionContext, folder_name: str, filename: str) -> str | None:
     if folder_name in diffus.models.FAVORITE_MODEL_TYPES:
-        model_info = diffus.repository.get_favorite_model_full_path(context.user_id, folder_name, filename)
-        if model_info:
-            context.add_used_models(model_info)
+        model_info = context.get_model(folder_name, filename)
+        if not model_info:
+            model_info = diffus.repository.get_favorite_model_full_path(context.user_id, folder_name, filename)
+            context.validate_model(folder_name, filename, model_info)
         return model_info
     else:
         global folder_names_and_paths

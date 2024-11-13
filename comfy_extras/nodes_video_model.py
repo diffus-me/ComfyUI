@@ -18,6 +18,12 @@ class ImageOnlyCheckpointLoader:
 
     CATEGORY = "loaders/video_models"
 
+
+    @classmethod
+    def VALIDATE_INPUTS(cls, ckpt_name, output_vae=True, output_clip=True, context: execution_context.ExecutionContext=None):
+        context.validate_model("checkpoints", ckpt_name)
+        return True
+
     def load_checkpoint(self, ckpt_name, output_vae=True, output_clip=True, context: execution_context.ExecutionContext=None):
         ckpt_path = folder_paths.get_full_path_or_raise(context, "checkpoints", ckpt_name)
         out = comfy.sd.load_checkpoint_guess_config(ckpt_path, output_vae=True, output_clip=False, output_clipvision=True, embedding_directory=folder_paths.get_folder_paths("embeddings"))

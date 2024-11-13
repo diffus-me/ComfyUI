@@ -523,6 +523,11 @@ class CheckpointLoader:
     CATEGORY = "advanced/loaders"
     DEPRECATED = True
 
+    @classmethod
+    def VALIDATE_INPUTS(cls, config_name, ckpt_name, context: execution_context.ExecutionContext=None):
+        context.validate_model("checkpoints", ckpt_name)
+        return True
+
     def load_checkpoint(self, config_name, ckpt_name, context=None):
         config_path = folder_paths.get_full_path(context, "configs", config_name)
         ckpt_path = folder_paths.get_full_path_or_raise(context, "checkpoints", ckpt_name)
@@ -547,6 +552,11 @@ class CheckpointLoaderSimple:
 
     CATEGORY = "loaders"
     DESCRIPTION = "Loads a diffusion model checkpoint, diffusion models are used to denoise latents."
+
+    @classmethod
+    def VALIDATE_INPUTS(cls, ckpt_name, context: execution_context.ExecutionContext = None):
+        context.validate_model("checkpoints", ckpt_name)
+        return True
 
     def load_checkpoint(self, ckpt_name, context: execution_context.ExecutionContext = None):
         ckpt_path = folder_paths.get_full_path_or_raise(context, "checkpoints", ckpt_name)
@@ -590,6 +600,11 @@ class unCLIPCheckpointLoader:
     FUNCTION = "load_checkpoint"
 
     CATEGORY = "loaders"
+
+    @classmethod
+    def VALIDATE_INPUTS(cls, ckpt_name, output_vae=True, output_clip=True, context: execution_context.ExecutionContext=None):
+        context.validate_model("checkpoints", ckpt_name)
+        return True
 
     def load_checkpoint(self, ckpt_name, output_vae=True, output_clip=True, context: execution_context.ExecutionContext=None):
         ckpt_path = folder_paths.get_full_path_or_raise(context, "checkpoints", ckpt_name)
@@ -638,6 +653,11 @@ class LoraLoader:
     CATEGORY = "loaders"
     DESCRIPTION = "LoRAs are used to modify diffusion and CLIP models, altering the way in which latents are denoised such as applying styles. Multiple LoRA nodes can be linked together."
 
+    @classmethod
+    def VALIDATE_INPUTS(cls, model, clip, lora_name, strength_model, strength_clip, context: execution_context.ExecutionContext):
+        context.validate_model("loras", lora_name)
+        return True
+
     def load_lora(self, model, clip, lora_name, strength_model, strength_clip, context: execution_context.ExecutionContext):
         if strength_model == 0 and strength_clip == 0:
             return (model, clip)
@@ -669,6 +689,11 @@ class LoraLoaderModelOnly(LoraLoader):
                 "hidden": {"context": "EXECUTION_CONTEXT"}}
     RETURN_TYPES = ("MODEL",)
     FUNCTION = "load_lora_model_only"
+
+    @classmethod
+    def VALIDATE_INPUTS(cls, model, lora_name, strength_model, context: execution_context.ExecutionContext):
+        context.validate_model("loras", lora_name)
+        return True
 
     def load_lora_model_only(self, model, lora_name, strength_model, context: execution_context.ExecutionContext):
         return (self.load_lora(model, None, lora_name, strength_model, 0, context)[0],)
@@ -890,6 +915,10 @@ class UNETLoader:
 
     CATEGORY = "advanced/loaders"
 
+    @classmethod
+    def VALIDATE_INPUTS(cls, unet_name, weight_dtype, context: execution_context.ExecutionContext):
+        context.validate_model("checkpoints", unet_name)
+        return True
 
     def load_unet(self, unet_name, weight_dtype, context: execution_context.ExecutionContext):
         model_options = {}

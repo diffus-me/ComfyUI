@@ -66,7 +66,7 @@ def _make_headers(extra_data: dict):
     return result
 
 
-def before_task_started(
+def _before_task_started(
         header_dict: dict,
         api_name: str,
         function_name: str,
@@ -141,7 +141,7 @@ def before_task_started(
     raise MonitorException(resp.status_code, content["code"], content["message"])
 
 
-def after_task_finished(
+def _after_task_finished(
         header_dict: dict,
         job_id: Optional[str],
         status: str,
@@ -226,7 +226,7 @@ def monitor_call_context(
     try:
         if not is_intermediate and queue_dispatcher:
             queue_dispatcher.on_task_started(task_id)
-        task_id = before_task_started(
+        task_id = _before_task_started(
             header_dict,
             api_name,
             function_name,
@@ -245,7 +245,7 @@ def monitor_call_context(
         message = f'{type(e).__name__}: {str(e)}'
         raise e
     finally:
-        monitor_result = after_task_finished(
+        monitor_result = _after_task_finished(
             header_dict,
             task_id,
             status,

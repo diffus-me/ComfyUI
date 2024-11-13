@@ -20,7 +20,10 @@ def _do_post_image_to_gallery(
         image_type,
         image_subfolder,
         image_filename,
-        pnginfo
+        positive_prompt: str,
+        pnginfo,
+        model_base: str,
+        model_ids: list[int],
 ):
     if image_type != "output":
         return
@@ -34,9 +37,9 @@ def _do_post_image_to_gallery(
         "feature": "COMFYUI",
         "pnginfo": pnginfo,
         "created_by": user_id,
-        "base": None,
-        "prompt": None,  # positive prompt
-        "model_ids": [],  # checkpoint, loras
+        "base": model_base,
+        "prompt": positive_prompt,  # positive prompt
+        "model_ids": model_ids,  # checkpoint, loras
         "is_public": False,
     }
     resp = requests.post(
@@ -80,6 +83,7 @@ def post_output_to_image_gallery(redis_client, node_obj, header_dict, input_data
         return
     image_server_endpoint = f"{gallery_service_node.host_url}/gallery-api/v1/images"
 
+    exec_context = _find_execution_context_from_input_data(input_data)
     for images_key in ("images", "gifs", "video"):
         if images_key not in ui_data:
             continue
@@ -105,7 +109,10 @@ def post_output_to_image_gallery(redis_client, node_obj, header_dict, input_data
                 image_type,
                 image_subfolder,
                 image_filename,
+                exec_context.positive_prompt,
                 pnginfo,
+                exec_context.checkpoints_model_base,
+                exec_context.loaded_model_ids
             )
             proceeded_files.add(image_filename)
 
@@ -125,7 +132,10 @@ def post_output_to_image_gallery(redis_client, node_obj, header_dict, input_data
                         "output",
                         "",
                         filename,
-                        ""
+                        exec_context.positive_prompt,
+                        "",
+                        exec_context.checkpoints_model_base,
+                        exec_context.loaded_model_ids
                     )
                     proceeded_files.add(filename)
 
@@ -139,6 +149,16 @@ def _find_user_hash_from_input_data(input_data):
         elif key == "context":
             return value[0].user_hash
     return ""
+
+
+def _find_execution_context_from_input_data(input_data):
+    import execution_context
+    if not isinstance(input_data, dict):
+        return None
+    for key, value in input_data.items():
+        if key == "context":
+            return value[0]
+    return execution_context.ExecutionContext({})
 
 
 def _find_extra_pnginfo_from_input_data(input_data):
