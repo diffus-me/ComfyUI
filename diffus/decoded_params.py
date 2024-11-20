@@ -1,5 +1,6 @@
-import execution_context
 import math
+
+import execution_context
 
 
 def _sample_consumption_ratio(
@@ -20,15 +21,41 @@ def _sample_consumption_ratio(
     return 1
 
 
-def __sample_opt_from_latent(context, model, latent_image, steps):
-    n_iter = latent_image.get("batch_index", 1)
+def __update_context_checkpoints_model_base(context: execution_context.ExecutionContext, model):
+    import comfy.model_base
+    import comfy.model_patcher
+    if isinstance(model, comfy.model_patcher.ModelPatcher):
+        model = model.model
+        if isinstance(model, comfy.model_base.SD3):
+            context.checkpoints_model_base = "SD3"
+        elif isinstance(model, comfy.model_base.Flux):
+            context.checkpoints_model_base = "SD3"
+        elif isinstance(model, comfy.model_base.GenmoMochi):
+            context.checkpoints_model_base = "MOCHI"
 
+
+def __get_image_size(model, latent_image):
+    import comfy.model_base
+    import comfy.model_patcher
     latent = latent_image["samples"]
     latent_size = latent.size()
     batch_size = latent_size[0]
-    image_height = latent_size[2] * 8
-    image_width = latent_size[3] * 8
+    if isinstance(model, comfy.model_patcher.ModelPatcher) and isinstance(model.model, comfy.model_base.GenmoMochi):
+        image_height = latent_size[3] * 8
+        image_width = latent_size[4] * 8
+        n_iter = max(1, (latent_size[2] - 1) * 6 + 1)
+    else:
+        image_height = latent_size[2] * 8
+        image_width = latent_size[3] * 8
+        n_iter = 1
+    return image_height, image_width, n_iter, batch_size
+
+
+def __sample_opt_from_latent(context: execution_context.ExecutionContext, model, latent_image, steps):
+    __update_context_checkpoints_model_base(context, model)
+    image_height, image_width, n_iter, batch_size = __get_image_size(model, latent_image)
     return {
+        'opt_type': 'ksampler',
         'width': image_width,
         'height': image_height,
         'steps': steps,
@@ -201,8 +228,53 @@ def _easy_full_k_sampler_consumption(pipe, steps, cfg, sampler_name, scheduler, 
     return {'opts': [__sample_opt_from_latent(context, samp_model, samp_samples, steps, )]}
 
 
-def _model_sampling_flux_consumption():
-    pass
+def _mochi_sampler_consumption(model, positive, negative, steps, cfg, seed, height, width, num_frames,
+                               cfg_schedule=None, opt_sigmas=None, samples=None, fastercache=None,
+                               context: execution_context.ExecutionContext = None):
+    return {
+        'opts': [
+            {
+                'opt_type': 'mochi_sampler',
+                'width': width,
+                'height': height,
+                'steps': steps,
+                'n_iter': num_frames,
+                'batch_size': 1,
+                "ratio": _sample_consumption_ratio(context, model)
+            }
+        ]
+    }
+
+
+def _cog_video_sampler_consumption(model, positive, negative, steps, cfg, seed, scheduler, num_frames, samples=None,
+                                   denoise_strength=1.0, image_cond_latents=None, context_options=None, controlnet=None,
+                                   tora_trajectory=None, fastercache=None,
+                                   context: execution_context.ExecutionContext = None):
+    H = 768
+    W = 768
+    B = 1
+    if samples is not None:
+        if len(samples["samples"].shape) == 5:
+            B, T, C, H, W = samples["samples"].shape
+        if len(samples["samples"].shape) == 4:
+            B, C, H, W = samples["samples"].shape
+    if image_cond_latents is not None:
+        B, T, C, H, W = image_cond_latents["samples"].shape
+    height = H * 8
+    width = W * 8
+    return {
+        'opts': [
+            {
+                'opt_type': 'cog_video_sampler',
+                'width': width,
+                'height': height,
+                'steps': steps,
+                'n_iter': num_frames,
+                'batch_size': B,
+                "ratio": _sample_consumption_ratio(context, model)
+            }
+        ]
+    }
 
 
 def _tiled_k_sampler_advanced_consumption(model, add_noise, noise_seed, tile_width, tile_height, tiling_strategy, steps,
@@ -973,6 +1045,8 @@ _NODE_CONSUMPTION_MAPPING = {
     'BNK_TiledKSamplerAdvanced': _tiled_k_sampler_advanced_consumption,
     'BNK_TiledKSampler': _tiled_k_sampler_consumption,
     'easy fullkSampler': _easy_full_k_sampler_consumption,
+    "CogVideoSampler": _cog_video_sampler_consumption,
+    "MochiSampler": _mochi_sampler_consumption,
 
     'UltimateSDUpscaleNoUpscale': _ultimate_sd_upscale_no_upscale_consumption,
     'CR Upscale Image': _cr_upscale_image_consumption,
@@ -1370,6 +1444,34 @@ _NODE_CONSUMPTION_MAPPING = {
     'SamplerEulerCFGpp': _none_consumption_maker,
     'ADE_AnimateDiffCombine': _none_consumption_maker,
     'comfy.Seed (rgthree)': _none_consumption_maker,
+
+    "CogVideoDecode": _none_consumption_maker,
+    "CogVideoTextEncode": _none_consumption_maker,
+    "CogVideoImageEncode": _none_consumption_maker,
+    "CogVideoTextEncodeCombine": _none_consumption_maker,
+    "CogVideoTransformerEdit": _none_consumption_maker,
+    "CogVideoContextOptions": _none_consumption_maker,
+    "CogVideoControlNet": _none_consumption_maker,
+    "ToraEncodeTrajectory": _none_consumption_maker,
+    "ToraEncodeOpticalFlow": _none_consumption_maker,
+    "CogVideoXFasterCache": _none_consumption_maker,
+    "CogVideoXFunResizeToClosestBucket": _none_consumption_maker,
+    "CogVideoLatentPreview": _none_consumption_maker,
+    "CogVideoXTorchCompileSettings": _none_consumption_maker,
+    "CogVideoImageEncodeFunInP": _none_consumption_maker,
+
+    "DownloadAndLoadMochiModel": _none_consumption_maker,
+    "MochiDecode": _none_consumption_maker,
+    "MochiTextEncode": _none_consumption_maker,
+    "MochiModelLoader": _none_consumption_maker,
+    "MochiVAELoader": _none_consumption_maker,
+    "MochiVAEEncoderLoader": _none_consumption_maker,
+    "MochiDecodeSpatialTiling": _none_consumption_maker,
+    "MochiTorchCompileSettings": _none_consumption_maker,
+    "MochiImageEncode": _none_consumption_maker,
+    "MochiLatentPreview": _none_consumption_maker,
+    "MochiSigmaSchedule": _none_consumption_maker,
+    "MochiFasterCache": _none_consumption_maker,
 }
 
 

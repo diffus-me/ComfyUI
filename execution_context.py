@@ -9,6 +9,7 @@ class ExecutionContext:
         self._used_models: dict[str, dict] = {}
         self._positive_prompt = ""
         self._negative_prompt = ""
+        self._checkpoints_model_base = ""
 
     def validate_model(self, model_type, model_name, model_info=None):
         if model_type not in diffus.models.FAVORITE_MODEL_TYPES:
@@ -33,8 +34,14 @@ class ExecutionContext:
     @property
     def checkpoints_model_base(self):
         for model_info in self.loaded_checkpoints:
-            return model_info.base
-        return ""
+            if model_info.base:
+                return model_info.base
+        # return self._checkpoints_model_base
+        return None
+
+    @checkpoints_model_base.setter
+    def checkpoints_model_base(self, model_base):
+        self._checkpoints_model_base = model_base
 
     @property
     def loaded_checkpoints(self):

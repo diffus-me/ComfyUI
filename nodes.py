@@ -917,7 +917,7 @@ class UNETLoader:
 
     @classmethod
     def VALIDATE_INPUTS(cls, unet_name, weight_dtype, context: execution_context.ExecutionContext):
-        context.validate_model("checkpoints", unet_name)
+        context.validate_model(context, "diffusion_models", unet_name)
         return True
 
     def load_unet(self, unet_name, weight_dtype, context: execution_context.ExecutionContext):
@@ -930,7 +930,7 @@ class UNETLoader:
         elif weight_dtype == "fp8_e5m2":
             model_options["dtype"] = torch.float8_e5m2
 
-        unet_path = folder_paths.get_full_path_or_raise("diffusion_models", unet_name)
+        unet_path = folder_paths.get_full_path_or_raise(context, "diffusion_models", unet_name)
         model = comfy.sd.load_diffusion_model(unet_path, model_options=model_options)
         return (model,)
 
