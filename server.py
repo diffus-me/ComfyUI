@@ -23,6 +23,7 @@ from io import BytesIO
 
 import aiohttp
 from aiohttp import web
+from aiohttp import hdrs
 import logging
 
 import mimetypes
@@ -67,6 +68,28 @@ async def cache_control(request: web.Request, handler):
     if request.path.endswith('.js') or request.path.endswith('.css'):
         response.headers.setdefault('Cache-Control', 'no-cache')
     return response
+
+
+@web.middleware
+async def compress_middleware(
+    request: web.Request, handler
+) -> web.StreamResponse:
+
+    accept_encoding = request.headers.get(hdrs.ACCEPT_ENCODING, "").lower()
+
+    if web.ContentCoding.gzip.value in accept_encoding:
+        compressor = web.ContentCoding.gzip.value
+    elif web.ContentCoding.deflate.value in accept_encoding:
+        compressor = web.ContentCoding.deflate.value
+    else:
+        return await handler(request)
+
+    resp = await handler(request)
+    if resp.content_length is not None and resp.content_length > 0:
+        resp.headers[hdrs.CONTENT_ENCODING] = compressor
+        resp.enable_compression()
+    return resp
+
 
 def create_cors_middleware(allowed_origin: str):
     @web.middleware
@@ -165,7 +188,7 @@ class PromptServer():
         self.client_session:Optional[aiohttp.ClientSession] = None
         self.number = 0
 
-        middlewares = [cache_control]
+        middlewares = [cache_control, compress_middleware]
         if args.enable_cors_header:
             middlewares.append(create_cors_middleware(args.enable_cors_header))
         else:
@@ -288,7 +311,7 @@ class PromptServer():
 
         def compare_image_hash(filepath, image):
             hasher = node_helpers.hasher()
-            
+
             # function to compare hashes of two images to see if it already exists, fix to #3465
             if os.path.exists(filepath):
                 a = hasher()
