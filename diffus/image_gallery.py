@@ -6,6 +6,7 @@ from typing import Iterable
 
 import requests
 
+import execution_context
 from diffus.service_registrar import get_service_node
 import folder_paths
 
@@ -35,7 +36,7 @@ def _do_post_image_to_gallery(
             image_filename,
         ),
         "feature": "COMFYUI",
-        "pnginfo": pnginfo,
+        "pnginfo": json.dumps(pnginfo),
         "created_by": user_id,
         "base": model_base,
         "prompt": positive_prompt,  # positive prompt
@@ -97,7 +98,7 @@ def post_output_to_image_gallery(redis_client, node_obj, header_dict, input_data
             image_type = image["type"]
             image_subfolder = image["subfolder"]
             image_filename = image["filename"]
-            pnginfo = _find_extra_pnginfo_from_input_data(input_data=input_data)
+            pnginfo = _find_extra_pnginfo_from_input_data(exec_context, input_data=input_data)
 
             if image_filename in proceeded_files:
                 continue
@@ -133,7 +134,7 @@ def post_output_to_image_gallery(redis_client, node_obj, header_dict, input_data
                         "",
                         filename,
                         exec_context.positive_prompt,
-                        "",
+                        {},
                         exec_context.checkpoints_model_base,
                         exec_context.loaded_model_ids
                     )
@@ -161,10 +162,13 @@ def _find_execution_context_from_input_data(input_data):
     return execution_context.ExecutionContext({})
 
 
-def _find_extra_pnginfo_from_input_data(input_data):
+def _find_extra_pnginfo_from_input_data(context: execution_context.ExecutionContext, input_data):
     if not isinstance(input_data, dict):
         return ""
     for key, value in input_data.items():
         if key == "extra_pnginfo" and value:
-            return json.dumps(value[0])
-    return ""
+            pnginfo = value[0]
+            pnginfo["parameters"] = context.geninfo if context else {}
+            return pnginfo
+    return {}
+

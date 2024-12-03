@@ -17,6 +17,7 @@ class CLIPTextEncodeHunyuanDiT:
 
         output = clip.encode_from_tokens(tokens, return_pooled=True, return_dict=True)
         cond = output.pop("cond")
+        output["_origin_text_"] = bert + " " + mt5xl
         return ([[cond, output]], )
 
 

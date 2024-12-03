@@ -67,6 +67,14 @@ def __sample_opt_from_latent(context: execution_context.ExecutionContext, model,
 
 def _k_sampler_consumption(model, seed, steps, cfg, sampler_name, scheduler, positive, negative, latent_image,
                            denoise=1.0, context=None):
+    context.set_geninfo(
+        positive_prompt=positive,
+        negative_prompt=negative,
+        steps=steps,
+        sampler=sampler_name,
+        cfg_scale=cfg,
+        seed=seed,
+    )
     return {'opts': [__sample_opt_from_latent(context, model, latent_image, steps, )]}
 
 
@@ -164,6 +172,14 @@ def _k_sampler_advanced_consumption(model,
                                     return_with_leftover_noise,
                                     denoise=1.0,
                                     context=None):
+    context.set_geninfo(
+        positive_prompt=positive,
+        negative_prompt=negative,
+        steps=steps,
+        sampler=sampler_name,
+        cfg_scale=cfg,
+        seed=noise_seed,
+    )
     return {'opts': [__sample_opt_from_latent(context, model, latent_image, steps, )]}
 
 
@@ -174,6 +190,14 @@ def _tsc_ksampler_advanced_consumption(model, add_noise, noise_seed, steps, cfg,
                                        prompt=None, extra_pnginfo=None, my_unique_id=None,
                                        context: execution_context.ExecutionContext = None,
                                        optional_vae=(None,), script=None):
+    context.set_geninfo(
+        positive_prompt=positive,
+        negative_prompt=negative,
+        steps=steps,
+        sampler=sampler_name,
+        cfg_scale=cfg,
+        seed=noise_seed,
+    )
     return {'opts': [__sample_opt_from_latent(context, model, latent_image, steps, )]}
 
 
@@ -183,6 +207,14 @@ def _tsc_ksampler_sdxl_consumption(sdxl_tuple, noise_seed, steps, cfg, sampler_n
                                    my_unique_id=None, context: execution_context.ExecutionContext = None,
                                    optional_vae=(None,), refiner_extras=None,
                                    script=None):
+    context.set_geninfo(
+        positive_prompt=prompt,
+        negative_prompt=None,
+        steps=steps,
+        sampler=sampler_name,
+        cfg_scale=cfg,
+        seed=noise_seed,
+    )
     model = sdxl_tuple[0]
     return {'opts': [__sample_opt_from_latent(context, model, latent_image, steps, )]}
 
@@ -193,6 +225,14 @@ def _tsc_k_sampler_consumption(model, seed, steps, cfg, sampler_name, scheduler,
                                context: execution_context.ExecutionContext = None,
                                optional_vae=(None,), script=None, add_noise=None, start_at_step=None, end_at_step=None,
                                return_with_leftover_noise=None, sampler_type="regular"):
+    context.set_geninfo(
+        positive_prompt=positive,
+        negative_prompt=negative,
+        steps=steps,
+        sampler=sampler_name,
+        cfg_scale=cfg,
+        seed=seed,
+    )
     return {'opts': [__sample_opt_from_latent(context, model, latent_image, steps, )]}
 
 
@@ -201,17 +241,43 @@ def _xlabs_sampler_consumption(model, conditioning, neg_conditioning,
                                image_to_image_strength, denoise_strength,
                                latent_image=None, controlnet_condition=None,
                                context=None):
+    context.set_geninfo(
+        positive_prompt=conditioning,
+        negative_prompt=neg_conditioning,
+        steps=steps,
+        sampler="",
+        cfg_scale=timestep_to_start_cfg,
+        seed=noise_seed,
+    )
     return {'opts': [__sample_opt_from_latent(context, model, latent_image, steps, )]}
 
 
 def _impact_k_sampler_basic_pipe_consumption(basic_pipe, seed, steps, cfg, sampler_name, scheduler, latent_image,
                                              denoise=1.0, context=None):
     model, clip, vae, positive, negative = basic_pipe
+
+    context.set_geninfo(
+        positive_prompt=positive,
+        negative_prompt=negative,
+        steps=steps,
+        sampler=sampler_name,
+        cfg_scale=cfg,
+        seed=seed,
+    )
+
     return {'opts': [__sample_opt_from_latent(context, model, latent_image, steps, )]}
 
 
 def _tiled_k_sampler_consumption(model, seed, tile_width, tile_height, tiling_strategy, steps, cfg, sampler_name,
                                  scheduler, positive, negative, latent_image, denoise, context=None):
+    context.set_geninfo(
+        positive_prompt=positive,
+        negative_prompt=negative,
+        steps=steps,
+        sampler=sampler_name,
+        cfg_scale=cfg,
+        seed=seed,
+    )
     return {'opts': [__sample_opt_from_latent(context, model, latent_image, steps, )]}
 
 
@@ -225,12 +291,28 @@ def _easy_full_k_sampler_consumption(pipe, steps, cfg, sampler_name, scheduler, 
     if image is not None and latent is None:
         samp_samples = {"samples": samp_vae.encode(image[:, :, :, :3])}
     samp_model = model if model is not None else pipe["model"]
+    context.set_geninfo(
+        positive_prompt=positive,
+        negative_prompt=negative,
+        steps=steps,
+        sampler=sampler_name,
+        cfg_scale=cfg,
+        seed=seed,
+    )
     return {'opts': [__sample_opt_from_latent(context, samp_model, samp_samples, steps, )]}
 
 
 def _mochi_sampler_consumption(model, positive, negative, steps, cfg, seed, height, width, num_frames,
                                cfg_schedule=None, opt_sigmas=None, samples=None, fastercache=None,
                                context: execution_context.ExecutionContext = None):
+    context.set_geninfo(
+        positive_prompt=positive,
+        negative_prompt=negative,
+        steps=steps,
+        sampler=samples,
+        cfg_scale=cfg,
+        seed=seed,
+    )
     return {
         'opts': [
             {
@@ -250,6 +332,15 @@ def _cog_video_sampler_consumption(model, positive, negative, steps, cfg, seed, 
                                    denoise_strength=1.0, image_cond_latents=None, context_options=None, controlnet=None,
                                    tora_trajectory=None, fastercache=None,
                                    context: execution_context.ExecutionContext = None):
+    context.set_geninfo(
+        positive_prompt=positive,
+        negative_prompt=negative,
+        steps=steps,
+        sampler=samples,
+        cfg_scale=cfg,
+        seed=seed,
+    )
+
     H = 768
     W = 768
     B = 1
@@ -281,12 +372,28 @@ def _tiled_k_sampler_advanced_consumption(model, add_noise, noise_seed, tile_wid
                                           cfg, sampler_name, scheduler, positive, negative, latent_image, start_at_step,
                                           end_at_step, return_with_leftover_noise, preview, denoise=1.0,
                                           context: execution_context.ExecutionContext = None):
+    context.set_geninfo(
+        positive_prompt=positive,
+        negative_prompt=negative,
+        steps=steps,
+        sampler=sampler_name,
+        cfg_scale=cfg,
+        seed=noise_seed,
+    )
     return {'opts': [__sample_opt_from_latent(context, model, latent_image, steps, )]}
 
 
 def _sampler_custom_consumption(model, add_noise, noise_seed, cfg, positive, negative, sampler, sigmas, latent_image,
                                 context):
     steps = len(sigmas)
+    context.set_geninfo(
+        positive_prompt=positive,
+        negative_prompt=negative,
+        steps=steps,
+        sampler=sampler,
+        cfg_scale=cfg,
+        seed=noise_seed,
+    )
     return {'opts': [__sample_opt_from_latent(context, model, latent_image, steps, )]}
 
 
@@ -299,6 +406,14 @@ def _k_sampler_inspire_consumption(model, seed, steps, cfg, sampler_name, schedu
                                    denoise, noise_mode, batch_seed_mode="comfy", variation_seed=None,
                                    variation_strength=None, variation_method="linear",
                                    context=None):
+    context.set_geninfo(
+        positive_prompt=positive,
+        negative_prompt=negative,
+        steps=steps,
+        sampler=sampler_name,
+        cfg_scale=cfg,
+        seed=seed,
+    )
     return {'opts': [__sample_opt_from_latent(context, model, latent_image, steps, )]}
 
 
@@ -314,6 +429,15 @@ def _was_k_sampler_cycle_consumption(model, seed, steps, cfg, sampler_name, sche
                                      steps_scaling=None, steps_control=None,
                                      steps_scaling_value=None, steps_cutoff=None, denoise_cutoff=0.25,
                                      context=None):
+    context.set_geninfo(
+        positive_prompt=positive,
+        negative_prompt=negative,
+        steps=steps,
+        sampler=sampler_name,
+        cfg_scale=cfg,
+        seed=seed,
+    )
+
     result = []
     upscale_steps = upscale_cycles
     division_factor = upscale_steps if steps >= upscale_steps else steps
@@ -382,6 +506,14 @@ def _searge_sdxl_image2image_sampler2_consumption(base_model, base_positive, bas
                                                   upscale_model=None, scaled_width=None, scaled_height=None,
                                                   noise_offset=None, refiner_strength=None,
                                                   context: execution_context.ExecutionContext = None):
+    context.set_geninfo(
+        positive_prompt=base_positive,
+        negative_prompt=base_negative,
+        steps=steps,
+        sampler=sampler_name,
+        cfg_scale=cfg,
+    )
+
     result = []
 
     if steps < 1:
@@ -437,6 +569,15 @@ def _ultimate_sd_upscale_consumption(image, model, positive, negative, vae, upsc
                                      seam_fix_mode, seam_fix_denoise, seam_fix_mask_blur,
                                      seam_fix_width, seam_fix_padding, force_uniform_tiles, tiled_decode,
                                      context: execution_context.ExecutionContext):
+    context.set_geninfo(
+        positive_prompt=positive,
+        negative_prompt=negative,
+        steps=steps,
+        sampler=sampler_name,
+        cfg_scale=cfg,
+        seed=seed,
+    )
+
     batch_size = image.shape[0]
     image_width = image.shape[2]
     image_height = image.shape[1]

@@ -180,7 +180,7 @@ class PhotoMakerEncode:
         else:
             out = cond
 
-        return ([[out, {"pooled_output": pooled}]], )
+        return ([[out, {"pooled_output": pooled, "_origin_text_": text}]], )
 
 
 NODE_CLASS_MAPPINGS = {

@@ -21,6 +21,7 @@ class CLIPTextEncodeFlux:
         output = clip.encode_from_tokens(tokens, return_pooled=True, return_dict=True)
         cond = output.pop("cond")
         output["guidance"] = guidance
+        output["_origin_text_"] = clip_l + " " + t5xxl
         return ([[cond, output]], )
 
 class FluxGuidance:

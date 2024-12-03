@@ -79,7 +79,7 @@ class CLIPTextEncodeSD3:
             while len(tokens["l"]) > len(tokens["g"]):
                 tokens["g"] += empty["g"]
         cond, pooled = clip.encode_from_tokens(tokens, return_pooled=True)
-        return ([[cond, {"pooled_output": pooled}]], )
+        return ([[cond, {"pooled_output": pooled, "_origin_text_": " ".join([clip_l, clip_g, t5xxl])}]], )
 
 
 class ControlNetApplySD3(nodes.ControlNetApplyAdvanced):
