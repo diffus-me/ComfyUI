@@ -8,8 +8,12 @@ class AppSettings():
         self.user_manager = user_manager
 
     def get_settings(self, request):
-        file = self.user_manager.get_request_user_filepath(
-            request, "comfy.settings.json")
+        # use user private settings
+        file = self.user_manager.get_request_user_filepath(request, "comfy.settings.json")
+        if not os.path.isfile(file):
+            # use default user settings
+            file = self.user_manager.get_default_user_filepath("comfy.settings.json")
+
         if os.path.isfile(file):
             with open(file) as f:
                 return json.load(f)

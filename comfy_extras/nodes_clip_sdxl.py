@@ -17,7 +17,7 @@ class CLIPTextEncodeSDXLRefiner:
 
     def encode(self, clip, ascore, width, height, text):
         tokens = clip.tokenize(text)
-        return (clip.encode_from_tokens_scheduled(tokens, add_dict={"aesthetic_score": ascore, "width": width, "height": height}), )
+        return (clip.encode_from_tokens_scheduled(tokens, add_dict={"aesthetic_score": ascore, "width": width, "height": height, "_origin_text_":  text}), )
 
 class CLIPTextEncodeSDXL:
     @classmethod
@@ -46,7 +46,7 @@ class CLIPTextEncodeSDXL:
                 tokens["l"] += empty["l"]
             while len(tokens["l"]) > len(tokens["g"]):
                 tokens["g"] += empty["g"]
-        return (clip.encode_from_tokens_scheduled(tokens, add_dict={"width": width, "height": height, "crop_w": crop_w, "crop_h": crop_h, "target_width": target_width, "target_height": target_height}), )
+        return (clip.encode_from_tokens_scheduled(tokens, add_dict={"width": width, "height": height, "crop_w": crop_w, "crop_h": crop_h, "target_width": target_width, "target_height": target_height, "_origin_text_": text_g + " " + text_l}), )
 
 NODE_CLASS_MAPPINGS = {
     "CLIPTextEncodeSDXLRefiner": CLIPTextEncodeSDXLRefiner,

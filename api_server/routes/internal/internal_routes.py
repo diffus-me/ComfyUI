@@ -1,6 +1,8 @@
 from aiohttp import web
 from typing import Optional
-from folder_paths import models_dir, user_directory, output_directory, folder_names_and_paths
+
+import execution_context
+from folder_paths import get_models_dir, get_user_directory, get_output_directory, folder_names_and_paths
 from api_server.services.file_service import FileService
 from api_server.services.terminal_service import TerminalService
 import app.logger
@@ -16,9 +18,9 @@ class InternalRoutes:
         self.routes: web.RouteTableDef = web.RouteTableDef()
         self._app: Optional[web.Application] = None
         self.file_service = FileService({
-            "models": models_dir,
-            "user": user_directory,
-            "output": output_directory
+            # "models": get_models_dir,
+            "user": get_user_directory,
+            "output": get_output_directory
         })
         self.prompt_server = prompt_server
         self.terminal_service = TerminalService(prompt_server)
@@ -27,38 +29,42 @@ class InternalRoutes:
         @self.routes.get('/files')
         async def list_files(request):
             directory_key = request.query.get('directory', '')
+            context = execution_context.ExecutionContext(request)
             try:
-                file_list = self.file_service.list_files(directory_key)
+                file_list = self.file_service.list_files(context, directory_key)
                 return web.json_response({"files": file_list})
             except ValueError as e:
                 return web.json_response({"error": str(e)}, status=400)
             except Exception as e:
                 return web.json_response({"error": str(e)}, status=500)
-
         @self.routes.get('/logs')
         async def get_logs(request):
-            return web.json_response("".join([(l["t"] + " - " + l["m"]) for l in app.logger.get_logs()]))
+            # return web.json_response(app.logger.get_logs())
+            return web.json_response([])
 
         @self.routes.get('/logs/raw')
         async def get_logs(request):
             self.terminal_service.update_size()
+            # return web.json_response({
+            #     "entries": list(app.logger.get_logs()),
+            #     "size": {"cols": self.terminal_service.cols, "rows": self.terminal_service.rows}
+            # })
             return web.json_response({
-                "entries": list(app.logger.get_logs()),
-                "size": {"cols": self.terminal_service.cols, "rows": self.terminal_service.rows}
+                "entries": [],
+                "size": {"cols": 0, "rows": 0}
             })
 
         @self.routes.patch('/logs/subscribe')
         async def subscribe_logs(request):
-            json_data = await request.json()
-            client_id = json_data["clientId"]
-            enabled = json_data["enabled"]
-            if enabled:
-                self.terminal_service.subscribe(client_id)
-            else:
-                self.terminal_service.unsubscribe(client_id)
+            # json_data = await request.json()
+            # client_id = json_data["clientId"]
+            # enabled = json_data["enabled"]
+            # if enabled:
+            #     self.terminal_service.subscribe(client_id)
+            # else:
+            #     self.terminal_service.unsubscribe(client_id)
 
             return web.Response(status=200)
-
 
         @self.routes.get('/folder_paths')
         async def get_folder_paths(request):

@@ -1,3 +1,4 @@
+import execution_context
 import nodes
 import folder_paths
 from comfy.cli_args import args
@@ -69,7 +70,6 @@ class ImageFromBatch:
 
 class SaveAnimatedWEBP:
     def __init__(self):
-        self.output_dir = folder_paths.get_output_directory()
         self.type = "output"
         self.prefix_append = ""
 
@@ -85,7 +85,7 @@ class SaveAnimatedWEBP:
                      "method": (list(s.methods.keys()),),
                      # "num_frames": ("INT", {"default": 0, "min": 0, "max": 8192}),
                      },
-                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
+                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO", "context": "EXECUTION_CONTEXT"},
                 }
 
     RETURN_TYPES = ()
@@ -95,10 +95,11 @@ class SaveAnimatedWEBP:
 
     CATEGORY = "image/animation"
 
-    def save_images(self, images, fps, filename_prefix, lossless, quality, method, num_frames=0, prompt=None, extra_pnginfo=None):
+    def save_images(self, images, fps, filename_prefix, lossless, quality, method, num_frames=0, prompt=None, extra_pnginfo=None, context:execution_context.ExecutionContext=None):
         method = self.methods.get(method)
         filename_prefix += self.prefix_append
-        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, self.output_dir, images[0].shape[1], images[0].shape[0])
+        output_dir = folder_paths.get_output_directory(context.user_hash)
+        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, output_dir, images[0].shape[1], images[0].shape[0])
         results = list()
         pil_images = []
         for image in images:
@@ -135,7 +136,6 @@ class SaveAnimatedWEBP:
 
 class SaveAnimatedPNG:
     def __init__(self):
-        self.output_dir = folder_paths.get_output_directory()
         self.type = "output"
         self.prefix_append = ""
 
@@ -147,7 +147,7 @@ class SaveAnimatedPNG:
                      "fps": ("FLOAT", {"default": 6.0, "min": 0.01, "max": 1000.0, "step": 0.01}),
                      "compress_level": ("INT", {"default": 4, "min": 0, "max": 9})
                      },
-                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
+                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO", "user_hash": "USER_HASH"},
                 }
 
     RETURN_TYPES = ()
@@ -157,9 +157,10 @@ class SaveAnimatedPNG:
 
     CATEGORY = "image/animation"
 
-    def save_images(self, images, fps, compress_level, filename_prefix="ComfyUI", prompt=None, extra_pnginfo=None):
+    def save_images(self, images, fps, compress_level, filename_prefix="ComfyUI", prompt=None, extra_pnginfo=None, user_hash=''):
         filename_prefix += self.prefix_append
-        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, self.output_dir, images[0].shape[1], images[0].shape[0])
+        output_dir = folder_paths.get_output_directory(user_hash)
+        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, output_dir, images[0].shape[1], images[0].shape[0])
         results = list()
         pil_images = []
         for image in images:

@@ -1,3 +1,4 @@
+import node_helpers
 import nodes
 
 from comfy_execution.graph_utils import is_link
@@ -54,8 +55,8 @@ class DynamicPrompt:
     def get_original_prompt(self):
         return self.original_prompt
 
-def get_input_info(class_def, input_name):
-    valid_inputs = class_def.INPUT_TYPES()
+def get_input_info(context, class_def, input_name):
+    valid_inputs = node_helpers.get_node_input_types(context, class_def)
     input_info = None
     input_category = None
     if "required" in valid_inputs and input_name in valid_inputs["required"]:
@@ -83,12 +84,12 @@ class TopologicalSort:
         self.blockCount = {} # Number of nodes this node is directly blocked by
         self.blocking = {} # Which nodes are blocked by this node
 
-    def get_input_info(self, unique_id, input_name):
+    def get_input_info(self, context, unique_id, input_name):
         class_type = self.dynprompt.get_node(unique_id)["class_type"]
         class_def = nodes.NODE_CLASS_MAPPINGS[class_type]
-        return get_input_info(class_def, input_name)
+        return get_input_info(context, class_def, input_name)
 
-    def make_input_strong_link(self, to_node_id, to_input):
+    def make_input_strong_link(self, context, to_node_id, to_input):
         inputs = self.dynprompt.get_node(to_node_id)["inputs"]
         if to_input not in inputs:
             raise NodeInputError(f"Node {to_node_id} says it needs input {to_input}, but there is no input to that node at all")
@@ -96,17 +97,17 @@ class TopologicalSort:
         if not is_link(value):
             raise NodeInputError(f"Node {to_node_id} says it needs input {to_input}, but that value is a constant")
         from_node_id, from_socket = value
-        self.add_strong_link(from_node_id, from_socket, to_node_id)
+        self.add_strong_link(context, from_node_id, from_socket, to_node_id)
 
-    def add_strong_link(self, from_node_id, from_socket, to_node_id):
+    def add_strong_link(self, context, from_node_id, from_socket, to_node_id):
         if not self.is_cached(from_node_id):
-            self.add_node(from_node_id)
+            self.add_node(context, from_node_id)
             if to_node_id not in self.blocking[from_node_id]:
                 self.blocking[from_node_id][to_node_id] = {}
                 self.blockCount[to_node_id] += 1
             self.blocking[from_node_id][to_node_id][from_socket] = True
 
-    def add_node(self, node_unique_id, include_lazy=False, subgraph_nodes=None):
+    def add_node(self, context, node_unique_id, include_lazy=False, subgraph_nodes=None):
         node_ids = [node_unique_id]
         links = []
 
@@ -126,14 +127,14 @@ class TopologicalSort:
                     from_node_id, from_socket = value
                     if subgraph_nodes is not None and from_node_id not in subgraph_nodes:
                         continue
-                    input_type, input_category, input_info = self.get_input_info(unique_id, input_name)
+                    input_type, input_category, input_info = self.get_input_info(context, unique_id, input_name)
                     is_lazy = input_info is not None and "lazy" in input_info and input_info["lazy"]
                     if (include_lazy or not is_lazy) and not self.is_cached(from_node_id):
                         node_ids.append(from_node_id)
                         links.append((from_node_id, from_socket, unique_id))
                         
         for link in links:
-            self.add_strong_link(*link)
+            self.add_strong_link(context, *link)
 
     def is_cached(self, node_id):
         return False
