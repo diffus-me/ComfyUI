@@ -162,7 +162,7 @@ def prompt_worker(q, server, task_dispatcher):
                 if monitor_error is not None:
                     server.send_sync("monitor_error",  { "node": None, 'prompt_id': prompt_id, 'used_time': end - begin, 'message': diffus.system_monitor.make_monitor_error_message(monitor_error) }, server.client_id)
                 else:
-                    server.send_sync("finished",  { "node": None, 'prompt_id': prompt_id, 'used_time': end - begin, 'subscription_consumption': extra_data['subscription_consumption'] }, server.client_id)
+                    server.send_sync("finished",  { "node": None, 'prompt_id': prompt_id, 'used_time': end - begin, 'subscription_consumption': extra_data.get('subscription_consumption', 0) }, server.client_id)
 
             current_time = time.perf_counter()
             execution_time = current_time - execution_start_time
