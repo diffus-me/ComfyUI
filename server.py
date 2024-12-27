@@ -552,17 +552,17 @@ class PromptServer():
                     "python_version": sys.version,
                     "pytorch_version": comfy.model_management.torch_version,
                     "embedded_python": os.path.split(os.path.split(sys.executable)[0])[1] == "python_embeded",
-                    "argv": sys.argv
+                    "argv": []
                 },
                 "devices": [
                     {
-                        "name": device_name,
-                        "type": device.type,
-                        "index": device.index,
-                        "vram_total": vram_total,
-                        "vram_free": vram_free,
-                        "torch_vram_total": torch_vram_total,
-                        "torch_vram_free": torch_vram_free,
+                        "name": "",
+                        "type": "",
+                        "index": "",
+                        "vram_total": 0,
+                        "vram_free": 0,
+                        "torch_vram_total": 0,
+                        "torch_vram_free": 0,
                     }
                 ]
             }
