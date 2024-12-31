@@ -302,6 +302,18 @@ def _easy_full_k_sampler_consumption(pipe, steps, cfg, sampler_name, scheduler, 
     return {'opts': [__sample_opt_from_latent(context, samp_model, samp_samples, steps, )]}
 
 
+def _flux_sampler_consumption(model, conditioning, latent_image, sampler_name, scheduler, steps, denoise, noise_seed,
+                              context: execution_context.ExecutionContext):
+    context.set_geninfo(
+        positive_prompt=conditioning,
+        steps=steps,
+        sampler=sampler_name,
+        cfg_scale=1,
+        seed=noise_seed,
+    )
+    return {'opts': [__sample_opt_from_latent(context, model, latent_image, steps, )]}
+
+
 def _mochi_sampler_consumption(model, positive, negative, steps, cfg, seed, height, width, num_frames,
                                cfg_schedule=None, opt_sigmas=None, samples=None, fastercache=None,
                                context: execution_context.ExecutionContext = None):
@@ -1188,6 +1200,7 @@ _NODE_CONSUMPTION_MAPPING = {
     'easy fullkSampler': _easy_full_k_sampler_consumption,
     "CogVideoSampler": _cog_video_sampler_consumption,
     "MochiSampler": _mochi_sampler_consumption,
+    "FluxSampler": _flux_sampler_consumption,
 
     'UltimateSDUpscaleNoUpscale': _ultimate_sd_upscale_no_upscale_consumption,
     'CR Upscale Image': _cr_upscale_image_consumption,
@@ -1849,6 +1862,23 @@ _NODE_CONSUMPTION_MAPPING = {
     "DF_Image_scale_by_ratio": _none_consumption_maker,
     "DF_Image_scale_to_side": _none_consumption_maker,
     "DF_Conditioning_area_scale_by_ratio": _none_consumption_maker,
+
+    "BooleanBasic": _none_consumption_maker,
+    "BooleanReverse": _none_consumption_maker,
+    "ChooseUpscaleModel": _none_consumption_maker,
+    "FluxAttentionCleanup": _none_consumption_maker,
+    "FluxAttentionControl": _none_consumption_maker,
+    "FluxControlNetApply": _none_consumption_maker,
+    "FluxResolutionNode": _none_consumption_maker,
+    "FluxUnionControlNetApply": _none_consumption_maker,
+    "GetImageSizeRatio": _none_consumption_maker,
+    "IntegerSettings": _none_consumption_maker,
+    "NoisePlusBlend": _none_consumption_maker,
+    "RegionMaskConditioning": _none_consumption_maker,
+    "RegionMaskGenerator": _none_consumption_maker,
+    "RegionMaskProcessor": _none_consumption_maker,
+    "RegionMaskValidator": _none_consumption_maker,
+    "RegionOverlayVisualizer": _none_consumption_maker,
 }
 
 
