@@ -29,7 +29,9 @@ class ServiceStatusResponse(BaseModel):
     queued_tasks: list = Field(title='QueuedTasks', default=[])
     finished_task_count: int = Field(title='FinishedTaskCount', default=0)
     failed_task_count: int = Field(title='FailedTaskCount', default=0)
+    pending_task_count: int = Field(title='PendingTaskCount', default=0)
     consecutive_failed_task_count: int = Field(title='ConsecutiveFailedTaskCount', default=0)
+    gpu_utilization: float = Field(title='GpuUtilization', default=0)
 
 
 class ServiceStatusRequest(BaseModel):
@@ -56,6 +58,8 @@ class _State:
         self.failed_task_count = 0
         self.consecutive_failed_task_count = 0
         self.last_error_message = ''
+        self.busy_time = 0
+
         self.service_interrupted = False
 
         self.task_thread = None
@@ -76,6 +80,8 @@ class _State:
 
 
 def _setup_daemon_api(_task_state: _State, routes: aiohttp.web_routedef.RouteTableDef):
+    service_started_at = time.time()
+
     @routes.get("/daemon/v1/status")
     async def get_status(request):
         resp = ServiceStatusResponse(
@@ -91,9 +97,10 @@ def _setup_daemon_api(_task_state: _State, routes: aiohttp.web_routedef.RouteTab
             failed_task_count=_task_state.failed_task_count,
             pending_task_count=_task_state.remaining_tasks,
             consecutive_failed_task_count=_task_state.consecutive_failed_task_count,
-        ).model_dump()
+            gpu_utilization=_task_state.busy_time / (time.time() - service_started_at),
+        )
 
-        return web.json_response(resp)
+        return web.json_response(resp.model_dump())
 
     @routes.put("/daemon/v1/status")
     async def update_status(request):
@@ -190,6 +197,8 @@ def _fetch_task(_task_state: _State, fetch_task_timeout=5):
 
 class TaskDispatcher:
     def __init__(self, prompt_queue, routes: aiohttp.web_routedef.RouteTableDef):
+        self._task_time_consumption = {}
+
         self._task_state = _State()
         self._prompt_queue = prompt_queue
         self._t = threading.Thread(target=self._task_loop, name='comfy-task-dispatcher-thread')
@@ -228,6 +237,7 @@ class TaskDispatcher:
     def on_task_started(self, task_id):
         _logger.info(f'on_task_started, {task_id}')
         self._task_state.current_task = task_id
+        self._task_time_consumption[task_id] = time.time()
 
     def on_task_finished(self, task_id, success, messages):
         _logger.info(f'on_task_finished, {task_id} {success} {messages}')
@@ -242,3 +252,6 @@ class TaskDispatcher:
             self._task_state.failed_task_count += 1
             self._task_state.consecutive_failed_task_count += 1
             self._task_state.last_error_message = messages
+
+        now = time.time()
+        self._task_state.busy_time += now - self._task_time_consumption.pop(task_id, now)
