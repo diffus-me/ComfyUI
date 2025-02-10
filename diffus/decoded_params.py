@@ -314,6 +314,22 @@ def _flux_sampler_consumption(model, conditioning, latent_image, sampler_name, s
     return {'opts': [__sample_opt_from_latent(context, model, latent_image, steps, )]}
 
 
+def _hy_video_sampler_consumption(model, hyvid_embeds, flow_shift, steps, embedded_guidance_scale, seed, width, height,
+                                  num_frames,
+                                  samples=None, denoise_strength=1.0, force_offload=True, stg_args=None,
+                                  context_options=None, feta_args=None, teacache_args=None, scheduler=None,
+                                  context: execution_context.ExecutionContext = None):
+    return {'opts': [{
+        'opt_type': 'hy_video_sampler',
+        'width': width,
+        'height': height,
+        'steps': steps,
+        'n_iter': num_frames,
+        'batch_size': 1,
+        "ratio": _sample_consumption_ratio(context, model)
+    }]}
+
+
 def _mochi_sampler_consumption(model, positive, negative, steps, cfg, seed, height, width, num_frames,
                                cfg_schedule=None, opt_sigmas=None, samples=None, fastercache=None,
                                context: execution_context.ExecutionContext = None):
@@ -1166,6 +1182,10 @@ def was_remove_background_consumption(images, mode='background', threshold=127, 
     return {'opts': opts}
 
 
+def _hy_video_enhance_a_video_consumption():
+    pass
+
+
 def _default_consumption_maker(*args, **kwargs):
     return {}
 
@@ -1201,6 +1221,7 @@ _NODE_CONSUMPTION_MAPPING = {
     "CogVideoSampler": _cog_video_sampler_consumption,
     "MochiSampler": _mochi_sampler_consumption,
     "FluxSampler": _flux_sampler_consumption,
+    "HyVideoSampler": _hy_video_sampler_consumption,
 
     'UltimateSDUpscaleNoUpscale': _ultimate_sd_upscale_no_upscale_consumption,
     'CR Upscale Image': _cr_upscale_image_consumption,
@@ -1879,6 +1900,26 @@ _NODE_CONSUMPTION_MAPPING = {
     "RegionMaskProcessor": _none_consumption_maker,
     "RegionMaskValidator": _none_consumption_maker,
     "RegionOverlayVisualizer": _none_consumption_maker,
+
+    "HyVideoDecode": _none_consumption_maker,
+    "HyVideoTextEncode": _none_consumption_maker,
+    "HyVideoTextImageEncode": _none_consumption_maker,
+    "HyVideoModelLoader": _none_consumption_maker,
+    "HyVideoVAELoader": _none_consumption_maker,
+    "DownloadAndLoadHyVideoTextEncoder": _none_consumption_maker,
+    "HyVideoEncode": _none_consumption_maker,
+    "HyVideoBlockSwap": _none_consumption_maker,
+    "HyVideoTorchCompileSettings": _none_consumption_maker,
+    "HyVideoSTG": _none_consumption_maker,
+    "HyVideoCFG": _none_consumption_maker,
+    "HyVideoCustomPromptTemplate": _none_consumption_maker,
+    "HyVideoLatentPreview": _none_consumption_maker,
+    "HyVideoLoraSelect": _none_consumption_maker,
+    "HyVideoLoraBlockEdit": _none_consumption_maker,
+    "HyVideoTextEmbedsLoad": _none_consumption_maker,
+    "HyVideoContextOptions": _none_consumption_maker,
+    "HyVideoEnhanceAVideo": _none_consumption_maker,
+    "HyVideoTeaCache": _none_consumption_maker,
 }
 
 
