@@ -58,13 +58,14 @@ def create_model_info(record: models.Model) -> ModelInfo:
     )
 
 
-def list_favorite_model_by_model_type(user_id: str, folder_name: str):
+def list_favorite_model_by_model_type(user_id: str, folder_name: str, **kwargs):
     if folder_name not in models.FAVORITE_MODEL_TYPES:
         return []
     model_type = models.FAVORITE_MODEL_TYPES[folder_name]
     with database.Database() as session:
+        model_base = kwargs.get('model_base', None)
         query = _make_favorite_model_query(session)
-        query = _filter_favorite_model_by_model_type(query, user_id, model_type)
+        query = _filter_favorite_model_by_model_type(query, user_id, model_type, model_base)
         return [create_model_info(ckpt).name for ckpt in session.scalars(query)]
 
 
@@ -74,7 +75,7 @@ def get_favorite_model_full_path(user_id: str, folder_name: str, filename: str) 
     model_type = models.FAVORITE_MODEL_TYPES[folder_name]
     with database.Database() as session:
         query = _make_favorite_model_query(session)
-        query = _filter_favorite_model_by_model_type(query, user_id, model_type)
+        query = _filter_favorite_model_by_model_type(query, user_id, model_type, None)
         query = _filter_model_by_name(query, filename)
         record = session.scalar(query)
         if not record:
@@ -107,7 +108,7 @@ def _filter_model_by_name(query: Query, name: str) -> Query:
     )
 
 
-def _filter_favorite_model_by_model_type(query: Query, user_id: str, model_type: str) -> Query:
+def _filter_favorite_model_by_model_type(query: Query, user_id: str, model_type: str, model_base) -> Query:
     query = query.filter(
         models.FavoriteModel.favorited_by == user_id
     )
@@ -115,5 +116,7 @@ def _filter_favorite_model_by_model_type(query: Query, user_id: str, model_type:
         query = query.filter(models.Model.model_type.in_(["LORA", "LYCORIS"]))
     else:
         query = query.filter(models.Model.model_type == model_type)
+    if model_base:
+        query = query.filter(models.Model.base == model_base)
 
     return query

@@ -378,9 +378,9 @@ def cached_filename_list_(folder_name: str) -> tuple[list[str], dict[str, float]
 
     return out
 
-def get_filename_list(context: execution_context.ExecutionContext, folder_name: str) -> list[str]:
+def get_filename_list(context: execution_context.ExecutionContext, folder_name: str, **kwargs) -> list[str]:
     if folder_name in diffus.models.FAVORITE_MODEL_TYPES:
-        return diffus.repository.list_favorite_model_by_model_type(context.user_id, folder_name)
+        return diffus.repository.list_favorite_model_by_model_type(context.user_id, folder_name, **kwargs)
     else:
         folder_name = map_legacy(folder_name)
     out = cached_filename_list_(folder_name)
