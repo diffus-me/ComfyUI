@@ -48,7 +48,7 @@ def interrupt_processing(value=True):
     comfy.model_management.interrupt_current_processing(value)
 
 
-MAX_RESOLUTION=16384
+MAX_RESOLUTION=2048
 
 class CLIPTextEncode(ComfyNodeABC):
     @classmethod

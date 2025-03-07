@@ -708,7 +708,7 @@ def _get_upscale_model_size(context, model_name):
             model_upscale_cache[model_name] = upscale_model.scale
             del upscale_model
         except Exception as e:
-            model_upscale_cache[model_name] = 4
+            model_upscale_cache[model_name] = 2
     return model_upscale_cache[model_name]
 
 
@@ -751,6 +751,25 @@ def _cr_upscale_image_consumption(image, upscale_model, rounding_modulus=8, loop
         return {
         }
 
+
+def _cr_apply_multi_upscale_consumption(image, resampling_method, supersample, rounding_modulus, upscale_stack,
+                                        context: execution_context.ExecutionContext):
+    params = list()
+    params.extend(upscale_stack)
+
+    result = []
+    # Loop through the list
+    for tup in params:
+        upscale_model, rescale_factor = tup
+        model_scale = _get_upscale_model_size(context, upscale_model)
+        result.append({
+            'opt_type': 'upscale',
+            'width': image.shape[2] * model_scale,
+            'height': image.shape[1] * model_scale,
+            'batch_size': image.shape[0],
+        })
+
+    return result
 
 def _vhs_video_combine_consumption(
         images,
@@ -966,8 +985,9 @@ def _re_actor_build_face_model_consumption(image, det_size=(640, 640)):
     }
 
 
-def _supir_decode_consumption(SUPIR_VAE, latents, use_tiled_vae, decoder_tile_size):
-    opt = __sample_opt_from_latent(latents, 30)
+def _supir_decode_consumption(SUPIR_VAE, latents, use_tiled_vae, decoder_tile_size,
+                              context: execution_context.ExecutionContext):
+    opt = __sample_opt_from_latent(context, SUPIR_VAE, latents, 30)
     opt['opt_type'] = 'supir_decode'
     del opt['steps']
     return {'opts': [opt, ]}
@@ -990,8 +1010,9 @@ def _supir_sample_consumption(SUPIR_model, latents, steps, seed, cfg_scale_end, 
                               negative,
                               cfg_scale_start, control_scale_start, control_scale_end, restore_cfg, keep_model_loaded,
                               DPMPP_eta,
-                              sampler, sampler_tile_size=1024, sampler_tile_stride=512):
-    return {'opts': [__sample_opt_from_latent(latents, steps, )]}
+                              sampler, sampler_tile_size=1024, sampler_tile_stride=512,
+                              context: execution_context.ExecutionContext = None):
+    return {'opts': [__sample_opt_from_latent(context, SUPIR_model, latents, steps, )]}
 
 
 def _supir_first_stage_consumption(SUPIR_VAE, image, encoder_dtype, use_tiled_vae, encoder_tile_size,
@@ -1225,6 +1246,7 @@ _NODE_CONSUMPTION_MAPPING = {
 
     'UltimateSDUpscaleNoUpscale': _ultimate_sd_upscale_no_upscale_consumption,
     'CR Upscale Image': _cr_upscale_image_consumption,
+    "CR Apply Multi Upscale": _cr_apply_multi_upscale_consumption,
     'KSampler //Inspire': _k_sampler_inspire_consumption,
     'KSampler Cycle': _was_k_sampler_cycle_consumption,
     'ImpactSimpleDetectorSEGS_for_AD': _impact_simple_detector_segs_for_ad_consumption,
@@ -1920,6 +1942,16 @@ _NODE_CONSUMPTION_MAPPING = {
     "HyVideoContextOptions": _none_consumption_maker,
     "HyVideoEnhanceAVideo": _none_consumption_maker,
     "HyVideoTeaCache": _none_consumption_maker,
+
+    "Latent Noise Injection": _none_consumption_maker,
+    "DisableNoise": _none_consumption_maker,
+    "InjectLatentNoise+": _none_consumption_maker,
+    "SplitSigmasDenoise": _none_consumption_maker,
+    "ImageConcanate": _none_consumption_maker,
+    "ResizeMask": _none_consumption_maker,
+    "ImageAndMaskPreview": _none_consumption_maker,
+    "Noise Control Script": _none_consumption_maker,
+    "CR Multi Upscale Stack": _none_consumption_maker,
 }
 
 
