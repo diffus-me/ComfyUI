@@ -152,6 +152,11 @@ def _find_user_hash_from_input_data(input_data):
     return ""
 
 
+class _DummyRequest:
+    def __init__(self):
+        self.headers: dict = {}
+
+
 def _find_execution_context_from_input_data(input_data):
     import execution_context
     if not isinstance(input_data, dict):
@@ -159,7 +164,7 @@ def _find_execution_context_from_input_data(input_data):
     for key, value in input_data.items():
         if key == "context":
             return value[0]
-    return execution_context.ExecutionContext({})
+    return execution_context.ExecutionContext(_DummyRequest())
 
 
 def _find_extra_pnginfo_from_input_data(context: execution_context.ExecutionContext, input_data):
@@ -171,4 +176,3 @@ def _find_extra_pnginfo_from_input_data(context: execution_context.ExecutionCont
             pnginfo["parameters"] = context.geninfo if context else {}
             return pnginfo
     return {}
-
