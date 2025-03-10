@@ -281,11 +281,13 @@ def _tiled_k_sampler_consumption(model, seed, tile_width, tile_height, tiling_st
     return {'opts': [__sample_opt_from_latent(context, model, latent_image, steps, )]}
 
 
-def _easy_full_k_sampler_consumption(pipe, steps, cfg, sampler_name, scheduler, denoise, image_output, link_id,
-                                     save_prefix, seed=None, model=None, positive=None, negative=None, latent=None,
-                                     vae=None, clip=None, xyPlot=None, tile_size=None, prompt=None, extra_pnginfo=None,
-                                     my_unique_id=None, context: execution_context.ExecutionContext = None,
-                                     force_full_denoise=False, disable_noise=False, downscale_options=None, image=None):
+def _easy_full_k_sampler_consumption(
+        pipe, steps, cfg, sampler_name, scheduler, denoise, image_output, link_id, save_prefix, seed=None, model=None,
+        positive=None, negative=None, latent=None, vae=None, clip=None, xyPlot=None, tile_size=None, prompt=None,
+        extra_pnginfo=None, my_unique_id=None, force_full_denoise=False, disable_noise=False, downscale_options=None,
+        image=None,
+        context: execution_context.ExecutionContext = None
+):
     samp_samples = latent if latent is not None else pipe["samples"]
     samp_vae = vae if vae is not None else pipe["vae"]
     if image is not None and latent is None:
@@ -771,6 +773,7 @@ def _cr_apply_multi_upscale_consumption(image, resampling_method, supersample, r
 
     return result
 
+
 def _vhs_video_combine_consumption(
         images,
         frame_rate: int,
@@ -1203,8 +1206,345 @@ def was_remove_background_consumption(images, mode='background', threshold=127, 
     return {'opts': opts}
 
 
-def _hy_video_enhance_a_video_consumption():
+
+def _easy_detailer_fix_consumption(pipe, image_output, link_id, save_prefix, model=None, prompt=None,
+                                   extra_pnginfo=None, my_unique_id=None,
+                                   context: execution_context.ExecutionContext = None):
+    image = pipe["images"]
+    clip = pipe["clip"]
+    vae = pipe["vae"]
+    seed = pipe["seed"]
+    positive = pipe["positive"]
+    negative = pipe["negative"]
+    loader_settings = pipe["loader_settings"] if "loader_settings" in pipe else {}
+    guide_size = pipe["detail_fix_settings"]["guide_size"] if "guide_size" in pipe["detail_fix_settings"] else 256
+    guide_size_for = pipe["detail_fix_settings"]["guide_size_for"] if "guide_size_for" in pipe[
+        "detail_fix_settings"] else True
+    max_size = pipe["detail_fix_settings"]["max_size"] if "max_size" in pipe["detail_fix_settings"] else 768
+    steps = pipe["detail_fix_settings"]["steps"] if "steps" in pipe["detail_fix_settings"] else 20
+    cfg = pipe["detail_fix_settings"]["cfg"] if "cfg" in pipe["detail_fix_settings"] else 1.0
+    sampler_name = pipe["detail_fix_settings"]["sampler_name"] if "sampler_name" in pipe[
+        "detail_fix_settings"] else None
+    scheduler = pipe["detail_fix_settings"]["scheduler"] if "scheduler" in pipe["detail_fix_settings"] else None
+    denoise = pipe["detail_fix_settings"]["denoise"] if "denoise" in pipe["detail_fix_settings"] else 0.5
+    feather = pipe["detail_fix_settings"]["feather"] if "feather" in pipe["detail_fix_settings"] else 5
+    drop_size = pipe["detail_fix_settings"]["drop_size"] if "drop_size" in pipe["detail_fix_settings"] else 10
+    noise_mask = pipe["detail_fix_settings"]["noise_mask"] if "noise_mask" in pipe["detail_fix_settings"] else None
+    force_inpaint = pipe["detail_fix_settings"]["force_inpaint"] if "force_inpaint" in pipe[
+        "detail_fix_settings"] else False
+    wildcard = pipe["detail_fix_settings"]["wildcard"] if "wildcard" in pipe["detail_fix_settings"] else ""
+    cycle = pipe["detail_fix_settings"]["cycle"] if "cycle" in pipe["detail_fix_settings"] else 1
+
+    bbox_segm_pipe = pipe["bbox_segm_pipe"] if pipe and "bbox_segm_pipe" in pipe else None
+    sam_pipe = pipe["sam_pipe"] if "sam_pipe" in pipe else None
+    if "mask_settings" in pipe:
+        pass
+    else:
+        if bbox_segm_pipe is None:
+            raise Exception(f"[ERROR] bbox_segm_pipe or pipe['bbox_segm_pipe'] is missing")
+        if sam_pipe is None:
+            raise Exception(f"[ERROR] sam_pipe or pipe['sam_pipe'] is missing")
+        bbox_detector_opt, bbox_threshold, bbox_dilation, bbox_crop_factor, segm_detector_opt = bbox_segm_pipe
+        sam_model_opt, sam_detection_hint, sam_dilation, sam_threshold, sam_bbox_expansion, sam_mask_hint_threshold, sam_mask_hint_use_negative = sam_pipe
+        return _face_detailer_consumption(
+            image, model, clip, vae, guide_size, guide_size_for, max_size, seed, steps, cfg, sampler_name,
+            scheduler,
+            positive, negative, denoise, feather, noise_mask, force_inpaint,
+            bbox_threshold, bbox_dilation, bbox_crop_factor,
+            sam_detection_hint, sam_dilation, sam_threshold, sam_bbox_expansion, sam_mask_hint_threshold,
+            sam_mask_hint_use_negative, drop_size, bbox_detector_opt, wildcard, cycle, sam_model_opt,
+            segm_detector_opt,
+            detailer_hook=None
+        )
+
+
+def _mask_detailer_pipe_consumption(
+        image, mask, basic_pipe, guide_size, guide_size_for, max_size, mask_mode,
+        seed, steps, cfg, sampler_name, scheduler, denoise,
+        feather, crop_factor, drop_size, refiner_ratio, batch_size, cycle=1,
+        refiner_basic_pipe_opt=None, detailer_hook=None, inpaint_model=False, noise_mask_feather=0,
+        bbox_fill=False, contour_fill=True, scheduler_func_opt=None,
+        context: execution_context.ExecutionContext = None):
+    image_width = image.shape[2]
+    image_height = image.shape[1]
+    n_iter = image.shape[0]
+    opts = [{
+        'opt_type': 'was_remove_background',
+        'width': image_width,
+        'height': image_height,
+        'batch_size': batch_size,
+        "n_iter": n_iter,
+    }]
+    return {'opts': opts}
+
+
+def _easy_k_sampler_consumption(
+        pipe, image_output, link_id, save_prefix, model=None, tile_size=None, prompt=None,
+        extra_pnginfo=None, my_unique_id=None, force_full_denoise=False, disable_noise=False,
+        context: execution_context.ExecutionContext = None):
+    return _easy_full_k_sampler_consumption(
+        pipe, None, None, None, None, None, image_output, link_id, save_prefix,
+        None, model, None, None, None, None, None, None,
+        None, prompt, extra_pnginfo, my_unique_id, force_full_denoise, disable_noise, context
+    )
+
+
+def _easy_k_sampler_custom_consumption(
+        pipe, image_output, link_id, save_prefix, model=None, tile_size=None, prompt=None, extra_pnginfo=None,
+        my_unique_id=None, force_full_denoise=False, disable_noise=False,
+        context: execution_context.ExecutionContext = None
+):
+    return _easy_full_k_sampler_consumption(
+        pipe, None, None, None, None, None, image_output, link_id, save_prefix,
+        None, model, None, None, None, None, None, None,
+        None, prompt, extra_pnginfo, my_unique_id, force_full_denoise, disable_noise,
+        context
+    )
+
+
+def _easy_k_sampler_tiled_consumption(
+        pipe, tile_size=512, image_output='preview', link_id=0, save_prefix='ComfyUI', model=None, prompt=None,
+        extra_pnginfo=None, my_unique_id=None, force_full_denoise=False, disable_noise=False,
+        context: execution_context.ExecutionContext = None
+):
+    return _easy_full_k_sampler_consumption(
+        pipe, None, None, None, None, None, image_output, link_id, save_prefix,
+        None, model, None, None, None, None, None, None,
+        tile_size, prompt, extra_pnginfo, my_unique_id, force_full_denoise, disable_noise, context
+    )
+
+
+def _easy_k_sampler_layer_diffusion_consumption(
+        pipe, image_output='preview', link_id=0, save_prefix='ComfyUI', model=None, prompt=None, extra_pnginfo=None,
+        my_unique_id=None, force_full_denoise=False, disable_noise=False,
+        context: execution_context.ExecutionContext = None
+):
+    return _easy_full_k_sampler_consumption(
+        pipe, None, None, None, None, None, image_output, link_id, save_prefix,
+        None, model, None, None, None, None, None, None,
+        None, prompt, extra_pnginfo, my_unique_id, force_full_denoise,
+        disable_noise, context)
+
+
+class _DummyLatent:
+    def __init__(self, batch, width, height):
+        self._batch = batch
+        self._width = width
+        self._height = height
+
+    def size(self):
+        return [self._batch, self._width // 8, self._height // 8]
+
+
+def _easy_k_sampler_inpainting_consumption(
+        pipe, grow_mask_by, image_output, link_id, save_prefix, additional, model=None, mask=None, tile_size=None,
+        prompt=None, extra_pnginfo=None, my_unique_id=None, force_full_denoise=False, disable_noise=False,
+        context: execution_context.ExecutionContext = None):
+    latent = pipe['samples'] if 'samples' in pipe else None
+    images = pipe["images"] if pipe and "images" in pipe else None
+
+    if images:
+        shape = images.shape
+        latent = {"samples": _DummyLatent(shape[0], shape[1], shape[2])}
+    return _easy_full_k_sampler_consumption(
+        pipe, None, None, None, None, None, image_output, link_id, save_prefix,
+        None, None, None, None, latent, None, None, None,
+        tile_size, prompt, extra_pnginfo, my_unique_id, force_full_denoise, disable_noise,
+        context=context
+    )
     pass
+
+
+def _easy_k_sampler_down_scale_unet_consumption(
+        pipe, downscale_mode, block_number, downscale_factor, start_percent, end_percent, downscale_after_skip,
+        downscale_method, upscale_method, image_output, link_id, save_prefix, model=None, tile_size=None, prompt=None,
+        extra_pnginfo=None, my_unique_id=None, force_full_denoise=False, disable_noise=False,
+        context: execution_context.ExecutionContext = None
+):
+    downscale_options = None
+    if downscale_mode == 'Auto':
+        downscale_options = {
+            "block_number": block_number,
+            "downscale_factor": None,
+            "start_percent": 0,
+            "end_percent": 0.35,
+            "downscale_after_skip": True,
+            "downscale_method": "bicubic",
+            "upscale_method": "bicubic"
+        }
+    elif downscale_mode == 'Custom':
+        downscale_options = {
+            "block_number": block_number,
+            "downscale_factor": downscale_factor,
+            "start_percent": start_percent,
+            "end_percent": end_percent,
+            "downscale_after_skip": downscale_after_skip,
+            "downscale_method": downscale_method,
+            "upscale_method": upscale_method
+        }
+    return _easy_full_k_sampler_consumption(
+        pipe, None, None, None, None, None, image_output, link_id, save_prefix,
+        None, model, None, None, None, None, None, None,
+        tile_size, prompt, extra_pnginfo, my_unique_id, force_full_denoise, disable_noise, downscale_options,
+        context=context
+    )
+
+
+def _easy_k_sampler_sd_turbo_consumption(
+        pipe, image_output, link_id, save_prefix, model=None, tile_size=None, prompt=None, extra_pnginfo=None,
+        my_unique_id=None,
+        context: execution_context.ExecutionContext = None
+):
+    samp_model = pipe["model"] if model is None else model
+    samp_positive = pipe["positive"]
+    samp_negative = pipe["negative"]
+    samp_samples = pipe["samples"]
+
+    samp_seed = pipe['seed']
+
+    samp_sampler = pipe['loader_settings']['sampler']
+
+    sigmas = pipe['loader_settings']['sigmas']
+    cfg = pipe['loader_settings']['cfg']
+    steps = pipe['loader_settings']['steps']
+
+    disable_noise = False
+
+    preview_latent = True
+    if image_output in ("Hide", "Hide&Save"):
+        preview_latent = False
+
+    return _easy_k_sampler_custom_consumption(
+        samp_model, samp_seed, steps, cfg, samp_sampler, sigmas, samp_positive, samp_negative, samp_samples,
+        disable_noise, preview_latent
+    )
+
+
+def _easy_full_cascade_k_sampler_consumption(
+        pipe, encode_vae_name, decode_vae_name, steps, cfg, sampler_name, scheduler, denoise, image_output, link_id,
+        save_prefix, seed, image_to_latent_c=None, latent_c=None, model_c=None, tile_size=None, prompt=None,
+        extra_pnginfo=None, my_unique_id=None, force_full_denoise=False, disable_noise=False,
+        context: execution_context.ExecutionContext = None
+):
+    batch_size = pipe["loader_settings"]["batch_size"] if "batch_size" in pipe["loader_settings"] else 1
+    samp_model = model_c if model_c else pipe["model"][0]
+    samp_positive = pipe["positive"]
+    samp_negative = pipe["negative"]
+    cfg = cfg if cfg is not None else pipe['loader_settings']['cfg']
+    sampler_name = sampler_name if sampler_name is not None else pipe['loader_settings']['sampler_name']
+
+    if image_to_latent_c is not None:
+        width = image_to_latent_c.shape[-2]
+        height = image_to_latent_c.shape[-3]
+        samples_c = {"samples": _DummyLatent(batch_size, width, height)}
+    elif latent_c is not None:
+        samples_c = latent_c
+    else:
+        samples_c = pipe["samples"][0]
+
+    context.set_geninfo(
+        positive_prompt=samp_positive,
+        negative_prompt=samp_negative,
+        steps=steps,
+        sampler=sampler_name,
+        cfg_scale=cfg,
+        seed=seed,
+    )
+    return {'opts': [__sample_opt_from_latent(context, samp_model, samples_c, steps, )]}
+
+
+def _easy_cascade_k_sampler_consumption(
+        pipe, image_output, link_id, save_prefix, model_c=None, tile_size=None, prompt=None, extra_pnginfo=None,
+        my_unique_id=None, force_full_denoise=False, disable_noise=False,
+        context: execution_context.ExecutionContext = None):
+    return _easy_full_cascade_k_sampler_consumption(
+        pipe, None, None, None, None, None, None, None, image_output, link_id, save_prefix,
+        None, None, None, model_c, tile_size, prompt, extra_pnginfo, my_unique_id, force_full_denoise, disable_noise,
+        context
+    )
+
+
+def _easy_un_sampler_consumption(
+        cfg, sampler_name, steps, end_at_step, scheduler, normalize, pipe=None, optional_model=None,
+        optional_positive=None, optional_negative=None,
+        optional_latent=None, context: execution_context.ExecutionContext = None
+):
+    model = optional_model if optional_model is not None else pipe["model"]
+    positive = optional_positive if optional_positive is not None else pipe["positive"]
+    negative = optional_negative if optional_negative is not None else pipe["negative"]
+    latent_image = optional_latent if optional_latent is not None else pipe["samples"]
+    end_at_step = min(end_at_step, steps - 1)
+    end_at_step = steps - end_at_step
+
+    context.set_geninfo(
+        positive_prompt=positive,
+        negative_prompt=negative,
+        steps=end_at_step,
+        sampler=sampler_name,
+        cfg_scale=cfg,
+        seed=0,
+    )
+    return {'opts': [__sample_opt_from_latent(context, model, latent_image, steps, )]}
+
+
+def _easy_image_rem_bg_consumption(
+        rem_mode, images, image_output, save_prefix, torchscript_jit=False, add_background='none',
+        refine_foreground=False, prompt=None, extra_pnginfo=None, context: execution_context.ExecutionContext = None
+):
+    image_width = images.shape[2]
+    image_height = images.shape[1]
+    batch_size = images.shape[0]
+    opts = [{
+        'opt_type': 'easy_image_rem_bg',
+        'width': image_width,
+        'height': image_height,
+        'batch_size': batch_size,
+    }]
+    return {'opts': opts}
+
+
+def _easy_image_detail_transfer_consumption(
+        target, source, mode, blur_sigma, blend_factor, image_output, save_prefix, mask=None, prompt=None,
+        extra_pnginfo=None, context: execution_context.ExecutionContext = None):
+    image_width = target.shape[2]
+    image_height = target.shape[1]
+    batch_size = target.shape[0]
+    opts = [{
+        'opt_type': 'easy_image_detail_transfer',
+        'width': image_width,
+        'height': image_height,
+        'batch_size': batch_size,
+    }]
+    return {'opts': opts}
+
+
+def _easy_image_interrogator_consumption(image, mode, use_lowvram=False):
+    image_width = image.shape[2]
+    image_height = image.shape[1]
+    batch_size = image.shape[0]
+    opts = [{
+        'opt_type': 'easy_image_interrogator',
+        'width': image_width,
+        'height': image_height,
+        'batch_size': batch_size,
+    }]
+    return {'opts': opts}
+
+
+def _easy_human_segmentation_consumption(
+        image, confidence, method, crop_multi, prompt=None, my_unique_id=None,
+        context: execution_context.ExecutionContext = None
+):
+    image_width = image.shape[2]
+    image_height = image.shape[1]
+    batch_size = image.shape[0]
+    opts = [{
+        'opt_type': 'easy_human_segmentation',
+        'width': image_width,
+        'height': image_height,
+        'batch_size': batch_size,
+    }]
+    return {'opts': opts}
 
 
 def _default_consumption_maker(*args, **kwargs):
@@ -1229,7 +1569,6 @@ _NODE_CONSUMPTION_MAPPING = {
     'ReActorBuildFaceModel': _re_actor_build_face_model_consumption,
     'ImageUpscaleWithModel': _image_upscale_with_model_consumption,
     'UltimateSDUpscale': _ultimate_sd_upscale_consumption,
-    'easy hiresFix': _easy_hires_fix_consumption,
     'VHS_VideoCombine': _vhs_video_combine_consumption,
     'FaceDetailer': _face_detailer_consumption,
     'FaceDetailerPipe': _face_detailer_pipe_consumption,
@@ -1238,11 +1577,11 @@ _NODE_CONSUMPTION_MAPPING = {
     'SeargeSDXLImage2ImageSampler2': _searge_sdxl_image2image_sampler2_consumption,
     'BNK_TiledKSamplerAdvanced': _tiled_k_sampler_advanced_consumption,
     'BNK_TiledKSampler': _tiled_k_sampler_consumption,
-    'easy fullkSampler': _easy_full_k_sampler_consumption,
     "CogVideoSampler": _cog_video_sampler_consumption,
     "MochiSampler": _mochi_sampler_consumption,
     "FluxSampler": _flux_sampler_consumption,
     "HyVideoSampler": _hy_video_sampler_consumption,
+    "MaskDetailerPipe": _mask_detailer_pipe_consumption,
 
     'UltimateSDUpscaleNoUpscale': _ultimate_sd_upscale_no_upscale_consumption,
     'CR Upscale Image': _cr_upscale_image_consumption,
@@ -1277,7 +1616,6 @@ _NODE_CONSUMPTION_MAPPING = {
     'ConstrainImage|pysssss': _none_consumption_maker,
     'MiDaS-DepthMapPreprocessor': _none_consumption_maker,
     'VHS_BatchManager': _none_consumption_maker,
-    'easy ultralyticsDetectorPipe': _none_consumption_maker,
     'ColorPreprocessor': _none_consumption_maker,
     'DWPreprocessor': _none_consumption_maker,
     'FreeU_V2': _none_consumption_maker,
@@ -1305,7 +1643,6 @@ _NODE_CONSUMPTION_MAPPING = {
     'ImageScale': _none_consumption_maker,
     'CLIPSetLastLayer': _none_consumption_maker,
     'LoadImage': _none_consumption_maker,
-    'easy promptReplace': _none_consumption_maker,
     'Text Multiline': _none_consumption_maker,
     'VAELoader': _none_consumption_maker,
     'ConditioningSetTimestepRange': _none_consumption_maker,
@@ -1319,10 +1656,8 @@ _NODE_CONSUMPTION_MAPPING = {
     'ConditioningZeroOut': _none_consumption_maker,
     'TripleCLIPLoader': _none_consumption_maker,
     'LatentUpscale': _none_consumption_maker,
-    'easy stylesSelector': _none_consumption_maker,
     'ComfyUIStyler': _none_consumption_maker,
     'CLIPTextEncodeSDXLRefiner': _none_consumption_maker,
-    'easy ipadapterApply': _none_consumption_maker,
     'ArtistStyler': _none_consumption_maker,
     'FantasyStyler': _none_consumption_maker,
     'ADE_AnimateDiffLoaderGen1': _none_consumption_maker,
@@ -1344,7 +1679,6 @@ _NODE_CONSUMPTION_MAPPING = {
     'TimeofdayStyler': _none_consumption_maker,
     'FaceStyler': _none_consumption_maker,
     'Breast_StateStyler': _none_consumption_maker,
-    'easy seed': _none_consumption_maker,
     'EmptySD3LatentImage': _none_consumption_maker,
     'UltralyticsDetectorProvider': _none_consumption_maker,
     'CR Apply LoRA Stack': _none_consumption_maker,
@@ -1355,29 +1689,22 @@ _NODE_CONSUMPTION_MAPPING = {
     'SAMLoader': _none_consumption_maker,
     'ADE_AnimateDiffUniformContextOptions': _none_consumption_maker,
     'ToBasicPipe': _none_consumption_maker,
-    'easy pipeOut': _none_consumption_maker,
-    'easy pipeIn': _none_consumption_maker,
     'CR LoRA Stack': _none_consumption_maker,
     'InstantIDModelLoader': _none_consumption_maker,
     'LatentUpscaleBy': _none_consumption_maker,
     'ToDetailerPipe': _none_consumption_maker,
-    'easy ipadapterStyleComposition': _none_consumption_maker,
     'Canny': _none_consumption_maker,
     'BaseModel_Loader_local': _none_consumption_maker,
     'CR Load LoRA': _none_consumption_maker,
     'SAM Model Loader': _none_consumption_maker,
     'CLIPLoader': _none_consumption_maker,
     'VHS_LoadImages': _none_consumption_maker,
-    'easy fullLoader': _none_consumption_maker,
     'XY Input: Checkpoint': _none_consumption_maker,
     'MaskToImage': _none_consumption_maker,
     'CR Text Concatenate': _none_consumption_maker,
     'CR Text': _none_consumption_maker,
-    'easy loadImageBase64': _none_consumption_maker,
-    'easy clearCacheAll': _none_consumption_maker,
     'ShowText|pysssss': _none_consumption_maker,
     'ADE_AnimateDiffLoRALoader': _none_consumption_maker,
-    'easy showTensorShape': _none_consumption_maker,
     'ConditioningConcat': _none_consumption_maker,
     'ConditioningAverage': _none_consumption_maker,
     'KSamplerSelect': _none_consumption_maker,
@@ -1396,9 +1723,7 @@ _NODE_CONSUMPTION_MAPPING = {
     'Eff. Loader SDXL': _none_consumption_maker,
     'Unpack SDXL Tuple': _none_consumption_maker,
     'Automatic CFG': _none_consumption_maker,
-    'easy textSwitch': _none_consumption_maker,
     'ApplyInstantIDAdvanced': _none_consumption_maker,
-    'easy a1111Loader': _none_consumption_maker,
     'Text to Conditioning': _none_consumption_maker,
     'SeargeSamplerInputs': _none_consumption_maker,
     'LineArtPreprocessor': _none_consumption_maker,
@@ -1437,7 +1762,6 @@ _NODE_CONSUMPTION_MAPPING = {
     'TTPlanet_TileSimple_Preprocessor': _none_consumption_maker,
     'IPAdapterNoise': _none_consumption_maker,
     'SetLatentNoiseMask': _none_consumption_maker,
-    'easy loraStack': _none_consumption_maker,
     'ScaledSoftControlNetWeights': _none_consumption_maker,
     'ScaledSoftMaskedUniversalWeights': _none_consumption_maker,
     'SoftControlNetWeights': _none_consumption_maker,
@@ -1448,17 +1772,7 @@ _NODE_CONSUMPTION_MAPPING = {
     'ACN_ReferencePreprocessor': _none_consumption_maker,
     'ACN_ReferenceControlNet': _none_consumption_maker,
     'ACN_ReferenceControlNetFnetune': _none_consumption_maker,
-    'easy controlnetStack': _none_consumption_maker,
     'Control Net Stacker': _none_consumption_maker,
-    'easy globalSeed': _none_consumption_maker,
-    "easy positive": _none_consumption_maker,
-    "easy negative": _none_consumption_maker,
-    "easy wildcards": _none_consumption_maker,
-    "easy prompt": _none_consumption_maker,
-    "easy promptList": _none_consumption_maker,
-    "easy promptLine": _none_consumption_maker,
-    "easy promptConcat": _none_consumption_maker,
-    "easy portraitMaster": _none_consumption_maker,
     'AIO_Preprocessor': _none_consumption_maker,
     'ImageResizeKJ': _none_consumption_maker,
     'ImagePadForOutpaint': _none_consumption_maker,
@@ -1467,7 +1781,6 @@ _NODE_CONSUMPTION_MAPPING = {
     'Zoe_DepthAnythingPreprocessor': _none_consumption_maker,
     'IPAdapterInsightFaceLoader': _none_consumption_maker,
     'ReActorMaskHelper': _none_consumption_maker,
-    'easy imageColorMatch': _none_consumption_maker,
     'Checkpoint Selector': _none_consumption_maker,
     'Save Image w/Metadata': _none_consumption_maker,
     'Sampler Selector': _none_consumption_maker,
@@ -1507,7 +1820,6 @@ _NODE_CONSUMPTION_MAPPING = {
     'SeargeFloatConstant': _none_consumption_maker,
     "SeargeFloatPair": _none_consumption_maker,
     "SeargeFloatMath": _none_consumption_maker,
-    'easy showAnything': _none_consumption_maker,
     'CLIPVisionEncode': _none_consumption_maker,
     'unCLIPConditioning': _none_consumption_maker,
     'SeargeDebugPrinter': _none_consumption_maker,
@@ -1576,8 +1888,6 @@ _NODE_CONSUMPTION_MAPPING = {
     'ImageColorMatch+': _none_consumption_maker,
     'PreviewDetailerHookProvider': _none_consumption_maker,
     'Image Analyze': _none_consumption_maker,
-    'easy comfyLoader': _none_consumption_maker,
-    'easy controlnetLoaderADV': _none_consumption_maker,
     'LoRALoader': _none_consumption_maker,
     'LoadCLIPSegModels+': _none_consumption_maker,
     'ApplyCLIPSeg+': _none_consumption_maker,
@@ -1591,7 +1901,6 @@ _NODE_CONSUMPTION_MAPPING = {
     'LayerUtility: PurgeVRAM': _none_consumption_maker,
     'LoRA Stacker': _none_consumption_maker,
     'Text Parse A1111 Embeddings': _none_consumption_maker,
-    'easy showSpentTime': _none_consumption_maker,
     'Latent Upscale by Factor (WAS)': _none_consumption_maker,
     'ImpactControlBridge': _none_consumption_maker,
     'LoRA Stack to String converter': _none_consumption_maker,
@@ -1628,8 +1937,6 @@ _NODE_CONSUMPTION_MAPPING = {
     'CR Seed': _none_consumption_maker,
     'LayerFilter: SoftLight': _none_consumption_maker,
     'LayerColor: Color of Shadow & Highlight': _none_consumption_maker,
-    'easy imageSize': _none_consumption_maker,
-    'easy imageScaleDownBy': _none_consumption_maker,
     'CFGGuider': _none_consumption_maker,
     'SolidMask': _none_consumption_maker,
     'MaskComposite': _none_consumption_maker,
@@ -1815,8 +2122,7 @@ _NODE_CONSUMPTION_MAPPING = {
     "JoinImageWithAlpha": _none_consumption_maker,
     "SplitImageWithAlpha": _none_consumption_maker,
     "DownloadAndLoadCogVideoModel": _none_consumption_maker,
-    "easy loraStackApply": _none_consumption_maker,
-    "DifferentialDiffusion": _none_consumption_maker,
+     "DifferentialDiffusion": _none_consumption_maker,
     "InpaintModelConditioning": _none_consumption_maker,
     "ImpactGaussianBlurMask": _none_consumption_maker,
     "MaskPreview+": _none_consumption_maker,
@@ -1824,7 +2130,6 @@ _NODE_CONSUMPTION_MAPPING = {
     "ReActorFaceBoost": _none_consumption_maker,
     "PrepImageForClipVision": _none_consumption_maker,
     "ModelMergeSDXL": _none_consumption_maker,
-    "easy int": _none_consumption_maker,
     "Display Int (rgthree)": _none_consumption_maker,
     "Text Random Line": _none_consumption_maker,
     "ImpactFloat": _none_consumption_maker,
@@ -1854,7 +2159,6 @@ _NODE_CONSUMPTION_MAPPING = {
     "Text String": _none_consumption_maker,
     "ReActorOptions": _none_consumption_maker,
     "ModelMergeAdd": _none_consumption_maker,
-    "easy controlnetNames": _none_consumption_maker,
     "LayerColor: Color of Shadow & Highligh": _none_consumption_maker,
     "CreateHookLora": _none_consumption_maker,
     "CreateHookLoraModelOnly": _none_consumption_maker,
@@ -1940,7 +2244,6 @@ _NODE_CONSUMPTION_MAPPING = {
     "HyVideoLoraBlockEdit": _none_consumption_maker,
     "HyVideoTextEmbedsLoad": _none_consumption_maker,
     "HyVideoContextOptions": _none_consumption_maker,
-    "HyVideoEnhanceAVideo": _none_consumption_maker,
     "HyVideoTeaCache": _none_consumption_maker,
 
     "Latent Noise Injection": _none_consumption_maker,
@@ -1952,6 +2255,211 @@ _NODE_CONSUMPTION_MAPPING = {
     "ImageAndMaskPreview": _none_consumption_maker,
     "Noise Control Script": _none_consumption_maker,
     "CR Multi Upscale Stack": _none_consumption_maker,
+
+    "easy loraStackApply": _none_consumption_maker,
+    "easy controlnetStackApply": _none_consumption_maker,
+    "easy ipadapterApply": _none_consumption_maker,
+    "easy ipadapterApplyADV": _none_consumption_maker,
+    "easy ipadapterApplyFaceIDKolors": _none_consumption_maker,
+    "easy ipadapterApplyEncoder": _none_consumption_maker,
+    "easy ipadapterApplyEmbeds": _none_consumption_maker,
+    "easy ipadapterApplyRegional": _none_consumption_maker,
+    "easy ipadapterApplyFromParams": _none_consumption_maker,
+    "easy ipadapterStyleComposition": _none_consumption_maker,
+    "easy instantIDApply": _none_consumption_maker,
+    "easy instantIDApplyADV": _none_consumption_maker,
+    "easy pulIDApply": _none_consumption_maker,
+    "easy pulIDApplyADV": _none_consumption_maker,
+    "easy styleAlignedBatchAlign": _none_consumption_maker,
+    "easy icLightApply": _none_consumption_maker,
+
+    "easy if": _none_consumption_maker,
+    "easy poseEditor": _none_consumption_maker,
+    "easy imageToMask": _none_consumption_maker,
+    "easy showSpentTime": _none_consumption_maker,
+    "easy latentNoisy": _none_consumption_maker,
+    "easy latentCompositeMaskedWithCond": _none_consumption_maker,
+    "easy injectNoiseToLatent": _none_consumption_maker,
+    "easy stableDiffusion3API": _none_consumption_maker,
+    "easy saveImageLazy": _none_consumption_maker,
+    "easy saveTextLazy": _none_consumption_maker,
+    "easy showAnythingLazy": _none_consumption_maker,
+
+    "easy hiresFix": _easy_hires_fix_consumption,
+    "easy preDetailerFix": _none_consumption_maker,
+    "easy preMaskDetailerFix": _none_consumption_maker,
+    # "easy ultralyticsDetectorPipe": _none_consumption_maker,
+    "easy samLoaderPipe": _none_consumption_maker,
+    "easy detailerFix": _easy_detailer_fix_consumption,
+    "easy imageInsetCrop": _none_consumption_maker,
+    "easy imageCount": _none_consumption_maker,
+    "easy imagesCountInDirectory": _none_consumption_maker,
+    "easy imageSize": _none_consumption_maker,
+    "easy imageSizeBySide": _none_consumption_maker,
+    "easy imageSizeByLongerSide": _none_consumption_maker,
+    "easy imagePixelPerfect": _none_consumption_maker,
+    "easy imageScaleDown": _none_consumption_maker,
+    "easy imageScaleDownBy": _none_consumption_maker,
+    "easy imageScaleDownToSize": _none_consumption_maker,
+    "easy imageScaleToNormPixels": _none_consumption_maker,
+    "easy imageRatio": _none_consumption_maker,
+    "easy imageConcat": _none_consumption_maker,
+    "easy imageListToImageBatch": _none_consumption_maker,
+    "easy imageBatchToImageList": _none_consumption_maker,
+    "easy imageSplitList": _none_consumption_maker,
+    "easy imageSplitGrid": _none_consumption_maker,
+    "easy imagesSplitImage": _none_consumption_maker,
+    "easy imageSplitTiles": _none_consumption_maker,
+    "easy imageTilesFromBatch": _none_consumption_maker,
+    "easy imageCropFromMask": _none_consumption_maker,
+    "easy imageUncropFromBBOX": _none_consumption_maker,
+    "easy imageSave": _none_consumption_maker,
+    "easy imageRemBg": _easy_image_rem_bg_consumption,
+    "easy imageChooser": _none_consumption_maker,
+    "easy imageColorMatch": _none_consumption_maker,
+    "easy imageDetailTransfer": _easy_image_detail_transfer_consumption,
+    "easy imageInterrogator": _easy_image_interrogator_consumption,
+    "easy loadImagesForLoop": _none_consumption_maker,
+    "easy loadImageBase64": _none_consumption_maker,
+    "easy imageToBase64": _none_consumption_maker,
+    "easy joinImageBatch": _none_consumption_maker,
+    "easy humanSegmentation": _easy_human_segmentation_consumption,
+    "easy removeLocalImage": _none_consumption_maker,
+    "easy makeImageForICLora": _none_consumption_maker,
+
+    "easy applyFooocusInpaint": _none_consumption_maker,
+    "easy applyBrushNet": _none_consumption_maker,
+    "easy applyPowerPaint": _none_consumption_maker,
+    "easy applyInpaint": _none_consumption_maker,
+
+    "easy fullLoader": _none_consumption_maker,
+    "easy a1111Loader": _none_consumption_maker,
+    "easy comfyLoader": _none_consumption_maker,
+    "easy svdLoader": _none_consumption_maker,
+    "easy sv3dLoader": _none_consumption_maker,
+    "easy zero123Loader": _none_consumption_maker,
+    "easy cascadeLoader": _none_consumption_maker,
+    "easy kolorsLoader": _none_consumption_maker,
+    "easy fluxLoader": _none_consumption_maker,
+    "easy hunyuanDiTLoader": _none_consumption_maker,
+    "easy pixArtLoader": _none_consumption_maker,
+    "easy mochiLoader": _none_consumption_maker,
+    "easy loraStack": _none_consumption_maker,
+    "easy controlnetStack": _none_consumption_maker,
+    "easy controlnetLoader": _none_consumption_maker,
+    "easy controlnetLoaderADV": _none_consumption_maker,
+    "easy controlnetLoader++": _none_consumption_maker,
+    "easy LLLiteLoader": _none_consumption_maker,
+
+    "easy string": _none_consumption_maker,
+    "easy int": _none_consumption_maker,
+    "easy rangeInt": _none_consumption_maker,
+    "easy float": _none_consumption_maker,
+    "easy rangeFloat": _none_consumption_maker,
+    "easy boolean": _none_consumption_maker,
+    "easy mathString": _none_consumption_maker,
+    "easy mathInt": _none_consumption_maker,
+    "easy mathFloat": _none_consumption_maker,
+    "easy compare": _none_consumption_maker,
+    "easy imageSwitch": _none_consumption_maker,
+    "easy textSwitch": _none_consumption_maker,
+    "easy imageIndexSwitch": _none_consumption_maker,
+    "easy textIndexSwitch": _none_consumption_maker,
+    "easy conditioningIndexSwitch": _none_consumption_maker,
+    "easy anythingIndexSwitch": _none_consumption_maker,
+    "easy ab": _none_consumption_maker,
+    "easy anythingInversedSwitch": _none_consumption_maker,
+    "easy whileLoopStart": _none_consumption_maker,
+    "easy whileLoopEnd": _none_consumption_maker,
+    "easy forLoopStart": _none_consumption_maker,
+    "easy forLoopEnd": _none_consumption_maker,
+    "easy blocker": _none_consumption_maker,
+    "easy ifElse": _none_consumption_maker,
+    "easy isMaskEmpty": _none_consumption_maker,
+    "easy isNone": _none_consumption_maker,
+    "easy isSDXL": _none_consumption_maker,
+    "easy isFileExist": _none_consumption_maker,
+    "easy outputToList": _none_consumption_maker,
+    "easy pixels": _none_consumption_maker,
+    "easy xyAny": _none_consumption_maker,
+    "easy lengthAnything": _none_consumption_maker,
+    "easy indexAnything": _none_consumption_maker,
+    "easy batchAnything": _none_consumption_maker,
+    "easy convertAnything": _none_consumption_maker,
+    "easy showAnything": _none_consumption_maker,
+    "easy showTensorShape": _none_consumption_maker,
+    "easy clearCacheKey": _none_consumption_maker,
+    "easy clearCacheAll": _none_consumption_maker,
+    "easy cleanGpuUsed": _none_consumption_maker,
+    "easy saveText": _none_consumption_maker,
+    "easy sleep": _none_consumption_maker,
+
+    "easy pipeIn": _none_consumption_maker,
+    "easy pipeOut": _none_consumption_maker,
+    "easy pipeEdit": _none_consumption_maker,
+    "easy pipeEditPrompt": _none_consumption_maker,
+    "easy pipeToBasicPipe": _none_consumption_maker,
+    "easy pipeBatchIndex": _none_consumption_maker,
+    "easy XYPlot": _none_consumption_maker,
+    "easy XYPlotAdvanced": _none_consumption_maker,
+
+    "easy preSampling": _none_consumption_maker,
+    "easy preSamplingAdvanced": _none_consumption_maker,
+    "easy preSamplingNoiseIn": _none_consumption_maker,
+    "easy preSamplingCustom": _none_consumption_maker,
+    "easy preSamplingSdTurbo": _none_consumption_maker,
+    "easy preSamplingDynamicCFG": _none_consumption_maker,
+    "easy preSamplingCascade": _none_consumption_maker,
+    "easy preSamplingLayerDiffusion": _none_consumption_maker,
+    "easy preSamplingLayerDiffusionADDTL": _none_consumption_maker,
+    "dynamicThresholdingFull": _none_consumption_maker,
+
+    "easy positive": _none_consumption_maker,
+    "easy negative": _none_consumption_maker,
+    "easy wildcards": _none_consumption_maker,
+    "easy prompt": _none_consumption_maker,
+    "easy promptList": _none_consumption_maker,
+    "easy promptLine": _none_consumption_maker,
+    "easy promptConcat": _none_consumption_maker,
+    "easy promptReplace": _none_consumption_maker,
+    "easy stylesSelector": _none_consumption_maker,
+    "easy portraitMaster": _none_consumption_maker,
+
+    "easy fullkSampler": _easy_full_k_sampler_consumption,
+    "easy kSampler": _easy_k_sampler_consumption,
+    "easy kSamplerCustom": _easy_k_sampler_custom_consumption,
+    "easy kSamplerTiled": _easy_k_sampler_tiled_consumption,
+    "easy kSamplerLayerDiffusion": _easy_k_sampler_layer_diffusion_consumption,
+    "easy kSamplerInpainting": _easy_k_sampler_inpainting_consumption,
+    "easy kSamplerDownscaleUnet": _easy_k_sampler_down_scale_unet_consumption,
+    "easy kSamplerSDTurbo": _easy_k_sampler_sd_turbo_consumption,
+    "easy fullCascadeKSampler": _easy_full_cascade_k_sampler_consumption,
+    "easy cascadeKSampler": _easy_cascade_k_sampler_consumption,
+    "easy unSampler": _easy_un_sampler_consumption,
+
+    "easy seed": _none_consumption_maker,
+    "easy globalSeed": _none_consumption_maker,
+
+    "easy showLoaderSettingsNames": _none_consumption_maker,
+    "easy sliderControl": _none_consumption_maker,
+    "easy ckptNames": _none_consumption_maker,
+    "easy controlnetNames": _none_consumption_maker,
+
+    "easy XYInputs: Seeds++ Batch": _none_consumption_maker,
+    "easy XYInputs: Steps": _none_consumption_maker,
+    "easy XYInputs: CFG Scale": _none_consumption_maker,
+    "easy XYInputs: FluxGuidance": _none_consumption_maker,
+    "easy XYInputs: Sampler/Scheduler": _none_consumption_maker,
+    "easy XYInputs: Denoise": _none_consumption_maker,
+    "easy XYInputs: Checkpoint": _none_consumption_maker,
+    "easy XYInputs: Lora": _none_consumption_maker,
+    "easy XYInputs: ModelMergeBlocks": _none_consumption_maker,
+    "easy XYInputs: PromptSR": _none_consumption_maker,
+    "easy XYInputs: ControlNet": _none_consumption_maker,
+    "easy XYInputs: PositiveCond": _none_consumption_maker,
+    "easy XYInputs: PositiveCondList": _none_consumption_maker,
+    "easy XYInputs: NegativeCond": _none_consumption_maker,
+    "easy XYInputs: NegativeCondList": _none_consumption_maker,
 }
 
 
