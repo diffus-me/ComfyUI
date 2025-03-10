@@ -862,7 +862,7 @@ def validate_prompt(context: execution_context.ExecutionContext, prompt):
                     node_errors[node_id]["dependent_outputs"].append(o)
             logging.error("Output will be ignored")
 
-    if len(good_outputs) == 0:
+    if errors:
         errors_list = []
         for o, errors in errors:
             for error in errors:

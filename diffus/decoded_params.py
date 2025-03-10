@@ -1285,7 +1285,7 @@ def _easy_k_sampler_consumption(
     return _easy_full_k_sampler_consumption(
         pipe, None, None, None, None, None, image_output, link_id, save_prefix,
         None, model, None, None, None, None, None, None,
-        None, prompt, extra_pnginfo, my_unique_id, force_full_denoise, disable_noise, context
+        None, prompt, extra_pnginfo, my_unique_id, force_full_denoise, disable_noise, context=context
     )
 
 
@@ -1298,7 +1298,7 @@ def _easy_k_sampler_custom_consumption(
         pipe, None, None, None, None, None, image_output, link_id, save_prefix,
         None, model, None, None, None, None, None, None,
         None, prompt, extra_pnginfo, my_unique_id, force_full_denoise, disable_noise,
-        context
+        context=context
     )
 
 
@@ -1310,7 +1310,8 @@ def _easy_k_sampler_tiled_consumption(
     return _easy_full_k_sampler_consumption(
         pipe, None, None, None, None, None, image_output, link_id, save_prefix,
         None, model, None, None, None, None, None, None,
-        tile_size, prompt, extra_pnginfo, my_unique_id, force_full_denoise, disable_noise, context
+        tile_size, prompt, extra_pnginfo, my_unique_id, force_full_denoise, disable_noise,
+        context=context
     )
 
 
@@ -1323,7 +1324,7 @@ def _easy_k_sampler_layer_diffusion_consumption(
         pipe, None, None, None, None, None, image_output, link_id, save_prefix,
         None, model, None, None, None, None, None, None,
         None, prompt, extra_pnginfo, my_unique_id, force_full_denoise,
-        disable_noise, context)
+        disable_noise, context=context)
 
 
 class _DummyLatent:
