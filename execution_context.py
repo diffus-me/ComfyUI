@@ -124,13 +124,18 @@ class ExecutionContext:
 
     def set_geninfo(
             self,
-            positive_prompt={},
-            negative_prompt={},
+            positive_prompt=None,
+            negative_prompt=None,
             steps=0,
             sampler='',
             cfg_scale=0,
             seed=0,
     ):
+        if positive_prompt is None:
+            positive_prompt = {}
+        if negative_prompt is None:
+            negative_prompt = {}
+
         self._geninfo.positive_prompt = self._concat_prompt(
             self._geninfo.positive_prompt,
             self._get_origin_text_from_tokens(positive_prompt)
