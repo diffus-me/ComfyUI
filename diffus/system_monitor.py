@@ -137,7 +137,8 @@ def _before_task_started(
 
     content = resp.json()
     # log the response if request failed
-    logger.error(f'create monitor log failed, status: {resp.status_code}, content: {content}')
+    logger.error(f'create monitor log failed, status: {resp.status_code}, content: {content}, request_data:')
+    logger.error(json.dumps(request_data, indent=2, ensure_ascii=False, sort_keys=True))
     raise MonitorException(resp.status_code, content["code"], content["message"])
 
 

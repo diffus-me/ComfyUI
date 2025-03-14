@@ -288,18 +288,35 @@ def _easy_full_k_sampler_consumption(
         image=None,
         context: execution_context.ExecutionContext = None
 ):
+    samp_model = model if model is not None else pipe["model"]
+    samp_positive = positive if positive is not None else pipe["positive"]
+    samp_negative = negative if negative is not None else pipe["negative"]
     samp_samples = latent if latent is not None else pipe["samples"]
     samp_vae = vae if vae is not None else pipe["vae"]
+
+    samp_seed = seed if seed is not None else pipe['seed']
+
+
+    steps = steps if steps is not None else pipe['loader_settings']['steps']
+    start_step = pipe['loader_settings']['start_step'] if 'start_step' in pipe['loader_settings'] else 0
+    last_step = pipe['loader_settings']['last_step'] if 'last_step' in pipe['loader_settings'] else 10000
+    cfg = cfg if cfg is not None else pipe['loader_settings']['cfg']
+    sampler_name = sampler_name if sampler_name is not None else pipe['loader_settings']['sampler_name']
+
+
     if image is not None and latent is None:
         samp_samples = {"samples": samp_vae.encode(image[:, :, :, :3])}
-    samp_model = model if model is not None else pipe["model"]
+
+    steps = min(steps, last_step) - start_step
+    if steps < 0:
+        steps = steps if steps is not None else pipe['loader_settings']['steps']
     context.set_geninfo(
-        positive_prompt=positive,
-        negative_prompt=negative,
+        positive_prompt=samp_positive,
+        negative_prompt=samp_negative,
         steps=steps,
         sampler=sampler_name,
         cfg_scale=cfg,
-        seed=seed,
+        seed=samp_seed,
     )
     return {'opts': [__sample_opt_from_latent(context, samp_model, samp_samples, steps, )]}
 
@@ -724,12 +741,12 @@ def _easy_hires_fix_consumption(
         image = image if image is not None else pipe["images"]
     if image is not None:
         return {
-            'opts': {
+            'opts': [{
                 'opt_type': 'hires_fix',
                 'width': image.shape[2] * model_scale,
                 'height': image.shape[1] * model_scale,
                 'batch_size': image.shape[0],
-            }
+            }]
         }
     else:
         return {
@@ -1204,7 +1221,6 @@ def was_remove_background_consumption(images, mode='background', threshold=127, 
         'batch_size': batch_size,
     }]
     return {'opts': opts}
-
 
 
 def _easy_detailer_fix_consumption(pipe, image_output, link_id, save_prefix, model=None, prompt=None,
@@ -2123,7 +2139,7 @@ _NODE_CONSUMPTION_MAPPING = {
     "JoinImageWithAlpha": _none_consumption_maker,
     "SplitImageWithAlpha": _none_consumption_maker,
     "DownloadAndLoadCogVideoModel": _none_consumption_maker,
-     "DifferentialDiffusion": _none_consumption_maker,
+    "DifferentialDiffusion": _none_consumption_maker,
     "InpaintModelConditioning": _none_consumption_maker,
     "ImpactGaussianBlurMask": _none_consumption_maker,
     "MaskPreview+": _none_consumption_maker,
@@ -2466,9 +2482,21 @@ _NODE_CONSUMPTION_MAPPING = {
 
 def get_monitor_params(obj, obj_type, input_data_all):
     func = _NODE_CONSUMPTION_MAPPING.get(obj_type, _default_consumption_maker)
+    if func == _none_consumption_maker:
+        return None
     consumption = _map_node_consumption_over_list(obj, input_data_all, func)
-    if consumption and 'opts' in consumption:
-        for opt in consumption['opts']:
+    if isinstance(consumption, list):
+        fixed_consumption = {
+            "opts": []
+        }
+        for cons in consumption:
+            if cons:
+                fixed_consumption["opts"] += cons.get("opts", [])
+    else:
+        fixed_consumption = consumption
+
+    if fixed_consumption and 'opts' in fixed_consumption:
+        for opt in fixed_consumption['opts']:
             opt["ratio"] = opt.get("ratio", 1) * 1.8
 
-    return consumption
+    return fixed_consumption
