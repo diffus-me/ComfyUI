@@ -296,13 +296,11 @@ def _easy_full_k_sampler_consumption(
 
     samp_seed = seed if seed is not None else pipe['seed']
 
-
     steps = steps if steps is not None else pipe['loader_settings']['steps']
     start_step = pipe['loader_settings']['start_step'] if 'start_step' in pipe['loader_settings'] else 0
     last_step = pipe['loader_settings']['last_step'] if 'last_step' in pipe['loader_settings'] else 10000
     cfg = cfg if cfg is not None else pipe['loader_settings']['cfg']
     sampler_name = sampler_name if sampler_name is not None else pipe['loader_settings']['sampler_name']
-
 
     if image is not None and latent is None:
         samp_samples = {"samples": samp_vae.encode(image[:, :, :, :3])}
@@ -336,7 +334,9 @@ def _flux_sampler_consumption(model, conditioning, latent_image, sampler_name, s
 def _hy_video_sampler_consumption(model, hyvid_embeds, flow_shift, steps, embedded_guidance_scale, seed, width, height,
                                   num_frames,
                                   samples=None, denoise_strength=1.0, force_offload=True, stg_args=None,
-                                  context_options=None, feta_args=None, teacache_args=None, scheduler=None,
+                                  context_options=None, feta_args=None,
+                                  teacache_args=None, scheduler=None, image_cond_latents=None, riflex_freq_index=0,
+                                  i2v_mode="stability", loop_args=None,
                                   context: execution_context.ExecutionContext = None):
     return {'opts': [{
         'opt_type': 'hy_video_sampler',
