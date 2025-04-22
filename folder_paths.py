@@ -342,6 +342,10 @@ def get_full_path_or_raise(context: execution_context.ExecutionContext, folder_n
 def get_filename_list_(folder_name: str) -> tuple[list[str], dict[str, float], float]:
     folder_name = map_legacy(folder_name)
     global folder_names_and_paths
+
+    if folder_name not in folder_names_and_paths:
+        return [], {}, time.perf_counter()
+
     output_list = set()
     folders = folder_names_and_paths[folder_name]
     output_folders = {}
