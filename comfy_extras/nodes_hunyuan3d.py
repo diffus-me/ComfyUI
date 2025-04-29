@@ -3,10 +3,13 @@ import os
 import json
 import struct
 import numpy as np
+
+import execution_context
 from comfy.ldm.modules.diffusionmodules.mmdit import get_1d_sincos_pos_embed_from_grid_torch
 import folder_paths
 import comfy.model_management
 from comfy.cli_args import args
+import comfy.utils
 
 
 class EmptyLatentHunyuan3Dv2:
@@ -590,7 +593,7 @@ class SaveGLB:
     def INPUT_TYPES(s):
         return {"required": {"mesh": ("MESH", ),
                              "filename_prefix": ("STRING", {"default": "mesh/ComfyUI"}), },
-                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"}, }
+                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO", "context": "EXECUTION_CONTEXT"}, }
 
     RETURN_TYPES = ()
     FUNCTION = "save"
@@ -599,8 +602,8 @@ class SaveGLB:
 
     CATEGORY = "3d"
 
-    def save(self, mesh, filename_prefix, prompt=None, extra_pnginfo=None):
-        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, folder_paths.get_output_directory())
+    def save(self, mesh, filename_prefix, prompt=None, extra_pnginfo=None, context: execution_context.ExecutionContext=None):
+        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, folder_paths.get_output_directory(context.user_hash))
         results = []
 
         metadata = {}

@@ -1,5 +1,7 @@
 import torch
 import torch.nn as nn
+
+import execution_context
 import folder_paths
 import comfy.clip_model
 import comfy.clip_vision
@@ -118,16 +120,17 @@ class PhotoMakerIDEncoder(comfy.clip_model.CLIPVisionModelProjection):
 
 class PhotoMakerLoader:
     @classmethod
-    def INPUT_TYPES(s):
-        return {"required": { "photomaker_model_name": (folder_paths.get_filename_list("photomaker"), )}}
+    def INPUT_TYPES(s, context: execution_context.ExecutionContext):
+        return {"required": { "photomaker_model_name": (folder_paths.get_filename_list(context, "photomaker"), )},
+                "hidden": {"context": "EXECUTION_CONTEXT"}}
 
     RETURN_TYPES = ("PHOTOMAKER",)
     FUNCTION = "load_photomaker_model"
 
     CATEGORY = "_for_testing/photomaker"
 
-    def load_photomaker_model(self, photomaker_model_name):
-        photomaker_model_path = folder_paths.get_full_path_or_raise("photomaker", photomaker_model_name)
+    def load_photomaker_model(self, photomaker_model_name, context: execution_context.ExecutionContext):
+        photomaker_model_path = folder_paths.get_full_path_or_raise(context, "photomaker", photomaker_model_name)
         photomaker_model = PhotoMakerIDEncoder()
         data = comfy.utils.load_torch_file(photomaker_model_path, safe_load=True)
         if "id_encoder" in data:
@@ -178,7 +181,7 @@ class PhotoMakerEncode:
         else:
             out = cond
 
-        return ([[out, {"pooled_output": pooled}]], )
+        return ([[out, {"pooled_output": pooled, "_origin_text_": text}]], )
 
 
 NODE_CLASS_MAPPINGS = {

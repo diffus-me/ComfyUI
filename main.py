@@ -12,6 +12,10 @@ import utils.extra_config
 import logging
 import sys
 
+import diffus.message
+import diffus.task_queue
+import diffus.system_monitor
+
 if __name__ == "__main__":
     #NOTE: These do not do anything on core ComfyUI, they are for custom nodes.
     os.environ['HF_HUB_DISABLE_TELEMETRY'] = '1'
@@ -30,28 +34,27 @@ def apply_custom_paths():
             utils.extra_config.load_extra_path_config(config_path)
 
     # --output-directory, --input-directory, --user-directory
-    if args.output_directory:
-        output_dir = os.path.abspath(args.output_directory)
-        logging.info(f"Setting output directory to: {output_dir}")
-        folder_paths.set_output_directory(output_dir)
+    # if args.output_directory:
+    #     output_dir = os.path.abspath(args.output_directory)
+    #     logging.info(f"Setting output directory to: {output_dir}")
+    #     folder_paths.set_output_directory(output_dir)
 
     # These are the default folders that checkpoints, clip and vae models will be saved to when using CheckpointSave, etc.. nodes
-    folder_paths.add_model_folder_path("checkpoints", os.path.join(folder_paths.get_output_directory(), "checkpoints"))
-    folder_paths.add_model_folder_path("clip", os.path.join(folder_paths.get_output_directory(), "clip"))
-    folder_paths.add_model_folder_path("vae", os.path.join(folder_paths.get_output_directory(), "vae"))
-    folder_paths.add_model_folder_path("diffusion_models",
-                                       os.path.join(folder_paths.get_output_directory(), "diffusion_models"))
-    folder_paths.add_model_folder_path("loras", os.path.join(folder_paths.get_output_directory(), "loras"))
+    # folder_paths.add_model_folder_path("checkpoints", os.path.join(folder_paths.get_output_directory(), "checkpoints"))
+    # folder_paths.add_model_folder_path("clip", os.path.join(folder_paths.get_output_directory(), "clip"))
+    # folder_paths.add_model_folder_path("vae", os.path.join(folder_paths.get_output_directory(), "vae"))
+    # folder_paths.add_model_folder_path("diffusion_models", os.path.join(folder_paths.get_output_directory(), "diffusion_models"))
+    # folder_paths.add_model_folder_path("loras", os.path.join(folder_paths.get_output_directory(), "loras"))
 
-    if args.input_directory:
-        input_dir = os.path.abspath(args.input_directory)
-        logging.info(f"Setting input directory to: {input_dir}")
-        folder_paths.set_input_directory(input_dir)
+    # if args.input_directory:
+    #     input_dir = os.path.abspath(args.input_directory)
+    #     logging.info(f"Setting input directory to: {input_dir}")
+    #     folder_paths.set_input_directory(input_dir)
 
-    if args.user_directory:
-        user_dir = os.path.abspath(args.user_directory)
-        logging.info(f"Setting user directory to: {user_dir}")
-        folder_paths.set_user_directory(user_dir)
+    # if args.user_directory:
+    #     user_dir = os.path.abspath(args.user_directory)
+    #     logging.info(f"Setting user directory to: {user_dir}")
+    #     folder_paths.set_user_directory(user_dir)
 
 
 def execute_prestartup_script():
@@ -150,7 +153,7 @@ def cuda_malloc_warning():
             logging.warning("\nWARNING: this card most likely does not support cuda-malloc, if you get \"CUDA error\" please run ComfyUI with: --disable-cuda-malloc\n")
 
 
-def prompt_worker(q, server_instance):
+def prompt_worker(q, server_instance, task_dispatcher):
     current_time: float = 0.0
     cache_type = execution.CacheType.CLASSIC
     if args.cache_lru > 0:
@@ -163,6 +166,8 @@ def prompt_worker(q, server_instance):
     need_gc = False
     gc_collect_interval = 10.0
 
+    task_dispatcher.start()
+
     while True:
         timeout = 1000.0
         if need_gc:
@@ -174,8 +179,30 @@ def prompt_worker(q, server_instance):
             execution_start_time = time.perf_counter()
             prompt_id = item[1]
             server_instance.last_prompt_id = prompt_id
+            context = item[-1]
+            extra_data = item[3]
 
-            e.execute(item[2], prompt_id, item[3], item[4])
+            begin = time.time()
+            monitor_error = None
+            try:
+                with diffus.system_monitor.monitor_call_context(
+                        task_dispatcher,
+                        extra_data,
+                        'comfy',
+                        'comfyui',
+                        prompt_id,
+                        is_intermediate=False,
+                        only_available_for=['basic', 'plus', 'pro', 'api'],
+                ) as result_encoder:
+                    e.execute(context, item[2], prompt_id, extra_data, item[4])
+                    result_encoder(e.success, e.status_messages)
+            except diffus.system_monitor.MonitorException as ex:
+                monitor_error = ex
+            except diffus.system_monitor.MonitorTierMismatchedException as ex:
+                monitor_error = ex
+            except Exception as ex:
+                logging.exception(ex)
+            end = time.time()
             need_gc = True
             q.task_done(item_id,
                         e.history_result,
@@ -185,6 +212,10 @@ def prompt_worker(q, server_instance):
                             messages=e.status_messages))
             if server_instance.client_id is not None:
                 server_instance.send_sync("executing", {"node": None, "prompt_id": prompt_id}, server_instance.client_id)
+                if monitor_error is not None:
+                    server_instance.send_sync("monitor_error",  { "node": None, 'prompt_id': prompt_id, 'used_time': end - begin, 'message': diffus.system_monitor.make_monitor_error_message(monitor_error) }, server_instance.client_id)
+                else:
+                    server_instance.send_sync("finished",  { "node": None, 'prompt_id': prompt_id, 'used_time': end - begin, 'subscription_consumption': extra_data.get('subscription_consumption', 0) }, server_instance.client_id)
 
             current_time = time.perf_counter()
             execution_time = current_time - execution_start_time
@@ -240,10 +271,10 @@ def hijack_progress(server_instance):
     comfy.utils.set_progress_bar_global_hook(hook)
 
 
-def cleanup_temp():
-    temp_dir = folder_paths.get_temp_directory()
-    if os.path.exists(temp_dir):
-        shutil.rmtree(temp_dir, ignore_errors=True)
+# def cleanup_temp():
+#     temp_dir = folder_paths.get_temp_directory()
+#     if os.path.exists(temp_dir):
+#         shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 def setup_database():
@@ -264,7 +295,7 @@ def start_comfyui(asyncio_loop=None):
         temp_dir = os.path.join(os.path.abspath(args.temp_directory), "temp")
         logging.info(f"Setting temp directory to: {temp_dir}")
         folder_paths.set_temp_directory(temp_dir)
-    cleanup_temp()
+    # cleanup_temp()
 
     if args.windows_standalone_build:
         try:
@@ -277,6 +308,8 @@ def start_comfyui(asyncio_loop=None):
         asyncio_loop = asyncio.new_event_loop()
         asyncio.set_event_loop(asyncio_loop)
     prompt_server = server.PromptServer(asyncio_loop)
+    q = execution.PromptQueue(prompt_server)
+    task_dispatcher = diffus.task_queue.TaskDispatcher(q, prompt_server.routes)
 
     hook_breaker_ac10a0.save_functions()
     nodes.init_extra_nodes(
@@ -291,12 +324,12 @@ def start_comfyui(asyncio_loop=None):
     prompt_server.add_routes()
     hijack_progress(prompt_server)
 
-    threading.Thread(target=prompt_worker, daemon=True, args=(prompt_server.prompt_queue, prompt_server,)).start()
+    threading.Thread(target=prompt_worker, daemon=True, args=(prompt_server.prompt_queue, prompt_server, task_dispatcher,)).start()
 
     if args.quick_test_for_ci:
         exit(0)
 
-    os.makedirs(folder_paths.get_temp_directory(), exist_ok=True)
+    # os.makedirs(folder_paths.get_temp_directory(), exist_ok=True)
     call_on_start = None
     if args.auto_launch:
         def startup_server(scheme, address, port):
@@ -331,5 +364,6 @@ if __name__ == "__main__":
         event_loop.run_until_complete(x)
     except KeyboardInterrupt:
         logging.info("\nStopped server")
+        task_dispatcher.stop()
 
-    cleanup_temp()
+    # cleanup_temp()

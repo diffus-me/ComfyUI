@@ -53,7 +53,13 @@ def load_torch_file(ckpt, safe_load=False, device=None, return_metadata=False):
     if device is None:
         device = torch.device("cpu")
     metadata = None
-    if ckpt.lower().endswith(".safetensors") or ckpt.lower().endswith(".sft"):
+    if hasattr(ckpt, 'is_safetensors') and hasattr(ckpt, 'filename'):
+        is_safetensors = ckpt.is_safetensors
+        ckpt = ckpt.filename
+    else:
+        is_safetensors = ckpt.lower().endswith(".safetensors")
+
+    if is_safetensors:
         try:
             with safetensors.safe_open(ckpt, framework="pt", device=device.type) as f:
                 sd = {}

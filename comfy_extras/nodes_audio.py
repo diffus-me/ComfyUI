@@ -14,6 +14,8 @@ import node_helpers
 from comfy.cli_args import args
 from comfy.comfy_types import FileLocator
 
+import execution_context
+
 class EmptyLatentAudio:
     def __init__(self):
         self.device = comfy.model_management.intermediate_device()
@@ -90,10 +92,10 @@ class VAEDecodeAudio:
         return ({"waveform": audio, "sample_rate": 44100}, )
 
 
-def save_audio(self, audio, filename_prefix="ComfyUI", format="flac", prompt=None, extra_pnginfo=None, quality="128k"):
-
+def save_audio(self, audio, filename_prefix="ComfyUI", format="flac", prompt=None, extra_pnginfo=None, quality="128k", context: execution_context.ExecutionContext=None):
+    output_dir = folder_paths.get_output_directory(context.user_hash)
     filename_prefix += self.prefix_append
-    full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, self.output_dir)
+    full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, output_dir)
     results: list[FileLocator] = []
 
     # Prepare metadata dictionary
@@ -204,16 +206,16 @@ def save_audio(self, audio, filename_prefix="ComfyUI", format="flac", prompt=Non
 
 class SaveAudio:
     def __init__(self):
-        self.output_dir = folder_paths.get_output_directory()
+        # self.output_dir = folder_paths.get_output_directory()
         self.type = "output"
         self.prefix_append = ""
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(s, context: execution_context.ExecutionContext):
         return {"required": { "audio": ("AUDIO", ),
                             "filename_prefix": ("STRING", {"default": "audio/ComfyUI"}),
                             },
-                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
+                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO", "context": "EXECUTION_CONTEXT"},
                 }
 
     RETURN_TYPES = ()
@@ -223,12 +225,12 @@ class SaveAudio:
 
     CATEGORY = "audio"
 
-    def save_flac(self, audio, filename_prefix="ComfyUI", format="flac", prompt=None, extra_pnginfo=None):
-        return save_audio(self, audio, filename_prefix, format, prompt, extra_pnginfo)
+    def save_flac(self, audio, filename_prefix="ComfyUI", format="flac", prompt=None, extra_pnginfo=None, context: execution_context.ExecutionContext=None):
+        return save_audio(self, audio, filename_prefix, format, prompt, extra_pnginfo, context=context)
 
 class SaveAudioMP3:
     def __init__(self):
-        self.output_dir = folder_paths.get_output_directory()
+        # self.output_dir = folder_paths.get_output_directory()
         self.type = "output"
         self.prefix_append = ""
 
@@ -238,7 +240,7 @@ class SaveAudioMP3:
                             "filename_prefix": ("STRING", {"default": "audio/ComfyUI"}),
                             "quality": (["V0", "128k", "320k"], {"default": "V0"}),
                             },
-                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
+                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO", "context": "EXECUTION_CONTEXT"},
                 }
 
     RETURN_TYPES = ()
@@ -248,12 +250,12 @@ class SaveAudioMP3:
 
     CATEGORY = "audio"
 
-    def save_mp3(self, audio, filename_prefix="ComfyUI", format="mp3", prompt=None, extra_pnginfo=None, quality="128k"):
-        return save_audio(self, audio, filename_prefix, format, prompt, extra_pnginfo, quality)
+    def save_mp3(self, audio, filename_prefix="ComfyUI", format="mp3", prompt=None, extra_pnginfo=None, quality="128k", context: execution_context.ExecutionContext=None):
+        return save_audio(self, audio, filename_prefix, format, prompt, extra_pnginfo, quality, context=context)
 
 class SaveAudioOpus:
     def __init__(self):
-        self.output_dir = folder_paths.get_output_directory()
+        # self.output_dir = folder_paths.get_output_directory()
         self.type = "output"
         self.prefix_append = ""
 
@@ -263,7 +265,7 @@ class SaveAudioOpus:
                             "filename_prefix": ("STRING", {"default": "audio/ComfyUI"}),
                             "quality": (["64k", "96k", "128k", "192k", "320k"], {"default": "128k"}),
                             },
-                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
+                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO", "context": "EXECUTION_CONTEXT"},
                 }
 
     RETURN_TYPES = ()
@@ -273,51 +275,51 @@ class SaveAudioOpus:
 
     CATEGORY = "audio"
 
-    def save_opus(self, audio, filename_prefix="ComfyUI", format="opus", prompt=None, extra_pnginfo=None, quality="V3"):
-        return save_audio(self, audio, filename_prefix, format, prompt, extra_pnginfo, quality)
+    def save_opus(self, audio, filename_prefix="ComfyUI", format="opus", prompt=None, extra_pnginfo=None, quality="V3", context: execution_context.ExecutionContext=None):
+        return save_audio(self, audio, filename_prefix, format, prompt, extra_pnginfo, quality, context=context)
 
 class PreviewAudio(SaveAudio):
     def __init__(self):
-        self.output_dir = folder_paths.get_temp_directory()
         self.type = "temp"
         self.prefix_append = "_temp_" + ''.join(random.choice("abcdefghijklmnopqrstupvxyz") for x in range(5))
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(s, context: execution_context.ExecutionContext):
         return {"required":
                     {"audio": ("AUDIO", ), },
-                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
+                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO", "context": "EXECUTION_CONTEXT"},
                 }
 
 class LoadAudio:
     @classmethod
-    def INPUT_TYPES(s):
-        input_dir = folder_paths.get_input_directory()
+    def INPUT_TYPES(s, context: execution_context.ExecutionContext):
+        input_dir = folder_paths.get_input_directory(context.user_hash)
         files = folder_paths.filter_files_content_types(os.listdir(input_dir), ["audio", "video"])
-        return {"required": {"audio": (sorted(files), {"audio_upload": True})}}
+        return {"required": {"audio": (sorted(files), {"audio_upload": True})},
+                "hidden": {"context": "EXECUTION_CONTEXT"}}
 
     CATEGORY = "audio"
 
     RETURN_TYPES = ("AUDIO", )
     FUNCTION = "load"
 
-    def load(self, audio):
-        audio_path = folder_paths.get_annotated_filepath(audio)
+    def load(self, audio, context: execution_context.ExecutionContext):
+        audio_path = folder_paths.get_annotated_filepath(audio, context.user_hash)
         waveform, sample_rate = torchaudio.load(audio_path)
         audio = {"waveform": waveform.unsqueeze(0), "sample_rate": sample_rate}
         return (audio, )
 
     @classmethod
-    def IS_CHANGED(s, audio):
-        image_path = folder_paths.get_annotated_filepath(audio)
+    def IS_CHANGED(s, audio, context: execution_context.ExecutionContext):
+        image_path = folder_paths.get_annotated_filepath(audio, context.user_hash)
         m = hashlib.sha256()
         with open(image_path, 'rb') as f:
             m.update(f.read())
         return m.digest().hex()
 
     @classmethod
-    def VALIDATE_INPUTS(s, audio):
-        if not folder_paths.exists_annotated_filepath(audio):
+    def VALIDATE_INPUTS(s, audio, context: execution_context.ExecutionContext):
+        if not folder_paths.exists_annotated_filepath(audio, context.user_hash):
             return "Invalid audio file: {}".format(audio)
         return True
 
