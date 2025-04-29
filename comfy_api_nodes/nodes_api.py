@@ -436,14 +436,14 @@ class OpenAIGPTImage1(ComfyNodeABC):
 # A dictionary that contains all nodes you want to export with their names
 # NOTE: names should be globally unique
 NODE_CLASS_MAPPINGS = {
-    "OpenAIDalle2": OpenAIDalle2,
-    "OpenAIDalle3": OpenAIDalle3,
-    "OpenAIGPTImage1": OpenAIGPTImage1,
+    # "OpenAIDalle2": OpenAIDalle2,
+    # "OpenAIDalle3": OpenAIDalle3,
+    # "OpenAIGPTImage1": OpenAIGPTImage1,
 }
 
 # A dictionary that contains the friendly/humanly readable titles for the nodes
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "OpenAIDalle2": "OpenAI DALL·E 2",
-    "OpenAIDalle3": "OpenAI DALL·E 3",
-    "OpenAIGPTImage1": "OpenAI GPT Image 1",
+    # "OpenAIDalle2": "OpenAI DALL·E 2",
+    # "OpenAIDalle3": "OpenAI DALL·E 3",
+    # "OpenAIGPTImage1": "OpenAI GPT Image 1",
 }

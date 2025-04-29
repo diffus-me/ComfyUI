@@ -1,3 +1,4 @@
+import execution_context
 import nodes
 import folder_paths
 import os
@@ -7,8 +8,8 @@ def normalize_path(path):
 
 class Load3D():
     @classmethod
-    def INPUT_TYPES(s):
-        input_dir = os.path.join(folder_paths.get_input_directory(), "3d")
+    def INPUT_TYPES(s, context: execution_context.ExecutionContext):
+        input_dir = os.path.join(folder_paths.get_input_directory(context.user_hash), "3d")
 
         os.makedirs(input_dir, exist_ok=True)
 
@@ -19,7 +20,11 @@ class Load3D():
             "image": ("LOAD_3D", {}),
             "width": ("INT", {"default": 1024, "min": 1, "max": 4096, "step": 1}),
             "height": ("INT", {"default": 1024, "min": 1, "max": 4096, "step": 1}),
-        }}
+        },
+            "hidden": {
+                "context": "EXECUTION_CONTEXT",
+            }
+        }
 
     RETURN_TYPES = ("IMAGE", "MASK", "STRING", "IMAGE", "IMAGE", "LOAD3D_CAMERA")
     RETURN_NAMES = ("image", "mask", "mesh_path", "normal", "lineart", "camera_info")
@@ -30,23 +35,24 @@ class Load3D():
     CATEGORY = "3d"
 
     def process(self, model_file, image, **kwargs):
-        image_path = folder_paths.get_annotated_filepath(image['image'])
-        mask_path = folder_paths.get_annotated_filepath(image['mask'])
-        normal_path = folder_paths.get_annotated_filepath(image['normal'])
-        lineart_path = folder_paths.get_annotated_filepath(image['lineart'])
+        context = kwargs.get("context")
+        image_path = folder_paths.get_annotated_filepath(image['image'], context.user_hash)
+        mask_path = folder_paths.get_annotated_filepath(image['mask'], context.user_hash)
+        normal_path = folder_paths.get_annotated_filepath(image['normal'], context.user_hash)
+        lineart_path = folder_paths.get_annotated_filepath(image['lineart'], context.user_hash)
 
         load_image_node = nodes.LoadImage()
-        output_image, ignore_mask = load_image_node.load_image(image=image_path)
-        ignore_image, output_mask = load_image_node.load_image(image=mask_path)
-        normal_image, ignore_mask2 = load_image_node.load_image(image=normal_path)
-        lineart_image, ignore_mask3 = load_image_node.load_image(image=lineart_path)
+        output_image, ignore_mask = load_image_node.load_image(image=image_path, context=context)
+        ignore_image, output_mask = load_image_node.load_image(image=mask_path, context=context)
+        normal_image, ignore_mask2 = load_image_node.load_image(image=normal_path, context=context)
+        lineart_image, ignore_mask3 = load_image_node.load_image(image=lineart_path, context=context)
 
         return output_image, output_mask, model_file, normal_image, lineart_image, image['camera_info']
 
 class Load3DAnimation():
     @classmethod
-    def INPUT_TYPES(s):
-        input_dir = os.path.join(folder_paths.get_input_directory(), "3d")
+    def INPUT_TYPES(s, context: execution_context.ExecutionContext):
+        input_dir = os.path.join(folder_paths.get_input_directory(context.user_hash), "3d")
 
         os.makedirs(input_dir, exist_ok=True)
 
@@ -57,6 +63,8 @@ class Load3DAnimation():
             "image": ("LOAD_3D_ANIMATION", {}),
             "width": ("INT", {"default": 1024, "min": 1, "max": 4096, "step": 1}),
             "height": ("INT", {"default": 1024, "min": 1, "max": 4096, "step": 1}),
+        },"hidden": {
+            "context": "EXECUTION_CONTEXT",
         }}
 
     RETURN_TYPES = ("IMAGE", "MASK", "STRING", "IMAGE", "LOAD3D_CAMERA")
@@ -68,14 +76,15 @@ class Load3DAnimation():
     CATEGORY = "3d"
 
     def process(self, model_file, image, **kwargs):
-        image_path = folder_paths.get_annotated_filepath(image['image'])
-        mask_path = folder_paths.get_annotated_filepath(image['mask'])
-        normal_path = folder_paths.get_annotated_filepath(image['normal'])
+        context = kwargs.get("context")
+        image_path = folder_paths.get_annotated_filepath(image['image'], context.user_hash)
+        mask_path = folder_paths.get_annotated_filepath(image['mask'], context.user_hash)
+        normal_path = folder_paths.get_annotated_filepath(image['normal'], context.user_hash)
 
         load_image_node = nodes.LoadImage()
-        output_image, ignore_mask = load_image_node.load_image(image=image_path)
-        ignore_image, output_mask = load_image_node.load_image(image=mask_path)
-        normal_image, ignore_mask2 = load_image_node.load_image(image=normal_path)
+        output_image, ignore_mask = load_image_node.load_image(image=image_path, context=context)
+        ignore_image, output_mask = load_image_node.load_image(image=mask_path, context=context)
+        normal_image, ignore_mask2 = load_image_node.load_image(image=normal_path, context=context)
 
         return output_image, output_mask, model_file, normal_image, image['camera_info']
 

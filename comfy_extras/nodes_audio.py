@@ -3,6 +3,7 @@ from __future__ import annotations
 import torchaudio
 import torch
 import comfy.model_management
+import execution_context
 import folder_paths
 import os
 import io
@@ -146,7 +147,6 @@ def insert_or_replace_vorbis_comment(flac_io, comment_dict):
 
 class SaveAudio:
     def __init__(self):
-        self.output_dir = folder_paths.get_output_directory()
         self.type = "output"
         self.prefix_append = ""
 
@@ -154,7 +154,7 @@ class SaveAudio:
     def INPUT_TYPES(s):
         return {"required": { "audio": ("AUDIO", ),
                               "filename_prefix": ("STRING", {"default": "audio/ComfyUI"})},
-                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
+                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO", "context": "EXECUTION_CONTEXT"},
                 }
 
     RETURN_TYPES = ()
@@ -164,9 +164,13 @@ class SaveAudio:
 
     CATEGORY = "audio"
 
-    def save_audio(self, audio, filename_prefix="ComfyUI", prompt=None, extra_pnginfo=None):
+    def save_audio(self, audio, filename_prefix="ComfyUI", prompt=None, extra_pnginfo=None, context: execution_context.ExecutionContext=None):
         filename_prefix += self.prefix_append
-        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, self.output_dir)
+        if self.type == "output":
+            output_dir = folder_paths.get_output_directory(context.user_hash)
+        else:
+            output_dir = folder_paths.get_temp_directory(context.user_hash)
+        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, output_dir)
         results: list[FileLocator] = []
 
         metadata = {}
@@ -200,7 +204,6 @@ class SaveAudio:
 
 class PreviewAudio(SaveAudio):
     def __init__(self):
-        self.output_dir = folder_paths.get_temp_directory()
         self.type = "temp"
         self.prefix_append = "_temp_" + ''.join(random.choice("abcdefghijklmnopqrstupvxyz") for x in range(5))
 
@@ -208,38 +211,39 @@ class PreviewAudio(SaveAudio):
     def INPUT_TYPES(s):
         return {"required":
                     {"audio": ("AUDIO", ), },
-                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
+                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO", "context": "EXECUTION_CONTEXT"},
                 }
 
 class LoadAudio:
     @classmethod
-    def INPUT_TYPES(s):
-        input_dir = folder_paths.get_input_directory()
+    def INPUT_TYPES(s, context: execution_context.ExecutionContext):
+        input_dir = folder_paths.get_input_directory(context.user_hash)
         files = folder_paths.filter_files_content_types(os.listdir(input_dir), ["audio", "video"])
-        return {"required": {"audio": (sorted(files), {"audio_upload": True})}}
+        return {"required": {"audio": (sorted(files), {"audio_upload": True})},
+                "hidden": {"context": "EXECUTION_CONTEXT"}}
 
     CATEGORY = "audio"
 
     RETURN_TYPES = ("AUDIO", )
     FUNCTION = "load"
 
-    def load(self, audio):
-        audio_path = folder_paths.get_annotated_filepath(audio)
+    def load(self, audio, context: execution_context.ExecutionContext):
+        audio_path = folder_paths.get_annotated_filepath(audio, context.user_hash)
         waveform, sample_rate = torchaudio.load(audio_path)
         audio = {"waveform": waveform.unsqueeze(0), "sample_rate": sample_rate}
         return (audio, )
 
     @classmethod
-    def IS_CHANGED(s, audio):
-        image_path = folder_paths.get_annotated_filepath(audio)
+    def IS_CHANGED(s, audio, context: execution_context.ExecutionContext):
+        image_path = folder_paths.get_annotated_filepath(audio, context.user_hash)
         m = hashlib.sha256()
         with open(image_path, 'rb') as f:
             m.update(f.read())
         return m.digest().hex()
 
     @classmethod
-    def VALIDATE_INPUTS(s, audio):
-        if not folder_paths.exists_annotated_filepath(audio):
+    def VALIDATE_INPUTS(s, audio, context: execution_context.ExecutionContext):
+        if not folder_paths.exists_annotated_filepath(audio, context.user_hash):
             return "Invalid audio file: {}".format(audio)
         return True
 

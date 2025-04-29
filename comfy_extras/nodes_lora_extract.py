@@ -1,6 +1,7 @@
 import torch
 import comfy.model_management
 import comfy.utils
+import execution_context
 import folder_paths
 import os
 import logging
@@ -73,7 +74,7 @@ def calc_lora_model(model_diff, rank, prefix_model, prefix_lora, output_sd, lora
 
 class LoraSave:
     def __init__(self):
-        self.output_dir = folder_paths.get_output_directory()
+        pass
 
     @classmethod
     def INPUT_TYPES(s):
@@ -84,6 +85,7 @@ class LoraSave:
                             },
                 "optional": {"model_diff": ("MODEL", {"tooltip": "The ModelSubtract output to be converted to a lora."}),
                              "text_encoder_diff": ("CLIP", {"tooltip": "The CLIPSubtract output to be converted to a lora."})},
+                "hidden": {"context": "EXECUTION_CONTEXT"}
     }
     RETURN_TYPES = ()
     FUNCTION = "save"
@@ -91,12 +93,13 @@ class LoraSave:
 
     CATEGORY = "_for_testing"
 
-    def save(self, filename_prefix, rank, lora_type, bias_diff, model_diff=None, text_encoder_diff=None):
+    def save(self, filename_prefix, rank, lora_type, bias_diff, model_diff=None, text_encoder_diff=None, context: execution_context.ExecutionContext=None):
         if model_diff is None and text_encoder_diff is None:
             return {}
 
         lora_type = LORA_TYPES.get(lora_type)
-        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, self.output_dir)
+        output_dir = folder_paths.get_output_directory(context.user_hash)
+        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, output_dir)
 
         output_sd = {}
         if model_diff is not None:
@@ -111,7 +114,7 @@ class LoraSave:
         return {}
 
 NODE_CLASS_MAPPINGS = {
-    "LoraSave": LoraSave
+    # "LoraSave": LoraSave
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {

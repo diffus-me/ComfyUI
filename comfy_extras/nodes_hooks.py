@@ -4,6 +4,8 @@ import logging
 import torch
 from collections.abc import Iterable
 
+import execution_context
+
 if TYPE_CHECKING:
     from comfy.sd import CLIP
 
@@ -292,15 +294,18 @@ class CreateHookLora:
         self.loaded_lora = None
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(s, context: execution_context.ExecutionContext):
         return {
             "required": {
-                "lora_name": (folder_paths.get_filename_list("loras"), ),
+                "lora_name": (folder_paths.get_filename_list(context, "loras"), ),
                 "strength_model": ("FLOAT", {"default": 1.0, "min": -20.0, "max": 20.0, "step": 0.01}),
                 "strength_clip": ("FLOAT", {"default": 1.0, "min": -20.0, "max": 20.0, "step": 0.01}),
             },
             "optional": {
                 "prev_hooks": ("HOOKS",)
+            },
+            "hidden": {
+                "context": "EXECUTION_CONTEXT"
             }
         }
 
@@ -309,7 +314,7 @@ class CreateHookLora:
     CATEGORY = "advanced/hooks/create"
     FUNCTION = "create_hook"
 
-    def create_hook(self, lora_name: str, strength_model: float, strength_clip: float, prev_hooks: comfy.hooks.HookGroup=None):
+    def create_hook(self, lora_name: str, strength_model: float, strength_clip: float, prev_hooks: comfy.hooks.HookGroup=None, context: execution_context.ExecutionContext=None):
         if prev_hooks is None:
             prev_hooks = comfy.hooks.HookGroup()
         prev_hooks.clone()
@@ -317,7 +322,7 @@ class CreateHookLora:
         if strength_model == 0 and strength_clip == 0:
             return (prev_hooks,)
 
-        lora_path = folder_paths.get_full_path("loras", lora_name)
+        lora_path = folder_paths.get_full_path(context, "loras", lora_name)
         lora = None
         if self.loaded_lora is not None:
             if self.loaded_lora[0] == lora_path:
@@ -338,14 +343,17 @@ class CreateHookLoraModelOnly(CreateHookLora):
     NodeId = 'CreateHookLoraModelOnly'
     NodeName = 'Create Hook LoRA (MO)'
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(s, context: execution_context.ExecutionContext):
         return {
             "required": {
-                "lora_name": (folder_paths.get_filename_list("loras"), ),
+                "lora_name": (folder_paths.get_filename_list(context, "loras"), ),
                 "strength_model": ("FLOAT", {"default": 1.0, "min": -20.0, "max": 20.0, "step": 0.01}),
             },
             "optional": {
                 "prev_hooks": ("HOOKS",)
+            },
+            "hidden": {
+                "context": "EXECUTION_CONTEXT"
             }
         }
 
@@ -354,8 +362,8 @@ class CreateHookLoraModelOnly(CreateHookLora):
     CATEGORY = "advanced/hooks/create"
     FUNCTION = "create_hook_model_only"
 
-    def create_hook_model_only(self, lora_name: str, strength_model: float, prev_hooks: comfy.hooks.HookGroup=None):
-        return self.create_hook(lora_name=lora_name, strength_model=strength_model, strength_clip=0, prev_hooks=prev_hooks)
+    def create_hook_model_only(self, lora_name: str, strength_model: float, prev_hooks: comfy.hooks.HookGroup=None, context: execution_context.ExecutionContext=None):
+        return self.create_hook(lora_name=lora_name, strength_model=strength_model, strength_clip=0, prev_hooks=prev_hooks, context=context)
 
 class CreateHookModelAsLora:
     NodeId = 'CreateHookModelAsLora'
@@ -367,15 +375,18 @@ class CreateHookModelAsLora:
         self.loaded_weights = None
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(s, context: execution_context.ExecutionContext):
         return {
             "required": {
-                "ckpt_name": (folder_paths.get_filename_list("checkpoints"), ),
+                "ckpt_name": (folder_paths.get_filename_list(context, "checkpoints"), ),
                 "strength_model": ("FLOAT", {"default": 1.0, "min": -20.0, "max": 20.0, "step": 0.01}),
                 "strength_clip": ("FLOAT", {"default": 1.0, "min": -20.0, "max": 20.0, "step": 0.01}),
             },
             "optional": {
                 "prev_hooks": ("HOOKS",)
+            },
+            "hidden": {
+                "context": "EXECUTION_CONTEXT"
             }
         }
 
@@ -385,12 +396,13 @@ class CreateHookModelAsLora:
     FUNCTION = "create_hook"
 
     def create_hook(self, ckpt_name: str, strength_model: float, strength_clip: float,
-                    prev_hooks: comfy.hooks.HookGroup=None):
+                    prev_hooks: comfy.hooks.HookGroup=None,
+                    context: execution_context.ExecutionContext=None):
         if prev_hooks is None:
             prev_hooks = comfy.hooks.HookGroup()
         prev_hooks.clone()
 
-        ckpt_path = folder_paths.get_full_path("checkpoints", ckpt_name)
+        ckpt_path = folder_paths.get_full_path(context, "checkpoints", ckpt_name)
         weights_model = None
         weights_clip = None
         if self.loaded_weights is not None:
@@ -416,14 +428,17 @@ class CreateHookModelAsLoraModelOnly(CreateHookModelAsLora):
     NodeId = 'CreateHookModelAsLoraModelOnly'
     NodeName = 'Create Hook Model as LoRA (MO)'
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(s, context: execution_context.ExecutionContext):
         return {
             "required": {
-                "ckpt_name": (folder_paths.get_filename_list("checkpoints"), ),
+                "ckpt_name": (folder_paths.get_filename_list(context, "checkpoints"), ),
                 "strength_model": ("FLOAT", {"default": 1.0, "min": -20.0, "max": 20.0, "step": 0.01}),
             },
             "optional": {
                 "prev_hooks": ("HOOKS",)
+            },
+            "hidden": {
+                "context": "EXECUTION_CONTEXT"
             }
         }
 
@@ -433,8 +448,9 @@ class CreateHookModelAsLoraModelOnly(CreateHookModelAsLora):
     FUNCTION = "create_hook_model_only"
 
     def create_hook_model_only(self, ckpt_name: str, strength_model: float,
-                               prev_hooks: comfy.hooks.HookGroup=None):
-        return self.create_hook(ckpt_name=ckpt_name, strength_model=strength_model, strength_clip=0.0, prev_hooks=prev_hooks)
+                               prev_hooks: comfy.hooks.HookGroup=None,
+                               context: execution_context.ExecutionContext=None):
+        return self.create_hook(ckpt_name=ckpt_name, strength_model=strength_model, strength_clip=0.0, prev_hooks=prev_hooks, context=context)
 #------------------------------------------
 ###########################################
 
