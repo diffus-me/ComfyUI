@@ -13,9 +13,18 @@ class MessageQueue:
             self._redis_client = diffus.redis_client.get_redis_client()
         try:
             if sid:
-                self._redis_client.rpush(f'COMFYUI_MESSAGE_{sid}', message)
+                keys = [
+                    f'COMFYUI_MESSAGE_{sid}',
+                    f'diffus:comfyui:message:{sid}'
+                ]
             else:
-                self._redis_client.publish(f'COMFYUI_MESSAGE_anonymous', message)
+                keys = [
+                    f'COMFYUI_MESSAGE_anonymous',
+                    f'diffus:comfyui:message:anonymous'
+                ]
+            for key in keys:
+                self._redis_client.rpush(key, message)
+                self._redis_client.expire(key, 60 * 60)
         except Exception as e:
             logger.exception(e)
             if retry > 0:
