@@ -173,6 +173,8 @@ def _find_extra_pnginfo_from_input_data(context: execution_context.ExecutionCont
     for key, value in input_data.items():
         if key == "extra_pnginfo" and value:
             pnginfo = value[0]
+            if not pnginfo or not isinstance(pnginfo, dict):
+                return {}
             pnginfo["parameters"] = context.geninfo if context else {}
             return pnginfo
     return {}
