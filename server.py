@@ -744,7 +744,11 @@ class PromptServer():
 
                 # if "client_id" in json_data:
                 #     extra_data["client_id"] = json_data["client_id"]
-                extra_data["client_id"] = context.user_id
+                if "diffus_client_id" in extra_data:
+                    client_id = extra_data["diffus_client_id"]
+                else:
+                    client_id = context.user_id
+                extra_data["client_id"] = client_id
 
                 context = execution_context.ExecutionContext(request=request, extra_data=extra_data)
 
