@@ -888,7 +888,22 @@ class PromptServer():
         message.extend(data)
         return message
 
-    async def send_image(self, image_data, sid=None):
+    @staticmethod
+    def encode_image_to_base64(image_type: str, image_data: bytes) -> str:
+        import base64
+        encoded = base64.b64encode(image_data).decode('utf-8')
+        return f'data:image/{image_type.lower()};base64,{encoded}'
+
+    async def send_image(self, data, sid=None):
+        if isinstance(data, dict):
+            image_data = data["preview_image"]
+            prompt_id = data["prompt_id"]
+            node_id = data["node"]
+        else:
+            image_data = data
+            prompt_id = None
+            node_id = None
+
         image_type = image_data[0]
         image = image_data[1]
         max_size = image_data[2]
@@ -911,6 +926,14 @@ class PromptServer():
         image.save(bytesIO, format=image_type, quality=95, compress_level=1)
         preview_bytes = bytesIO.getvalue()
         await self.send_bytes(BinaryEventTypes.PREVIEW_IMAGE, preview_bytes, sid=sid)
+
+        if prompt_id and node_id:
+            preview = {
+                "prompt_id": prompt_id,
+                "node": node_id,
+                "preview_img": self.encode_image_to_base64(image_type, preview_bytes[len(header):]),
+            }
+            await self.send_json("preview", preview, sid=sid)
 
     async def send_bytes(self, event, data, sid=None):
         message = self.encode_bytes(event, data)

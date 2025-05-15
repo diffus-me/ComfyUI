@@ -10,6 +10,7 @@ import requests
 
 import diffus.decoded_params
 import diffus.task_queue
+import diffus.message
 from diffus.image_gallery import post_output_to_image_gallery
 from diffus.redis_client import get_redis_client
 
@@ -36,7 +37,7 @@ class MonitorTierMismatchedException(Exception):
         return self._msg
 
 
-def _get_system_monitor_config(headers: dict) -> Tuple[str, str]:
+def get_system_monitor_config(headers: dict) -> Tuple[str, str]:
     # take per-task config as priority instead of global config
     monitor_addr = headers.get(
         'x-diffus-system-monitor-url', ""
@@ -51,7 +52,7 @@ def _get_system_monitor_config(headers: dict) -> Tuple[str, str]:
     return monitor_addr, system_monitor_api_secret
 
 
-def _make_headers(extra_data: dict):
+def make_headers(extra_data: dict):
     headers = extra_data.get('diffus-request-headers', {})
     result = {}
     for key, value in headers.items():
@@ -80,7 +81,7 @@ def _before_task_started(
 
     if job_id is None:
         job_id = str(uuid.uuid4())
-    monitor_addr, system_monitor_api_secret = _get_system_monitor_config(header_dict)
+    monitor_addr, system_monitor_api_secret = get_system_monitor_config(header_dict)
     if not monitor_addr or not system_monitor_api_secret:
         logger.error(f'{job_id}: system_monitor_addr or system_monitor_api_secret is not present')
         return None
@@ -156,7 +157,7 @@ def _after_task_finished(
         logger.error(
             'task_id is not present in after_task_finished, there might be error occured in before_task_started.')
         return {}
-    monitor_addr, system_monitor_api_secret = _get_system_monitor_config(header_dict)
+    monitor_addr, system_monitor_api_secret = get_system_monitor_config(header_dict)
     if not monitor_addr or not system_monitor_api_secret:
         logger.error(f'{job_id}: system_monitor_addr or system_monitor_api_secret is not present')
         return {}
@@ -183,6 +184,10 @@ def _after_task_finished(
         request_body['task_id'] = task_id
     else:
         request_body['task_id'] = job_id
+
+    result = diffus.message.fetch_prompt_result(request_body['task_id'])
+    if result:
+        request_body['result'] = result.json(exclude={"last_msg", "result"}, exclude_none=True)
     resp = requests.post(
         request_url,
         headers={
@@ -213,7 +218,7 @@ def monitor_call_context(
     status = 'unknown'
     message = ''
     task_is_failed = False
-    header_dict = _make_headers(extra_data)
+    header_dict = make_headers(extra_data)
 
     def result_encoder(success, result):
         try:
@@ -285,7 +290,7 @@ def node_execution_monitor(get_output_data):
             try:
                 output_data = get_output_data(obj, input_data_all, extra_data, execution_block_cb, pre_execute_cb)
                 result_encoder(True, None)
-                post_output_to_image_gallery(redis_client, obj, _make_headers(extra_data), input_data_all, output_data)
+                post_output_to_image_gallery(redis_client, obj, make_headers(extra_data), input_data_all, output_data)
                 return output_data
             except Exception as ex:
                 result_encoder(False, ex)

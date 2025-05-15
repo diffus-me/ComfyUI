@@ -212,10 +212,37 @@ def prompt_worker(q, server_instance, task_dispatcher):
                             messages=e.status_messages))
             if server_instance.client_id is not None:
                 server_instance.send_sync("executing", {"node": None, "prompt_id": prompt_id}, server_instance.client_id)
-                if monitor_error is not None:
-                    server_instance.send_sync("monitor_error",  { "node": None, 'prompt_id': prompt_id, 'used_time': end - begin, 'message': diffus.system_monitor.make_monitor_error_message(monitor_error) }, server_instance.client_id)
+
+                header_dict = diffus.system_monitor.make_headers(extra_data=extra_data)
+                monitor_addr, system_monitor_api_secret = diffus.system_monitor.get_system_monitor_config(header_dict)
+                monitor_info = {
+                    "monitor_addr": monitor_addr,
+                    "system_monitor_api_secret": system_monitor_api_secret,
+                }
+                if monitor_error is None:
+                    server_instance.send_sync(
+                        "finished",
+                        {
+                            "node": None,
+                            'prompt_id': prompt_id,
+                            'used_time': end - begin,
+                            'subscription_consumption': extra_data.get('subscription_consumption', 0),
+                            "monitor_info": monitor_info
+                        },
+                        server_instance.client_id
+                    )
                 else:
-                    server_instance.send_sync("finished",  { "node": None, 'prompt_id': prompt_id, 'used_time': end - begin, 'subscription_consumption': extra_data.get('subscription_consumption', 0) }, server_instance.client_id)
+                    server_instance.send_sync(
+                        "monitor_error",
+                        {
+                            "node": None,
+                            'prompt_id': prompt_id,
+                            'used_time': end - begin,
+                            'message': diffus.system_monitor.make_monitor_error_message(monitor_error),
+                            "monitor_info": monitor_info
+                        },
+                        server_instance.client_id
+                    )
 
             current_time = time.perf_counter()
             execution_time = current_time - execution_start_time
@@ -259,6 +286,8 @@ async def run(server_instance, address='', port=8188, verbose=True, call_on_star
     )
 
 
+
+
 def hijack_progress(server_instance):
     def hook(value, total, preview_image):
         comfy.model_management.throw_exception_if_processing_interrupted()
@@ -266,7 +295,12 @@ def hijack_progress(server_instance):
 
         server_instance.send_sync("progress", progress, server_instance.client_id)
         if preview_image is not None:
-            server_instance.send_sync(BinaryEventTypes.UNENCODED_PREVIEW_IMAGE, preview_image, server_instance.client_id)
+            image = {
+                "preview_image": preview_image,
+                "prompt_id": server_instance.last_prompt_id,
+                "node": server_instance.last_node_id
+            }
+            server_instance.send_sync(BinaryEventTypes.UNENCODED_PREVIEW_IMAGE, image, server_instance.client_id)
 
     comfy.utils.set_progress_bar_global_hook(hook)
 

@@ -146,7 +146,7 @@ def get_output_directory(user_hash):
 
 def get_relative_output_directory(user_hash):
     _check_user_hash(user_hash)
-    return os.path.join(user_hash, "outputs", "comfyui", datetime.datetime.now().strftime("%Y-%m-%d"))
+    return os.path.join(user_hash, "outputs", "comfyui")
 
 
 def _get_comfyui_user_data_base(user_hash):
@@ -458,7 +458,10 @@ def get_save_image_path(filename_prefix: str, output_dir: str, image_width=0, im
     if "%" in filename_prefix:
         filename_prefix = compute_vars(filename_prefix, image_width, image_height)
 
-    subfolder = os.path.dirname(os.path.normpath(filename_prefix))
+    day_folder = datetime.datetime.now().strftime("%Y-%m-%d")
+    filename_folder = os.path.dirname(os.path.normpath(filename_prefix))
+    subfolder = os.path.join(day_folder, filename_folder)
+
     filename = os.path.basename(os.path.normpath(filename_prefix))
 
     full_output_folder = os.path.join(output_dir, subfolder)
