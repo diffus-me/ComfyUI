@@ -217,10 +217,37 @@ def prompt_worker(q, server_instance, task_dispatcher):
                             messages=e.status_messages))
             if server_instance.client_id is not None:
                 server_instance.send_sync("executing", {"node": None, "prompt_id": prompt_id}, server_instance.client_id)
-                if monitor_error is not None:
-                    server_instance.send_sync("monitor_error",  { "node": None, 'prompt_id': prompt_id, 'used_time': end - begin, 'message': diffus.system_monitor.make_monitor_error_message(monitor_error) }, server_instance.client_id)
+
+                header_dict = diffus.system_monitor.make_headers(extra_data=extra_data)
+                monitor_addr, system_monitor_api_secret = diffus.system_monitor.get_system_monitor_config(header_dict)
+                monitor_info = {
+                    "monitor_addr": monitor_addr,
+                    "system_monitor_api_secret": system_monitor_api_secret,
+                }
+                if monitor_error is None:
+                    server_instance.send_sync(
+                        "finished",
+                        {
+                            "node": None,
+                            'prompt_id': prompt_id,
+                            'used_time': end - begin,
+                            'subscription_consumption': extra_data.get('subscription_consumption', 0),
+                            "monitor_info": monitor_info
+                        },
+                        server_instance.client_id
+                    )
                 else:
-                    server_instance.send_sync("finished",  { "node": None, 'prompt_id': prompt_id, 'used_time': end - begin, 'subscription_consumption': extra_data.get('subscription_consumption', 0) }, server_instance.client_id)
+                    server_instance.send_sync(
+                        "monitor_error",
+                        {
+                            "node": None,
+                            'prompt_id': prompt_id,
+                            'used_time': end - begin,
+                            'message': diffus.system_monitor.make_monitor_error_message(monitor_error),
+                            "monitor_info": monitor_info
+                        },
+                        server_instance.client_id
+                    )
 
             current_time = time.perf_counter()
             execution_time = current_time - execution_start_time
