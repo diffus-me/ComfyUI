@@ -43,18 +43,24 @@ def _do_post_image_to_gallery(
         "model_ids": model_ids,  # checkpoint, loras
         "is_public": False,
     }
-    resp = requests.post(
-        url=post_url,
-        json=post_json
-    )
-
-    if 199 < resp.status_code < 300:
-        logger.debug(
-            f"succeeded to post image to gallery, {resp.status_code} {resp.text}, url={post_url}, post_json={post_json}"
+    try:
+        resp = requests.post(
+            url=post_url,
+            timeout=5,
+            json=post_json
         )
-    else:
+
+        if 199 < resp.status_code < 300:
+            logger.debug(
+                f"succeeded to post image to gallery, {resp.status_code} {resp.text}, url={post_url}, post_json={post_json}"
+            )
+        else:
+            logger.error(
+                f"failed to post image to gallery, {resp.status_code} {resp.text}, url={post_url}, post_json={post_json}"
+            )
+    except Exception as e:
         logger.error(
-            f"failed to post image to gallery, {resp.status_code} {resp.text}, url={post_url}, post_json={post_json}"
+            f"failed to post image to gallery, {e}, url={post_url}, post_json={post_json}"
         )
 
 
