@@ -57,13 +57,13 @@ class MsgData(BaseModel):
     timestamp: int | None = None
     exception_message: str | None = None
     exception_type: str | None = None
-    traceback: str | None = None
+    traceback: list[str] | None = None
     preview_img: str | None = None
     used_time: float | None = None
     subscription_consumption: SubscriptionConsumption | None = None
     monitor_info: MonitorInfo | None = None
     message: dict | None = None
-    executed: str | None  = None
+    executed: str | list[str] | None  = None
 
 
 class PromptMessages(BaseModel):

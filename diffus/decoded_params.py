@@ -658,6 +658,102 @@ def _ultimate_sd_upscale_consumption(image, model, positive, negative, vae, upsc
     return {'opts': result}
 
 
+def _wan_video_sampler_consumption(
+        model, text_embeds, image_embeds, shift, steps, cfg, seed, scheduler, riflex_freq_index,
+        force_offload=True, samples=None, feta_args=None, denoise_strength=1.0, context_options=None,
+        teacache_args=None, flowedit_args=None, batched_cfg=False, slg_args=None, rope_function="default",
+        loop_args=None, experimental_args=None, sigmas=None, unianimate_poses=None, fantasytalking_embeds=None
+):
+    patcher = model
+    model_name = patcher.model["model_name"]
+    if not model_name or "1.3B" in model_name.upper():
+        ratio = 1
+    else:
+        ratio = 4
+
+    image_cond = image_embeds.get("image_embeds", None)
+    if image_cond is not None:
+        end_image = image_embeds.get("end_image", None)
+        lat_h = image_embeds.get("lat_h", None)
+        lat_w = image_embeds.get("lat_w", None)
+        if lat_h is None or lat_w is None:
+            raise ValueError("Clip encoded image embeds must be provided for I2V (Image to Video) model")
+        fun_or_fl2v_model = image_embeds.get("fun_or_fl2v_model", False)
+        num_frames = ((image_embeds["num_frames"] - 1) // 4 + (
+            2 if end_image is not None and not fun_or_fl2v_model else 1)) * 4
+        height = lat_h * 8
+        width = lat_w * 8
+    else:  # t2v
+        target_shape = image_embeds.get("target_shape", None)
+        if target_shape is None:
+            raise ValueError("Empty image embeds must be provided for T2V (Text to Video")
+        has_ref = image_embeds.get("has_ref", False)
+        vace_context = image_embeds.get("vace_context", None)
+        vace_additional_embeds = image_embeds.get("additional_vace_inputs", [])
+        if vace_context is not None:
+            if len(vace_additional_embeds) > 0:
+                for i in range(len(vace_additional_embeds)):
+                    if vace_additional_embeds[i].get("has_ref", False):
+                        has_ref = True
+                        break
+        num_frames = (target_shape[1] + 1 if has_ref else target_shape[1]) * 4
+        height = target_shape[2] * 8
+        width = target_shape[3] * 8
+
+    return {
+        'opts': [{
+            'opt_type': 'wan_video_sampler',
+            'width': width,
+            'height': height,
+            'steps': steps,
+            'n_iter': num_frames,
+            'batch_size': 1,
+            "ratio": ratio
+        }]
+    }
+
+
+def _wan_video_diffusion_forcing_sampler_consumption(
+        model, text_embeds, image_embeds, shift, fps, steps, addnoise_condition, cfg, seed, scheduler,
+        force_offload=True, samples=None, prefix_samples=None, denoise_strength=1.0, slg_args=None,
+        rope_function="default", teacache_args=None, experimental_args=None, unianimate_poses=None
+):
+    patcher = model
+    model_name = patcher.model["model_name"]
+    if not model_name or "1.3B" in model_name.upper():
+        ratio = 1
+    else:
+        ratio = 4
+
+    target_shape = image_embeds.get("target_shape", None)
+    if target_shape is None:
+        raise ValueError("Empty image embeds must be provided for T2V (Text to Video")
+    has_ref = image_embeds.get("has_ref", False)
+    vace_context = image_embeds.get("vace_context", None)
+    vace_additional_embeds = image_embeds.get("additional_vace_inputs", [])
+    if vace_context is not None:
+        if len(vace_additional_embeds) > 0:
+            for i in range(len(vace_additional_embeds)):
+                if vace_additional_embeds[i].get("has_ref", False):
+                    has_ref = True
+                    break
+    num_frames = (target_shape[1] + 1 if has_ref else target_shape[1]) * 4
+    height = target_shape[2] * 8
+    width = target_shape[3] * 8
+
+    return {
+        'opts': [{
+            'opt_type': 'wan_video_sampler',
+            'width': width,
+            'height': height,
+            'steps': steps,
+            'n_iter': num_frames,
+            'batch_size': 1,
+            "ratio": ratio
+        }]
+    }
+
+
 def _image_upscale_with_model_consumption(upscale_model, image):
     return {
         'opts': [{
@@ -2477,6 +2573,53 @@ _NODE_CONSUMPTION_MAPPING = {
     "easy XYInputs: PositiveCondList": _none_consumption_maker,
     "easy XYInputs: NegativeCond": _none_consumption_maker,
     "easy XYInputs: NegativeCondList": _none_consumption_maker,
+
+    "WanVideoSampler": _wan_video_sampler_consumption,
+    "WanVideoDiffusionForcingSampler": _wan_video_diffusion_forcing_sampler_consumption,
+
+    "WanVideoDecode": _none_consumption_maker,
+    "WanVideoTextEncode": _none_consumption_maker,
+    "WanVideoModelLoader": _none_consumption_maker,
+    "WanVideoVAELoader": _none_consumption_maker,
+    "LoadWanVideoT5TextEncoder": _none_consumption_maker,
+    "WanVideoImageClipEncode": _none_consumption_maker,
+    "WanVideoClipVisionEncode": _none_consumption_maker,
+    "WanVideoImageToVideoEncode": _none_consumption_maker,
+    "LoadWanVideoClipTextEncoder": _none_consumption_maker,
+    "WanVideoEncode": _none_consumption_maker,
+    "WanVideoBlockSwap": _none_consumption_maker,
+    "WanVideoTorchCompileSettings": _none_consumption_maker,
+    "WanVideoEmptyEmbeds": _none_consumption_maker,
+    "WanVideoLoraSelect": _none_consumption_maker,
+    "WanVideoLoraBlockEdit": _none_consumption_maker,
+    "WanVideoEnhanceAVideo": _none_consumption_maker,
+    "WanVideoContextOptions": _none_consumption_maker,
+    "WanVideoTeaCache": _none_consumption_maker,
+    "WanVideoVRAMManagement": _none_consumption_maker,
+    "WanVideoTextEmbedBridge": _none_consumption_maker,
+    "WanVideoFlowEdit": _none_consumption_maker,
+    "WanVideoControlEmbeds": _none_consumption_maker,
+    "WanVideoSLG": _none_consumption_maker,
+    "WanVideoTinyVAELoader": _none_consumption_maker,
+    "WanVideoLoopArgs": _none_consumption_maker,
+    "WanVideoImageResizeToClosest": _none_consumption_maker,
+    "WanVideoSetBlockSwap": _none_consumption_maker,
+    "WanVideoExperimentalArgs": _none_consumption_maker,
+    "WanVideoVACEEncode": _none_consumption_maker,
+    "WanVideoVACEStartToEndFrame": _none_consumption_maker,
+    "WanVideoVACEModelSelect": _none_consumption_maker,
+    "WanVideoPhantomEmbeds": _none_consumption_maker,
+    "CreateCFGScheduleFloatList": _none_consumption_maker,
+    "WanVideoReCamMasterCameraEmbed": _none_consumption_maker,
+    "ReCamMasterPoseVisualizer": _none_consumption_maker,
+    "WanVideoReCamMasterGenerateOrbitCamera": _none_consumption_maker,
+    "WanVideoReCamMasterDefaultCamera": _none_consumption_maker,
+    "WanVideoUniAnimatePoseInput": _none_consumption_maker,
+    "WanVideoUniAnimateDWPoseDetector": _none_consumption_maker,
+    "DownloadAndLoadWav2VecModel": _none_consumption_maker,
+    "FantasyTalkingModelLoader": _none_consumption_maker,
+    "FantasyTalkingWav2VecEmbeds": _none_consumption_maker,
+    "WanVideoFunCameraEmbeds": _none_consumption_maker,
 }
 
 
