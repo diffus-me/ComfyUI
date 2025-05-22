@@ -2,6 +2,7 @@ import numpy as np
 import scipy.ndimage
 import torch
 import comfy.utils
+import execution_context
 import node_helpers
 import folder_paths
 import random
@@ -370,7 +371,7 @@ class ThresholdMask:
 # upstream requested in https://github.com/Kosinkadink/rfcs/blob/main/rfcs/0000-corenodes.md#preview-nodes
 class MaskPreview(nodes.SaveImage):
     def __init__(self):
-        self.output_dir = folder_paths.get_temp_directory()
+        # self.output_dir = folder_paths.get_temp_directory()
         self.type = "temp"
         self.prefix_append = "_temp_" + ''.join(random.choice("abcdefghijklmnopqrstupvxyz") for x in range(5))
         self.compress_level = 4
@@ -379,15 +380,15 @@ class MaskPreview(nodes.SaveImage):
     def INPUT_TYPES(s):
         return {
             "required": {"mask": ("MASK",), },
-            "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
+            "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO", "context": "EXECUTION_CONTEXT"},
         }
 
     FUNCTION = "execute"
     CATEGORY = "mask"
 
-    def execute(self, mask, filename_prefix="ComfyUI", prompt=None, extra_pnginfo=None):
+    def execute(self, mask, filename_prefix="ComfyUI", prompt=None, extra_pnginfo=None, context: execution_context.ExecutionContext=None):
         preview = mask.reshape((-1, 1, mask.shape[-2], mask.shape[-1])).movedim(1, -1).expand(-1, -1, -1, 3)
-        return self.save_images(preview, filename_prefix, prompt, extra_pnginfo)
+        return self.save_images(preview, filename_prefix, prompt, extra_pnginfo, context=context)
 
 
 NODE_CLASS_MAPPINGS = {
