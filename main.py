@@ -226,7 +226,7 @@ def prompt_worker(q, server_instance, task_dispatcher):
                             "node": None,
                             'prompt_id': prompt_id,
                             'used_time': end - begin,
-                            'subscription_consumption': extra_data.get('subscription_consumption', 0),
+                            'subscription_consumption': extra_data.get('subscription_consumption', None),
                             "monitor_info": monitor_info
                         },
                         server_instance.client_id
