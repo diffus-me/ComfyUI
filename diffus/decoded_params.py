@@ -794,6 +794,14 @@ model_upscale_cache = {
     '4x_fatal_Anime_500000_G.pth': 4,
     '4x_foolhardy_Remacri.pth': 4,
     '4x_foolhardy_Remacri_ExtraSmoother.pth': 4,
+    "4x-AnimeSharp.onnx": 4,
+    "4x-UltraSharp.onnx": 4,
+    "4x-WTP-UDS-Esrgan.onnx": 4,
+    "4x_NMKD-Siax_200k.onnx": 4,
+    "4x_RealisticRescaler_100000_G.onnx": 4,
+    "4x_foolhardy_Remacri.onnx": 4,
+    "RealESRGAN_x4.onnx": 4,
+    "4xNomos2_otf_esrgan.onnx": 4,
     '8xPSNR.pth': 8,
     '8x_NMKD-Superscale_150000_G.pth': 8,
     '8x_NMKD-Typescale_175k.pth': 8,
@@ -810,9 +818,26 @@ model_upscale_cache = {
     "lollypop.pth": 4,
 }
 
+model_upscale_keywords = {
+    "1x": 1,
+    "x1": 1,
+    "2x": 2,
+    "x2": 2,
+    "4x": 4,
+    "x4": 4,
+    "8x": 8,
+    "x8": 8,
+    "16x": 16,
+    "x16": 16,
+    "32x": 32,
+    "x32": 32,
+}
 
 def _get_upscale_model_size(context, model_name):
     if model_name not in model_upscale_cache:
+        for k, v in model_upscale_keywords.items():
+            if k in model_name:
+                return v
         try:
             import folder_paths
             import comfy
