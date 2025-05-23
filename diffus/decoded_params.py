@@ -833,6 +833,7 @@ model_upscale_keywords = {
     "x32": 32,
 }
 
+
 def _get_upscale_model_size(context, model_name):
     if model_name not in model_upscale_cache:
         for k, v in model_upscale_keywords.items():
@@ -1415,6 +1416,22 @@ def _mask_detailer_pipe_consumption(
     return {'opts': opts}
 
 
+def _ksampler_gradually_adding_more_denoise_consumption(
+        model, positive, negative, latent_image, optional_vae,
+        seed, steps, cfg, sampler_name, scheduler, start_denoise, denoise_increment, denoise_increment_steps,
+        context: execution_context.ExecutionContext
+):
+    context.set_geninfo(
+        positive_prompt=positive,
+        negative_prompt=negative,
+        steps=steps,
+        sampler=sampler_name,
+        cfg_scale=cfg,
+        seed=seed,
+    )
+    return {'opts': [__sample_opt_from_latent(context, model, latent_image, steps, )]}
+
+
 def _easy_k_sampler_consumption(
         pipe, image_output, link_id, save_prefix, model=None, tile_size=None, prompt=None,
         extra_pnginfo=None, my_unique_id=None, force_full_denoise=False, disable_noise=False,
@@ -1720,6 +1737,7 @@ _NODE_CONSUMPTION_MAPPING = {
     "FluxSampler": _flux_sampler_consumption,
     "HyVideoSampler": _hy_video_sampler_consumption,
     "MaskDetailerPipe": _mask_detailer_pipe_consumption,
+    "KSampler Gradually Adding More Denoise (efficient)": _ksampler_gradually_adding_more_denoise_consumption,
 
     'UltimateSDUpscaleNoUpscale': _ultimate_sd_upscale_no_upscale_consumption,
     'CR Upscale Image': _cr_upscale_image_consumption,
@@ -2645,6 +2663,20 @@ _NODE_CONSUMPTION_MAPPING = {
     "FantasyTalkingModelLoader": _none_consumption_maker,
     "FantasyTalkingWav2VecEmbeds": _none_consumption_maker,
     "WanVideoFunCameraEmbeds": _none_consumption_maker,
+
+    "GMFSS Fortuna VFI": _none_consumption_maker,
+    "IFRNet VFI": _none_consumption_maker,
+    "IFUnet VFI": _none_consumption_maker,
+    "M2M VFI": _none_consumption_maker,
+    "RIFE VFI": _none_consumption_maker,
+    "Sepconv VFI": _none_consumption_maker,
+    "AMT VFI": _none_consumption_maker,
+    "FILM VFI": _none_consumption_maker,
+    "Make Interpolation State List": _none_consumption_maker,
+    "STMFNet VFI": _none_consumption_maker,
+    "FLAVR VFI": _none_consumption_maker,
+    "CAIN VFI": _none_consumption_maker,
+    "VFI FloatToInt": _none_consumption_maker,
 }
 
 
