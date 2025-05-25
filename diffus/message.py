@@ -63,7 +63,7 @@ class MsgData(BaseModel):
     subscription_consumption: SubscriptionConsumption | None = None
     monitor_info: MonitorInfo | None = None
     message: dict | None = None
-    executed: str | list[str] | None  = None
+    executed: str | list[str] | None = None
 
 
 class PromptMessages(BaseModel):
@@ -110,6 +110,9 @@ def _update_prompt_result(
         prompt_messages: PromptMessages,
         prompt_result: PromptStatus,
 ):
+    if not prompt_result:
+        return
+
     redis_client.set(
         name=_make_prompt_result_key(prompt_id),
         value=prompt_result.json(),
@@ -145,10 +148,12 @@ def _fetch_prompt_result(
     prompt_status_str = redis_client.get(
         _make_prompt_result_key(prompt_id)
     )
-    if prompt_status_str:
-        return PromptStatus.validate(json.loads(prompt_status_str))
-    else:
-        return None
+    try:
+        if prompt_status_str:
+            return PromptStatus.validate(json.loads(prompt_status_str))
+    except Exception as e:
+        logger.exception(f"failed to validate '{prompt_status_str}' to PromptStatus: {e}")
+    return None
 
 
 def _process_prompt_message(
@@ -235,6 +240,11 @@ class MessageQueue:
             prompt_id = msg.data.prompt_id
             if not prompt_id:
                 return
+        except Exception as e:
+            logger.exception(f"failed to validate prompt message '{message}': {e}")
+            return
+
+        try:
             prompt_result = _process_prompt_message(
                 client_id=sid,
                 prompt_id=prompt_id,
@@ -248,7 +258,7 @@ class MessageQueue:
                 prompt_result=prompt_result,
             )
         except Exception as e:
-            logger.exception(f"failed to validate prompt message '{message}': {e}")
+            logger.exception(f"failed to update prompt result '{message}': {e}")
 
     def send_message(self, sid: str, message: bytes | str, retry=1):
         if not self._redis_client:

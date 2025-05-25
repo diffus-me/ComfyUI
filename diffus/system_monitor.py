@@ -185,9 +185,13 @@ def _after_task_finished(
     else:
         request_body['task_id'] = job_id
 
-    result = diffus.message.fetch_prompt_result(request_body['task_id'])
-    if result:
-        request_body['result'] = result.json(exclude={"last_msg", "result"}, exclude_none=True)
+    try:
+        result = diffus.message.fetch_prompt_result(request_body['task_id'])
+        if result:
+            request_body['result'] = result.json(exclude={"last_msg", "result"}, exclude_none=True)
+    except Exception as e:
+        logger.error(f'{job_id}: failed to update prompt result: {e}')
+
     resp = requests.post(
         request_url,
         headers={
