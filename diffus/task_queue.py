@@ -11,6 +11,7 @@ import requests
 from pydantic import BaseModel, Field
 import version
 import diffus.redis_client
+from diffus.repository import insert_comfy_task_record
 
 _logger = logging.getLogger(__name__)
 
@@ -137,19 +138,27 @@ def _post_task(_task_state: _State, request_obj, retry=1):
     headers = request_obj['headers']
     path = request_obj['path']
 
-    try:
-        encoded_headers = {}
-        for k, v in headers.items():
-            encoded_headers[k] = ';'.join(v)
-        encoded_headers['X-Predict-Timeout'] = f'{timeout}'
-        encoded_headers['X-Task-Timeout'] = f'{timeout}'
-        encoded_headers['X-Task-Id'] = task_id
-        # pack request headers to extra_data
-        request_data = json.loads(request_obj['body'])
-        extra_data = request_data.get('extra_data', {})
-        extra_data['diffus-request-headers'] = encoded_headers
-        request_data['extra_data'] = extra_data
+    encoded_headers = {}
+    for k, v in headers.items():
+        encoded_headers[k] = ';'.join(v)
+    encoded_headers['X-Predict-Timeout'] = f'{timeout}'
+    encoded_headers['X-Task-Timeout'] = f'{timeout}'
+    encoded_headers['X-Task-Id'] = task_id
+    # pack request headers to extra_data
+    request_data = json.loads(request_obj['body'])
+    extra_data = request_data.get('extra_data', {})
+    extra_data['diffus-request-headers'] = encoded_headers
+    request_data['extra_data'] = extra_data
 
+    try:
+        insert_comfy_task_record(
+            task_id=task_id,
+            params=request_data,
+        )
+    except Exception as e:
+        _logger.exception(f'failed to insert task record: {e}')
+
+    try:
         request_url = f'http://localhost:{_task_state.service_port}{path}'
         request_timeout = timeout + 3
 
@@ -158,9 +167,9 @@ def _post_task(_task_state: _State, request_obj, retry=1):
                              json=request_data,
                              timeout=request_timeout)
         if not (199 < resp.status_code < 300):
+            _logger.error(f"failed to post task to server: {resp.status_code} {resp.text}")
             return False
         else:
-            _logger.error(f"failed to post task to server: {resp.status_code} {resp.text}")
             return True
     except Exception as e:
         _logger.exception(f'failed to post task status to redis: {e}')

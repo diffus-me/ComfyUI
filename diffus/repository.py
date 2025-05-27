@@ -5,7 +5,8 @@ from typing import Literal
 from pydantic import BaseModel
 from sqlalchemy.orm import Session, Query
 
-from diffus import models, database
+from diffus import models
+from diffus.database import gallery, comfy
 
 MODEL_BINARY_CONTAINER = os.getenv('MODEL_BINARY_CONTAINER')
 MODEL_CONFIG_CONTAINER = os.getenv('MODEL_CONFIG_CONTAINER')
@@ -62,7 +63,7 @@ def list_favorite_model_by_model_type(user_id: str, folder_name: str, **kwargs):
     if folder_name not in models.FAVORITE_MODEL_TYPES:
         return []
     model_type = models.FAVORITE_MODEL_TYPES[folder_name]
-    with database.Database() as session:
+    with gallery.Database() as session:
         model_base = kwargs.get('model_base', None)
         query = _make_favorite_model_query(session)
         query = _filter_favorite_model_by_model_type(query, user_id, model_type, model_base)
@@ -73,7 +74,7 @@ def get_favorite_model_full_path(user_id: str, folder_name: str, filename: str) 
     if folder_name not in models.FAVORITE_MODEL_TYPES:
         return None
     model_type = models.FAVORITE_MODEL_TYPES[folder_name]
-    with database.Database() as session:
+    with gallery.Database() as session:
         query = _make_favorite_model_query(session)
         query = _filter_favorite_model_by_model_type(query, user_id, model_type, None)
         query = _filter_model_by_name(query, filename)
@@ -120,3 +121,17 @@ def _filter_favorite_model_by_model_type(query: Query, user_id: str, model_type:
         query = query.filter(models.Model.base == model_base)
 
     return query
+
+
+def insert_comfy_task_record(
+        task_id: str,
+        params: dict,
+) -> models.ComfyTaskRecord:
+    with comfy.Database() as session:
+        record = models.ComfyTaskRecord(
+            task_id=task_id,
+            params=params,
+        )
+        session.add(record)
+        session.commit()
+        return record
