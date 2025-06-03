@@ -39,15 +39,24 @@ def __get_image_size(model, latent_image):
     import comfy.model_patcher
     latent = latent_image["samples"]
     latent_size = latent.size()
+
     batch_size = latent_size[0]
     if isinstance(model, comfy.model_patcher.ModelPatcher) and isinstance(model.model, comfy.model_base.GenmoMochi):
         image_height = latent_size[3] * 8
         image_width = latent_size[4] * 8
         n_iter = max(1, (latent_size[2] - 1) * 6 + 1)
+    elif isinstance(model, comfy.model_patcher.ModelPatcher) and isinstance(model.model, comfy.model_base.WAN21):
+        image_height = latent_size[3] * 8
+        image_width = latent_size[4] * 8
+        n_iter = max(1, (latent_size[2] - 1) * 4 + 1)
     else:
-        image_height = latent_size[2] * 8
-        image_width = latent_size[3] * 8
-        n_iter = 1
+        image_height = latent_size[-2] * 8
+        image_width = latent_size[-1] * 8
+        if len(list(latent_size)) == 4:
+            n_iter = 1
+        else:
+            n_iter = max(1, (latent_size[-3] - 1) * 6 + 1)
+
     return image_height, image_width, n_iter, batch_size
 
 

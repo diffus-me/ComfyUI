@@ -22,10 +22,10 @@ class PromptOutput(BaseModel):
 
 
 class SubscriptionConsumption(BaseModel):
-    discount: float
-    credit_consumption: int
-    machine_time_consumption: int
-    gpu_acceleration_time_consumption: int
+    discount: float | None = None
+    credit_consumption: int | None = None
+    machine_time_consumption: int | None = None
+    gpu_acceleration_time_consumption: int | None = None
 
 
 class MonitorInfo(BaseModel):
