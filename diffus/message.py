@@ -12,14 +12,21 @@ logger = logging.getLogger(__name__)
 
 
 class ImageResult(BaseModel):
-    filename: str
-    subfolder: str
-    type: str
+    filename: str | None = None
+    subfolder: str | None = None
+    type: str | None = None
+
+class GifResult(BaseModel):
+    filename: str | None = None
+    subfolder: str | None = None
+    type: str | None = None
+    format: str | None = None
+    frame_rate: float | None = None
 
 
 class PromptOutput(BaseModel):
-    images: list[ImageResult]
-
+    images: list[ImageResult] | None = None
+    gifs: list[ImageResult] | None = None
 
 class SubscriptionConsumption(BaseModel):
     discount: float | None = None
