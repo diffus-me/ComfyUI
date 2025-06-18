@@ -1354,6 +1354,43 @@ def was_remove_background_consumption(images, mode='background', threshold=127, 
     return {'opts': opts}
 
 
+def _ani_doc_sampler_consumption(
+        anidoc_pipeline,
+        controlnet_images,
+        reference_image,
+        repeat_matching=False,
+        cotracker={
+            "tracking": False,
+            "tracker": None,
+            "grid_size": 8,
+            "grid_query_frame": 0,
+            "backward_tracking": False,
+            "max_points": 50,
+        },
+        fps=7,
+        steps=25,
+        noise_aug=0.02,
+        seed=0,
+        motion_bucket_id=127,
+        decode_chunk_size=8,
+        device="cuda",
+        dtype=None,
+):
+    width, height = controlnet_images.shape[2], controlnet_images.shape[1]
+    num_frames = len(controlnet_images)
+
+    opts = [{
+        'opt_type': 'ani_doc_sampler',
+        'width': width,
+        'height': height,
+        'steps': steps,
+        'n_iter': 1,
+        'batch_size': num_frames,
+        "ratio": 1.2
+    }]
+    return {'opts': opts}
+
+
 def _easy_detailer_fix_consumption(pipe, image_output, link_id, save_prefix, model=None, prompt=None,
                                    extra_pnginfo=None, my_unique_id=None,
                                    context: execution_context.ExecutionContext = None):
@@ -1769,6 +1806,7 @@ _NODE_CONSUMPTION_MAPPING = {
     'Image Rembg (Remove Background)': image_rembg_consumption,
     'SAMDetectorCombined': _sam_detector_combined_consumption,
     'Image Remove Background (Alpha)': was_remove_background_consumption,
+    "AniDocSampler": _ani_doc_sampler_consumption,
 
     'ADE_UseEvolvedSampling': _none_consumption_maker,
     'ModelSamplingSD3': _none_consumption_maker,
@@ -2686,6 +2724,10 @@ _NODE_CONSUMPTION_MAPPING = {
     "FLAVR VFI": _none_consumption_maker,
     "CAIN VFI": _none_consumption_maker,
     "VFI FloatToInt": _none_consumption_maker,
+
+    "AniDocLoader": _none_consumption_maker,
+    "LoadCoTracker": _none_consumption_maker,
+    "GetAniDocControlnetImages": _none_consumption_maker,
 }
 
 
