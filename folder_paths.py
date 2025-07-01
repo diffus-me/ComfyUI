@@ -345,8 +345,9 @@ def get_full_path(context: execution_context.ExecutionContext, folder_name: str,
     else:
         """
     Get the full path of a file in a folder, has to be a file
-    """global folder_names_and_paths
-        folder_name = map_legacy(folder_name)
+    """
+    global folder_names_and_paths
+    folder_name = map_legacy(folder_name)
     if folder_name not in folder_names_and_paths:
         return None
     folders = folder_names_and_paths[folder_name]
