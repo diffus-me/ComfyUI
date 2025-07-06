@@ -666,13 +666,32 @@ class PromptServer():
             # if max_items is not None:
             #     max_items = int(max_items)
             # return web.json_response(self.prompt_queue.get_history(max_items=max_items))
-            return web.json_response([])
+            # return web.json_response([])
+            import diffus.repository
+            context = execution_context.ExecutionContext(request)
+            task_records = diffus.repository.list_comfy_task_record(context.user_id)
+            return web.json_response(
+                [
+                    task_record.params for task_record in task_records
+                ]
+            )
 
         @routes.get("/history/{prompt_id}")
         async def get_history(request):
-            # prompt_id = request.match_info.get("prompt_id", None)
+            prompt_id = request.match_info.get("prompt_id", None)
             # return web.json_response(self.prompt_queue.get_history(prompt_id=prompt_id))
-            return web.json_response({})
+            import diffus.repository
+            if prompt_id:
+                task_record = diffus.repository.get_comfy_task_record(prompt_id)
+            else:
+                task_record = None
+            return web.json_response(
+                {
+                    "taskType": "History",
+                    "prompt": task_record.params["prompt"],
+                    "status": "success",
+                } if task_record else {}
+            )
 
         @routes.delete("/inputs")
         async def clear_input(request):
@@ -807,7 +826,7 @@ class PromptServer():
 
         @routes.post("/history")
         async def post_history(request):
-            # json_data =  await request.json()
+            json_data = await request.json()
             # if "clear" in json_data:
             #     if json_data["clear"]:
             #         self.prompt_queue.wipe_history()
@@ -815,7 +834,15 @@ class PromptServer():
             #     to_delete = json_data['delete']
             #     for id_to_delete in to_delete:
             #         self.prompt_queue.delete_history_item(id_to_delete)
-
+            context = execution_context.ExecutionContext(request)
+            try:
+                import diffus.repository
+                if "clear" in json_data:
+                    diffus.repository.clear_comfy_task_record_for_user(user_id=context.user_id)
+                elif "delete" in json_data:
+                    diffus.repository.delete_comfy_task_record(user_id=context.user_id, task_ids=json_data['delete'])
+            except Exception as e:
+                logging.exception(f"error to delete history for user {context.user_id}: {e}")
             return web.Response(status=200)
 
     async def setup(self):

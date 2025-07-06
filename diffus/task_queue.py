@@ -11,7 +11,6 @@ import requests
 from pydantic import BaseModel, Field
 import version
 import diffus.redis_client
-from diffus.repository import insert_comfy_task_record
 
 _logger = logging.getLogger(__name__)
 
@@ -149,14 +148,6 @@ def _post_task(_task_state: _State, request_obj, retry=1):
     extra_data = request_data.get('extra_data', {})
     extra_data['diffus-request-headers'] = encoded_headers
     request_data['extra_data'] = extra_data
-
-    try:
-        insert_comfy_task_record(
-            task_id=task_id,
-            params=request_data,
-        )
-    except Exception as e:
-        _logger.exception(f'failed to insert task record: {e}')
 
     try:
         request_url = f'http://localhost:{_task_state.service_port}{path}'

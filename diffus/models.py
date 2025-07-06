@@ -36,4 +36,5 @@ class ComfyTaskRecord(comfy.Base):
 
     id = Column(Integer, primary_key=True, nullable=False, unique=True, autoincrement=True)
     task_id = Column(String(64), index=True, nullable=False)
+    user_id = Column(String(64), index=True, nullable=False)
     params = Column(JSON, nullable=False)

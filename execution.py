@@ -983,6 +983,28 @@ class PromptQueue:
                 'status': status_dict,
             }
             self.history[prompt[1]].update(history_result)
+            try:
+                import diffus.repository
+                record = self.history[prompt[1]]
+                number, prompt_id, prompt_dict, extra_data, outputs_to_execute, context = record["prompt"]
+                extra_data = copy.deepcopy(extra_data)
+                del extra_data["diffus-request-headers"]
+                del extra_data["client_id"]
+                params = {
+                    "prompt": [
+                        number, prompt_id, prompt_dict, extra_data, outputs_to_execute
+                    ],
+                    "outputs": record["outputs"],
+                    "status": record["status"],
+                    "meta": record["meta"],
+                }
+                diffus.repository.insert_comfy_task_record(
+                    user_id=context.user_id,
+                    task_id=prompt[1],
+                    params=params,
+                )
+            except Exception as ex:
+                logging.exception(f"failed to insert task record to diffus repo: {ex}")
             self.server.queue_updated()
 
     # Note: slow

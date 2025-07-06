@@ -59,6 +59,24 @@ def create_model_info(record: models.Model) -> ModelInfo:
     )
 
 
+class TaskInfo(BaseModel):
+    number: int
+    task_id: str
+    user_id: str
+    params: dict
+
+
+def create_task_record(number: int, record: models.ComfyTaskRecord) -> TaskInfo | None:
+    if not record:
+        return None
+    return TaskInfo(
+        number=number,
+        task_id=record.task_id,
+        user_id=record.user_id,
+        params=record.params,
+    )
+
+
 def list_favorite_model_by_model_type(user_id: str, folder_name: str, **kwargs):
     if folder_name not in models.FAVORITE_MODEL_TYPES:
         return []
@@ -125,13 +143,71 @@ def _filter_favorite_model_by_model_type(query: Query, user_id: str, model_type:
 
 def insert_comfy_task_record(
         task_id: str,
+        user_id: str,
         params: dict,
 ) -> models.ComfyTaskRecord:
     with comfy.Database() as session:
         record = models.ComfyTaskRecord(
             task_id=task_id,
+            user_id=user_id,
             params=params,
         )
         session.add(record)
         session.commit()
         return record
+
+
+def get_comfy_task_record(task_id: str) -> TaskInfo | None:
+    with comfy.Database() as session:
+        query = session.query(
+            models.ComfyTaskRecord
+        ).where(
+            models.ComfyTaskRecord.task_id == task_id
+        )
+        return create_task_record(0, session.scalar(query).one_or_none())
+
+
+def list_comfy_task_record(user_id: str) -> list[TaskInfo]:
+    with comfy.Database() as session:
+        query = session.query(
+            models.ComfyTaskRecord
+        ).where(
+            models.ComfyTaskRecord.user_id == user_id
+        ).order_by(
+            models.ComfyTaskRecord.id.desc()
+        ).limit(
+            20
+        )
+        return [
+            create_task_record(number, record) for number, record in enumerate(session.scalars(query).all())
+        ]
+
+
+def delete_comfy_task_record(
+        user_id: str,
+        task_ids: list[str]
+) -> None:
+    if not (task_ids and user_id):
+        return
+    with comfy.Database() as session:
+        session.query(
+            models.ComfyTaskRecord
+        ).filter(
+            models.ComfyTaskRecord.user_id == user_id,
+            models.ComfyTaskRecord.task_id.in_(task_ids),
+        ).delete()
+        session.commit()
+
+
+def clear_comfy_task_record_for_user(
+        user_id: str,
+) -> None:
+    if not user_id:
+        return
+    with comfy.Database() as session:
+        session.query(
+            models.ComfyTaskRecord
+        ).filter(
+            models.ComfyTaskRecord.user_id == user_id,
+        ).delete()
+        session.commit()
