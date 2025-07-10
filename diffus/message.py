@@ -16,6 +16,7 @@ class ImageResult(BaseModel):
     subfolder: str | None = None
     type: str | None = None
 
+
 class GifResult(BaseModel):
     filename: str | None = None
     subfolder: str | None = None
@@ -27,6 +28,7 @@ class GifResult(BaseModel):
 class PromptOutput(BaseModel):
     images: list[ImageResult] | None = None
     gifs: list[ImageResult] | None = None
+
 
 class SubscriptionConsumption(BaseModel):
     discount: float | None = None
@@ -106,6 +108,12 @@ class PromptStatus(BaseModel):
     def finished(self):
         return self.state in (PromptState.finished, PromptState.monitor_error)
 
+    def to_json_str(self):
+        return self.model_dump_json(
+            include={"outputs", "state", "success"},
+            exclude_none=True, exclude_unset=True,
+        )
+
 
 def _make_prompt_result_key(prompt_id: str) -> str:
     return f'diffus:comfyui:prompt:status:{prompt_id}'
@@ -122,7 +130,7 @@ def _update_prompt_result(
 
     redis_client.set(
         name=_make_prompt_result_key(prompt_id),
-        value=prompt_result.json(),
+        value=prompt_result.model_dump_json(),
         ex=60 * 60
     )
 
@@ -137,11 +145,7 @@ def _update_prompt_result(
             },
             json={
                 "update_type": "result",
-                "result": prompt_result.json(
-                    exclude={"prompt_id", "result", "last_msg", "preview_img"},
-                    exclude_none=True,
-                    exclude_unset=True,
-                ),
+                "result": prompt_result.to_json_str(),
             }
         )
         if resp.status_code != 200:
@@ -157,7 +161,7 @@ def _fetch_prompt_result(
     )
     try:
         if prompt_status_str:
-            return PromptStatus.validate(json.loads(prompt_status_str))
+            return PromptStatus.model_validate_json(prompt_status_str)
     except Exception as e:
         logger.exception(f"failed to validate '{prompt_status_str}' to PromptStatus: {e}")
     return None
@@ -242,8 +246,7 @@ class MessageQueue:
             return
 
         try:
-            msg_dict = json.loads(message)
-            msg = PromptMessages.validate(msg_dict)
+            msg = PromptMessages.model_validate_json(message)
             prompt_id = msg.data.prompt_id
             if not prompt_id:
                 return
