@@ -7,6 +7,8 @@ import folder_paths
 import comfy.utils
 import logging
 
+import execution_context
+
 MAX_PREVIEW_RESOLUTION = args.preview_size
 
 def preview_to_image(latent_image):
@@ -59,9 +61,9 @@ class Latent2RGBPreviewer(LatentPreviewer):
         return preview_to_image(latent_image)
 
 
-def get_previewer(context, device, latent_format):
+def get_previewer(context: execution_context.ExecutionContext, device, latent_format):
     previewer = None
-    method = args.preview_method
+    method = context.extra_data.get("preview_method", None) or args.preview_method
     if method != LatentPreviewMethod.NoPreviews:
         # TODO previewer methods
         taesd_decoder_path = None
