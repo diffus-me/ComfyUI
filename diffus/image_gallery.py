@@ -58,10 +58,13 @@ def _do_post_image_to_gallery(
             logger.error(
                 f"failed to post image to gallery, {resp.status_code} {resp.text}, url={post_url}, post_json={post_json}"
             )
+        result = resp.json()
+        return result.get("url", None)
     except Exception as e:
         logger.error(
             f"failed to post image to gallery, {e}, url={post_url}, post_json={post_json}"
         )
+        return None
 
 
 def post_output_to_image_gallery(redis_client, node_obj, header_dict, input_data, output_data):
@@ -108,7 +111,7 @@ def post_output_to_image_gallery(redis_client, node_obj, header_dict, input_data
 
             if image_filename in proceeded_files:
                 continue
-            _do_post_image_to_gallery(
+            presigned_url = _do_post_image_to_gallery(
                 image_server_endpoint,
                 task_id,
                 user_id,
@@ -121,6 +124,7 @@ def post_output_to_image_gallery(redis_client, node_obj, header_dict, input_data
                 exec_context.checkpoints_model_base,
                 exec_context.loaded_model_ids
             )
+            image["presigned_url"] = presigned_url
             proceeded_files.add(image_filename)
 
     if hasattr(node_obj, "RETURN_TYPES") and "VHS_FILENAMES" in node_obj.RETURN_TYPES:

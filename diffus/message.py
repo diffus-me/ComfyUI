@@ -15,6 +15,7 @@ class ImageResult(BaseModel):
     filename: str | None = None
     subfolder: str | None = None
     type: str | None = None
+    presigned_url: str | None = None
 
 
 class GifResult(BaseModel):
@@ -28,6 +29,7 @@ class GifResult(BaseModel):
 class PromptOutput(BaseModel):
     images: list[ImageResult] | None = None
     gifs: list[ImageResult] | None = None
+    video: list[ImageResult] | None = None
 
 
 class SubscriptionConsumption(BaseModel):
