@@ -89,7 +89,7 @@ class ProgressProgress(BaseModel):
 
 
 class ProgressResult(BaseModel):
-    used_time: float
+    used_time: float | None = None
     subscription_consumption: SubscriptionConsumption | None = None
     monitor_info: MonitorInfo | None = None
     message: dict | None = None
@@ -196,6 +196,13 @@ def _process_prompt_message(
         result.success = True
     elif msg.type == "execution_error":
         result.success = False
+        result.result = ProgressResult(
+            message={
+                "reason": msg.data.exception_type,
+                "detail": msg.data.exception_message
+            },
+            used_time=msg.data.used_time
+        )
     elif msg.type == "execution_interrupted":
         result.success = False
         result.state = PromptState.execution_interrupted
@@ -210,6 +217,7 @@ def _process_prompt_message(
     elif msg.type == "monitor_error":
         result.success = False
         result.state = PromptState.monitor_error
+        result.result = ProgressResult(message=msg.data.message, used_time=msg.data.used_time)
     elif msg.type == "finished":
         result.state = PromptState.finished
         result.result = msg.data
