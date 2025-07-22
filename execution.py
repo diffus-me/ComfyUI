@@ -996,7 +996,7 @@ class PromptQueue:
                     ],
                     "outputs": record["outputs"],
                     "status": record["status"],
-                    "meta": record["meta"],
+                    "meta": record.get("meta", None),
                 }
                 diffus.repository.insert_comfy_task_record(
                     user_id=context.user_id,
