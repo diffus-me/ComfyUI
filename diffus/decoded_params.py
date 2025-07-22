@@ -1391,6 +1391,28 @@ def _ani_doc_sampler_consumption(
     return {'opts': opts}
 
 
+def _mat_anyone_video_matting_consumption(
+        video_frames, mask, warmup_frames=10, erode_kernel=10, dilate_kernel=10,
+        bg_red=120, bg_green=255, bg_blue=155):
+    video_frame_shape = video_frames.shape
+    if video_frame_shape[3] == 3:
+        image_width = video_frame_shape[2]
+        image_height = video_frame_shape[1]
+        batch_size = video_frame_shape[0]
+    else:
+        image_width = video_frame_shape[3]
+        image_height = video_frame_shape[2]
+        batch_size = video_frame_shape[0]
+    opts = [{
+        'opt_type': 'mat_anyone_video_matting',
+        'width': image_width,
+        'height': image_height,
+        'batch_size': batch_size,
+        "ratio": 1.0
+    }]
+    return {'opts': opts}
+
+
 def _easy_detailer_fix_consumption(pipe, image_output, link_id, save_prefix, model=None, prompt=None,
                                    extra_pnginfo=None, my_unique_id=None,
                                    context: execution_context.ExecutionContext = None):
@@ -1553,7 +1575,6 @@ def _easy_k_sampler_inpainting_consumption(
         tile_size, prompt, extra_pnginfo, my_unique_id, force_full_denoise, disable_noise,
         context=context
     )
-    pass
 
 
 def _easy_k_sampler_down_scale_unet_consumption(
@@ -1748,6 +1769,165 @@ def _easy_human_segmentation_consumption(
     return {'opts': opts}
 
 
+def _BiRefNetRMBG_consumption(image, model, **params):
+    image_width = image.shape[2]
+    image_height = image.shape[1]
+    batch_size = image.shape[0]
+    opts = [{
+        'opt_type': 'BiRefNetRMBG',
+        'width': image_width,
+        'height': image_height,
+        'batch_size': batch_size,
+    }]
+    return {'opts': opts}
+
+
+def _BodySegment_consumption(
+        images, mask_blur=0, mask_offset=0, background="Alpha", background_color="#222222",
+        invert_output=False, **class_selections):
+    image_width = images.shape[2]
+    image_height = images.shape[1]
+    batch_size = images.shape[0]
+    opts = [{
+        'opt_type': 'BodySegment',
+        'width': image_width,
+        'height': image_height,
+        'batch_size': batch_size,
+    }]
+    return {'opts': opts}
+
+
+def _ClothesSegment_consumption(
+        images, process_res=1024, mask_blur=0, mask_offset=0, background="Alpha", background_color="#222222",
+        invert_output=False, **class_selections
+):
+    image_width = images.shape[2]
+    image_height = images.shape[1]
+    batch_size = images.shape[0]
+    opts = [{
+        'opt_type': 'ClothesSegment',
+        'width': image_width,
+        'height': image_height,
+        'batch_size': batch_size,
+    }]
+    return {'opts': opts}
+
+
+def _FaceSegment_consumption(
+        images, process_res=512, mask_blur=0, mask_offset=0, background="Alpha", background_color="#222222",
+        invert_output=False, **class_selections
+):
+    image_width = images.shape[2]
+    image_height = images.shape[1]
+    batch_size = images.shape[0]
+    opts = [{
+        'opt_type': 'FaceSegment',
+        'width': image_width,
+        'height': image_height,
+        'batch_size': batch_size,
+    }]
+    return {'opts': opts}
+
+
+def _FashionSegmentAccessories_consumption():
+    pass
+
+
+def _FashionSegmentClothing_consumption(
+        images, accessories_options, process_res=512, mask_blur=0, mask_offset=0,
+        background="Alpha", background_color="#222222", invert_output=False, **class_selections
+):
+    image_width = images.shape[2]
+    image_height = images.shape[1]
+    batch_size = images.shape[0]
+    opts = [{
+        'opt_type': 'FashionSegmentClothing',
+        'width': image_width,
+        'height': image_height,
+        'batch_size': batch_size,
+    }]
+    return {'opts': opts}
+
+
+def _AILab_MaskExtractor_consumption(
+        image, mode="extract_masked_area", background="Alpha", background_color="#FFFFFF", mask=None
+):
+    image_width = image.shape[2]
+    image_height = image.shape[1]
+    batch_size = image.shape[0]
+    opts = [{
+        'opt_type': 'AILab_MaskExtractor',
+        'width': image_width,
+        'height': image_height,
+        'batch_size': batch_size,
+    }]
+    return {'opts': opts}
+
+
+def _AILab_LamaRemover_consumption(
+        images, masks, removal_strength, edge_smoothness
+):
+    image_width = images.shape[2]
+    image_height = images.shape[1]
+    batch_size = images.shape[0]
+    opts = [{
+        'opt_type': 'AILab_LamaRemover',
+        'width': image_width,
+        'height': image_height,
+        'batch_size': batch_size,
+    }]
+    return {'opts': opts}
+
+
+def _RMBG_consumption(image, model, **params):
+    image_width = image.shape[2]
+    image_height = image.shape[1]
+    batch_size = image.shape[0]
+    opts = [{
+        'opt_type': 'RMBG',
+        'width': image_width,
+        'height': image_height,
+        'batch_size': batch_size,
+    }]
+    return {'opts': opts}
+
+
+def _Segment_consumption(
+        image, prompt, sam_model, dino_model, threshold=0.35,
+        mask_blur=0, mask_offset=0, background="Alpha",
+        background_color="#222222", invert_output=False,
+        context: execution_context.ExecutionContext = None
+):
+    image_width = image.shape[2]
+    image_height = image.shape[1]
+    batch_size = image.shape[0]
+    opts = [{
+        'opt_type': 'Segment',
+        'width': image_width,
+        'height': image_height,
+        'batch_size': batch_size,
+    }]
+    return {'opts': opts}
+
+
+def _SegmentV2_consumption(
+        image, prompt, sam_model, dino_model, threshold=0.30,
+        mask_blur=0, mask_offset=0, background="Alpha",
+        background_color="#222222", invert_output=False,
+        context: execution_context.ExecutionContext = None
+):
+    image_width = image.shape[2]
+    image_height = image.shape[1]
+    batch_size = image.shape[0]
+    opts = [{
+        'opt_type': 'SegmentV2',
+        'width': image_width,
+        'height': image_height,
+        'batch_size': batch_size,
+    }]
+    return {'opts': opts}
+
+
 def _default_consumption_maker(*args, **kwargs):
     return {}
 
@@ -1807,6 +1987,38 @@ _NODE_CONSUMPTION_MAPPING = {
     'SAMDetectorCombined': _sam_detector_combined_consumption,
     'Image Remove Background (Alpha)': was_remove_background_consumption,
     "AniDocSampler": _ani_doc_sampler_consumption,
+
+    "MatAnyoneVideoMatting": _mat_anyone_video_matting_consumption,
+    "Kytra_Images_To_RGB": _none_consumption_maker,
+
+    "BiRefNetRMBG": _BiRefNetRMBG_consumption,
+    "BodySegment": _BodySegment_consumption,
+    "ClothesSegment": _ClothesSegment_consumption,
+    "FaceSegment": _FaceSegment_consumption,
+    "FashionSegmentAccessories": _FashionSegmentAccessories_consumption,
+    "FashionSegmentClothing": _FashionSegmentClothing_consumption,
+    "AILab_LoadImage": _none_consumption_maker,
+    "AILab_Preview": _none_consumption_maker,
+    "AILab_MaskOverlay": _none_consumption_maker,
+    "AILab_ImagePreview": _none_consumption_maker,
+    "AILab_MaskPreview": _none_consumption_maker,
+    "AILab_ImageMaskConvert": _none_consumption_maker,
+    "AILab_MaskEnhancer": _none_consumption_maker,
+    "AILab_MaskCombiner": _none_consumption_maker,
+    "AILab_ImageCombiner": _none_consumption_maker,
+    "AILab_MaskExtractor": _AILab_MaskExtractor_consumption,
+    "AILab_ImageStitch": _none_consumption_maker,
+    "AILab_ImageCrop": _none_consumption_maker,
+    "AILab_ICLoRAConcat": _none_consumption_maker,
+    "AILab_CropObject": _none_consumption_maker,
+    "AILab_ImageCompare": _none_consumption_maker,
+    "AILab_ColorInput": _none_consumption_maker,
+    "AILab_ImageMaskResize": _none_consumption_maker,
+    "AILab_ReferenceLatentMask": _none_consumption_maker,
+    "AILab_LamaRemover": _AILab_LamaRemover_consumption,
+    "RMBG": _RMBG_consumption,
+    "Segment": _Segment_consumption,
+    "SegmentV2": _SegmentV2_consumption,
 
     'ADE_UseEvolvedSampling': _none_consumption_maker,
     'ModelSamplingSD3': _none_consumption_maker,
