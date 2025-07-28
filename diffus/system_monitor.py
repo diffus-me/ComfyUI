@@ -233,6 +233,11 @@ def monitor_call_context(
         except Exception as ex:
             logger.error(f'{task_id}: Json encode result failed {ex}.')
 
+    skip_monitor = header_dict.get("x-disable-monitor-logs", None) or header_dict.get("X-Disable-Monitor-Logs", None)
+    if skip_monitor and skip_monitor.lower() == "true":
+        yield result_encoder
+        return
+
     try:
         if not is_intermediate and queue_dispatcher:
             queue_dispatcher.on_task_started(task_id)

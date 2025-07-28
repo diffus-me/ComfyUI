@@ -75,8 +75,13 @@ def post_output_to_image_gallery(redis_client, node_obj, header_dict, input_data
     if not user_hash:
         return
 
-    user_id = header_dict.get('user-id', None) or header_dict.get('user-id', None)
+    user_id = header_dict.get('user-id', None) or header_dict.get('User-Id', None)
     if not user_id:
+        return
+
+    disable_post = header_dict.get('x-disable-gallery-post', None) or header_dict.get('X-Disable-Gallery-Post', None)
+    if disable_post and disable_post.lower() == "true":
+        logger.warning(f"post result to gallery is disabled")
         return
 
     result_data, ui_data, _ = output_data
