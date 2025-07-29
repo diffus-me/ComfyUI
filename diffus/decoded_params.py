@@ -2940,6 +2940,11 @@ _NODE_CONSUMPTION_MAPPING = {
     "AniDocLoader": _none_consumption_maker,
     "LoadCoTracker": _none_consumption_maker,
     "GetAniDocControlnetImages": _none_consumption_maker,
+
+    "SaveVideo": _none_consumption_maker,
+    "CreateVideo": _none_consumption_maker,
+    "TrimVideoLatent": _none_consumption_maker,
+    "WanVaceToVideo": _none_consumption_maker,
 }
 
 
