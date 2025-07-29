@@ -668,10 +668,13 @@ def _ultimate_sd_upscale_consumption(image, model, positive, negative, vae, upsc
 
 
 def _wan_video_sampler_consumption(
-        model, text_embeds, image_embeds, shift, steps, cfg, seed, scheduler, riflex_freq_index,
+        model, image_embeds, shift, steps, cfg, seed, scheduler, riflex_freq_index, text_embeds=None,
         force_offload=True, samples=None, feta_args=None, denoise_strength=1.0, context_options=None,
-        teacache_args=None, flowedit_args=None, batched_cfg=False, slg_args=None, rope_function="default",
-        loop_args=None, experimental_args=None, sigmas=None, unianimate_poses=None, fantasytalking_embeds=None
+        cache_args=None, teacache_args=None, flowedit_args=None, batched_cfg=False, slg_args=None,
+        rope_function="default", loop_args=None,
+        experimental_args=None, sigmas=None, unianimate_poses=None, fantasytalking_embeds=None, uni3c_embeds=None,
+        multitalk_embeds=None, freeinit_args=None,
+        context: execution_context.ExecutionContext = None
 ):
     patcher = model
     model_name = patcher.model["model_name"]
@@ -725,7 +728,9 @@ def _wan_video_sampler_consumption(
 def _wan_video_diffusion_forcing_sampler_consumption(
         model, text_embeds, image_embeds, shift, fps, steps, addnoise_condition, cfg, seed, scheduler,
         force_offload=True, samples=None, prefix_samples=None, denoise_strength=1.0, slg_args=None,
-        rope_function="default", teacache_args=None, experimental_args=None, unianimate_poses=None
+        rope_function="default", cache_args=None, teacache_args=None,
+        experimental_args=None, unianimate_poses=None,
+        context: execution_context.ExecutionContext = None
 ):
     patcher = model
     model_name = patcher.model["model_name"]
