@@ -3,6 +3,7 @@ from __future__ import annotations
 import av
 import torchaudio
 import torch
+import time
 import comfy.model_management
 import folder_paths
 import os
@@ -112,7 +113,7 @@ def save_audio(self, audio, filename_prefix="ComfyUI", format="flac", prompt=Non
 
     for (batch_number, waveform) in enumerate(audio["waveform"].cpu()):
         filename_with_batch_num = filename.replace("%batch_num%", str(batch_number))
-        file = f"{filename_with_batch_num}_{counter:05}_.{format}"
+        file = f"{filename_with_batch_num}_{counter:05}_{int(time.time()*1000)}.{format}"
         output_path = os.path.join(full_output_folder, file)
 
         # Use original sample rate initially

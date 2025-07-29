@@ -118,5 +118,5 @@ NODE_CLASS_MAPPINGS = {
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "LoraSave": "Extract and Save Lora"
+    # "LoraSave": "Extract and Save Lora"
 }

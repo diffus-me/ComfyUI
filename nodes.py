@@ -2061,7 +2061,7 @@ NODE_CLASS_MAPPINGS = {
     "DiffusersLoader": DiffusersLoader,
 
     "LoadLatent": LoadLatent,
-    "SaveLatent": SaveLatent,
+    # "SaveLatent": SaveLatent,
 
     "ConditioningZeroOut": ConditioningZeroOut,
     "ConditioningSetTimestepRange": ConditioningSetTimestepRange,

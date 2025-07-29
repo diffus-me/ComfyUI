@@ -5,6 +5,7 @@ import av
 import torch
 import folder_paths
 import json
+import time
 from typing import Optional, Literal
 from fractions import Fraction
 from comfy.comfy_types import IO, FileLocator, ComfyNodeABC
@@ -49,7 +50,7 @@ class SaveWEBM:
         filename_prefix += self.prefix_append
         full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, output_dir, images[0].shape[1], images[0].shape[0])
 
-        file = f"{filename}_{counter:05}_.webm"
+        file = f"{filename}_{counter:05}_{int(time.time()*1000)}.webm"
         container = av.open(os.path.join(full_output_folder, file), mode="w")
 
         if prompt is not None:
@@ -134,7 +135,7 @@ class SaveVideo(ComfyNodeABC):
                 metadata["prompt"] = prompt
             if len(metadata) > 0:
                 saved_metadata = metadata
-        file = f"{filename}_{counter:05}_.{VideoContainer.get_extension(format)}"
+        file = f"{filename}_{counter:05}_{int(time.time()*1000)}.{VideoContainer.get_extension(format)}"
         video.save_to(
             os.path.join(full_output_folder, file),
             format=format,

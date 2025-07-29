@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+
 import execution_context
 import nodes
 import folder_paths
@@ -150,7 +152,7 @@ class SaveAnimatedWEBP:
 
         c = len(pil_images)
         for i in range(0, c, num_frames):
-            file = f"{filename}_{counter:05}_.webp"
+            file = f"{filename}_{counter:05}_{int(time.time()*1000)}.webp"
             pil_images[i].save(os.path.join(full_output_folder, file), save_all=True, duration=int(1000.0/fps), append_images=pil_images[i + 1:i + num_frames], exif=metadata, lossless=lossless, quality=quality, method=method)
             results.append({
                 "filename": file,
@@ -205,7 +207,7 @@ class SaveAnimatedPNG:
                 for x in extra_pnginfo:
                     metadata.add(b"comf", x.encode("latin-1", "strict") + b"\0" + json.dumps(extra_pnginfo[x]).encode("latin-1", "strict"), after_idat=True)
 
-        file = f"{filename}_{counter:05}_.png"
+        file = f"{filename}_{counter:05}_{int(time.time()*1000)}.png"
         pil_images[0].save(os.path.join(full_output_folder, file), pnginfo=metadata, compress_level=compress_level, save_all=True, duration=int(1000.0/fps), append_images=pil_images[1:])
         results.append({
             "filename": file,
@@ -520,7 +522,7 @@ class SaveSVGNode:
 
         for batch_number, svg_bytes in enumerate(svg.data):
             filename_with_batch_num = filename.replace("%batch_num%", str(batch_number))
-            file = f"{filename_with_batch_num}_{counter:05}_.svg"
+            file = f"{filename_with_batch_num}_{counter:05}_{int(time.time()*1000)}.svg"
 
             # Read SVG content
             svg_bytes.seek(0)
