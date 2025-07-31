@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import pathlib
 import uuid
 from typing import Iterable
 
@@ -136,8 +137,7 @@ def post_output_to_image_gallery(redis_client, node_obj, header_dict, input_data
         for node_result in result_data[node_obj.RETURN_TYPES.index("VHS_FILENAMES")]:
             if node_result[0]:
                 for filepath in node_result[1]:
-                    output_directory_len = len(folder_paths.get_output_directory(user_hash))
-                    filename = filepath[output_directory_len + 1:]
+                    filename = pathlib.Path(filepath).name
                     if filename in proceeded_files:
                         continue
                     _do_post_image_to_gallery(
