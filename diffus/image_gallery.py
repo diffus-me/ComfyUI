@@ -100,7 +100,7 @@ def post_output_to_image_gallery(redis_client, node_obj, header_dict, input_data
     image_server_endpoint = f"{gallery_service_node.host_url}/gallery-api/v1/images"
 
     exec_context = _find_execution_context_from_input_data(input_data)
-    for images_key in ("images", "gifs", "video"):
+    for images_key in ("images", "gifs", "video", "3d"):
         if images_key not in ui_data:
             continue
 

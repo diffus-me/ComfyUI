@@ -199,7 +199,8 @@ def save_audio(self, audio, filename_prefix="ComfyUI", format="flac", prompt=Non
         results.append({
             "filename": file,
             "subfolder": subfolder,
-            "type": self.type
+            "type": self.type,
+            "user_hash": context.user_hash,
         })
         counter += 1
 

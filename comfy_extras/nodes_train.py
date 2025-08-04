@@ -705,6 +705,7 @@ class LossGraphNode:
                         "filename": f"{filename_prefix}_{date}.png",
                         "subfolder": "",
                         "type": "temp",
+                        "user_hash": context.user_hash,
                     }
                 ]
             }

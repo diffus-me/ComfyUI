@@ -157,7 +157,8 @@ class SaveAnimatedWEBP:
             results.append({
                 "filename": file,
                 "subfolder": subfolder,
-                "type": self.type
+                "type": self.type,
+                "user_hash": context.user_hash,
             })
             counter += 1
 
@@ -212,7 +213,8 @@ class SaveAnimatedPNG:
         results.append({
             "filename": file,
             "subfolder": subfolder,
-            "type": self.type
+            "type": self.type,
+            "user_hash": user_hash,
         })
 
         return { "ui": { "images": results, "animated": (True,)} }
@@ -552,7 +554,8 @@ class SaveSVGNode:
             results.append({
                 "filename": file,
                 "subfolder": subfolder,
-                "type": self.type
+                "type": self.type,
+                "user_hash": context.user_hash,
             })
             counter += 1
         return { "ui": { "images": results } }

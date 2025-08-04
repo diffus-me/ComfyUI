@@ -620,7 +620,8 @@ class SaveGLB:
             results.append({
                 "filename": f,
                 "subfolder": subfolder,
-                "type": "output"
+                "type": "output",
+                "user_hash": context.user_hash,
             })
             counter += 1
         return {"ui": {"3d": results}}

@@ -16,6 +16,7 @@ class ImageResult(BaseModel):
     subfolder: str | None = None
     type: str | None = None
     presigned_url: str | None = None
+    user_hash: str | None = None
 
 
 class GifResult(BaseModel):
@@ -24,6 +25,7 @@ class GifResult(BaseModel):
     type: str | None = None
     format: str | None = None
     frame_rate: float | None = None
+    user_hash: str | None = None
 
 
 class PromptOutput(BaseModel):

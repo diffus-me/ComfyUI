@@ -80,7 +80,8 @@ class SaveWEBM:
         results: list[FileLocator] = [{
             "filename": file,
             "subfolder": subfolder,
-            "type": self.type
+            "type": self.type,
+            "user_hash": context.user_hash,
         }]
 
         return {"ui": {"images": results, "animated": (True,)}}  # TODO: frontend side
@@ -146,7 +147,8 @@ class SaveVideo(ComfyNodeABC):
         results.append({
             "filename": file,
             "subfolder": subfolder,
-            "type": self.type
+            "type": self.type,
+            "user_hash": context.user_hash,
         })
         counter += 1
 
