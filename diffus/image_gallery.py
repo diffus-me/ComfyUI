@@ -18,6 +18,7 @@ def _do_post_image_to_gallery(
         post_url,
         task_id,
         user_id,
+        user_tier,
         user_hash,
         image_type,
         image_subfolder,
@@ -38,16 +39,18 @@ def _do_post_image_to_gallery(
         ),
         "feature": "COMFYUI",
         "pnginfo": json.dumps(pnginfo),
-        "created_by": user_id,
         "base": model_base,
         "prompt": positive_prompt,  # positive prompt
         "model_ids": model_ids,  # checkpoint, loras
-        "is_public": False,
     }
     try:
         resp = requests.post(
             url=post_url,
             timeout=5,
+            headers={
+                "user-id": user_id,
+                "user-tier": user_tier,
+            },
             json=post_json
         )
 
@@ -79,6 +82,7 @@ def post_output_to_image_gallery(redis_client, node_obj, header_dict, input_data
     user_id = header_dict.get('user-id', None) or header_dict.get('User-Id', None)
     if not user_id:
         return
+    user_tier = header_dict.get('user-tier', None) or header_dict.get('User-Tier', None)
 
     disable_post = header_dict.get('x-disable-gallery-post', None) or header_dict.get('X-Disable-Gallery-Post', None)
     if disable_post and disable_post.lower() == "true":
@@ -121,6 +125,7 @@ def post_output_to_image_gallery(redis_client, node_obj, header_dict, input_data
                 image_server_endpoint,
                 task_id,
                 user_id,
+                user_tier,
                 user_hash,
                 image_type,
                 image_subfolder,
@@ -172,7 +177,7 @@ class _DummyRequest:
         self.headers: dict = {}
 
 
-def _find_execution_context_from_input_data(input_data):
+def _find_execution_context_from_input_data(input_data) -> execution_context.ExecutionContext | None:
     import execution_context
     if not isinstance(input_data, dict):
         return None

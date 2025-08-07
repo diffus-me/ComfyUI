@@ -99,7 +99,7 @@ class ProgressResult(BaseModel):
 
 class PromptStatus(BaseModel):
     prompt_id: str
-    client_id: str
+    client_id: str | None = None
     progress: ProgressProgress | None = None
     outputs: list[PromptOutput] | None = None
     result: ProgressResult | None = None
