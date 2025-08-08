@@ -176,7 +176,7 @@ def list_comfy_task_record(user_id: str) -> list[TaskInfo]:
         ).order_by(
             models.ComfyTaskRecord.id.desc()
         ).limit(
-            20
+            10
         )
         return [
             create_task_record(number, record) for number, record in enumerate(session.scalars(query).all())
