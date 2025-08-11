@@ -1,3 +1,4 @@
+import logging
 import os
 import pathlib
 from typing import Literal
@@ -7,6 +8,8 @@ from sqlalchemy.orm import Session, Query
 
 from diffus import models
 from diffus.database import gallery, comfy
+
+logger = logging.getLogger(__name__)
 
 MODEL_BINARY_CONTAINER = os.getenv('MODEL_BINARY_CONTAINER')
 MODEL_CONFIG_CONTAINER = os.getenv('MODEL_CONFIG_CONTAINER')
@@ -146,6 +149,15 @@ def insert_comfy_task_record(
         user_id: str,
         params: dict,
 ) -> models.ComfyTaskRecord:
+    # simplify params:
+    try:
+        number, prompt_id, prompt_dict, extra_data, outputs_to_execute = params["prompt"]
+        for node_param in prompt_dict.values():
+            if node_param["class_type"] == "easy loadImageBase64":
+                node_param["class_type"]["inputs"]["base64_data"] = ""
+    except Exception as e:
+        logger.warning(f"failed to simplify params for comfy task record '{task_id}': {e}")
+
     with comfy.Database() as session:
         record = models.ComfyTaskRecord(
             task_id=task_id,
