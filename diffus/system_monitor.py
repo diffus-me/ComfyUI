@@ -235,7 +235,11 @@ def monitor_call_context(
 
     skip_monitor = header_dict.get("x-disable-monitor-logs", None) or header_dict.get("X-Disable-Monitor-Logs", None)
     if skip_monitor and skip_monitor.lower() == "true":
+        if not is_intermediate and queue_dispatcher:
+            queue_dispatcher.on_task_started(task_id)
         yield result_encoder
+        if not is_intermediate and queue_dispatcher:
+                queue_dispatcher.on_task_finished(task_id, not task_is_failed, message)
         return
 
     try:

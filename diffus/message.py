@@ -48,6 +48,7 @@ class MonitorInfo(BaseModel):
 
 class PromptState(str, Enum):
     waiting = "waiting"
+    queued = "queued"
     started = "started"
     executing = "executing"
     success = "success"
