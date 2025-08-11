@@ -162,6 +162,7 @@ def insert_comfy_task_record(
         record = models.ComfyTaskRecord(
             task_id=task_id,
             user_id=user_id,
+            node=os.getenv('HOST_IP', default=''),
             params=params,
         )
         session.add(record)
