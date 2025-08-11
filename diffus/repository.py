@@ -152,9 +152,10 @@ def insert_comfy_task_record(
     # simplify params:
     try:
         number, prompt_id, prompt_dict, extra_data, outputs_to_execute = params["prompt"]
+        del extra_data["extra_pnginfo"]["workflow"]
         for node_param in prompt_dict.values():
             if node_param["class_type"] == "easy loadImageBase64":
-                node_param["class_type"]["inputs"]["base64_data"] = ""
+                node_param["inputs"]["base64_data"] = ""
     except Exception as e:
         logger.warning(f"failed to simplify params for comfy task record '{task_id}': {e}")
 
