@@ -122,18 +122,18 @@ def post_output_to_image_gallery(redis_client, node_obj, header_dict, input_data
             if image_filename in proceeded_files:
                 continue
             presigned_url = _do_post_image_to_gallery(
-                image_server_endpoint,
-                task_id,
-                user_id,
-                user_tier,
-                user_hash,
-                image_type,
-                image_subfolder,
-                image_filename,
-                exec_context.positive_prompt,
-                pnginfo,
-                exec_context.checkpoints_model_base,
-                exec_context.loaded_model_ids
+                post_url=image_server_endpoint,
+                task_id=task_id,
+                user_id=user_id,
+                user_tier=user_tier,
+                user_hash=user_hash,
+                image_type=image_type,
+                image_subfolder=image_subfolder,
+                image_filename=image_filename,
+                positive_prompt=exec_context.positive_prompt,
+                pnginfo=pnginfo,
+                model_base=exec_context.checkpoints_model_base,
+                model_ids=exec_context.loaded_model_ids
             )
             image["presigned_url"] = presigned_url
             proceeded_files.add(image_filename)
@@ -146,17 +146,18 @@ def post_output_to_image_gallery(redis_client, node_obj, header_dict, input_data
                     if filename in proceeded_files:
                         continue
                     _do_post_image_to_gallery(
-                        image_server_endpoint,
-                        task_id,
-                        user_id,
-                        user_hash,
-                        "output",
-                        "",
-                        filename,
-                        exec_context.positive_prompt,
-                        {},
-                        exec_context.checkpoints_model_base,
-                        exec_context.loaded_model_ids
+                        post_url=image_server_endpoint,
+                        task_id=task_id,
+                        user_id=user_id,
+                        user_hash=user_hash,
+                        user_tier=user_tier,
+                        image_type="output",
+                        image_subfolder="",
+                        image_filename=filename,
+                        positive_prompt=exec_context.positive_prompt,
+                        pnginfo={},
+                        model_base=exec_context.checkpoints_model_base,
+                        model_ids=exec_context.loaded_model_ids
                     )
                     proceeded_files.add(filename)
 
