@@ -709,6 +709,8 @@ class PromptServer():
         async def get_queue(request):
             queue_info = {}
             # current_queue = self.prompt_queue.get_current_queue_volatile()
+            # queue_info['queue_running'] = current_queue[0]
+            # queue_info['queue_pending'] = current_queue[1]
             queue_info['queue_running'] = []
             queue_info['queue_pending'] = []
             return web.json_response(queue_info)

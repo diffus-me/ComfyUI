@@ -209,7 +209,6 @@ def _after_task_finished(
 
 @contextmanager
 def monitor_call_context(
-        queue_dispatcher: diffus.task_queue.TaskDispatcher | None,
         extra_data: dict,
         api_name: str,
         function_name: str,
@@ -235,16 +234,10 @@ def monitor_call_context(
 
     skip_monitor = header_dict.get("x-disable-monitor-logs", None) or header_dict.get("X-Disable-Monitor-Logs", None)
     if skip_monitor and skip_monitor.lower() == "true":
-        if not is_intermediate and queue_dispatcher:
-            queue_dispatcher.on_task_started(task_id)
         yield result_encoder
-        if not is_intermediate and queue_dispatcher:
-                queue_dispatcher.on_task_finished(task_id, not task_is_failed, message)
         return
 
     try:
-        if not is_intermediate and queue_dispatcher:
-            queue_dispatcher.on_task_started(task_id)
         task_id = _before_task_started(
             header_dict,
             api_name,
@@ -276,8 +269,6 @@ def monitor_call_context(
         if not is_intermediate:
             logger.info(f'monitor_result: {monitor_result}')
             extra_data['subscription_consumption'] = monitor_result.get('consumptions', {})
-            if queue_dispatcher:
-                queue_dispatcher.on_task_finished(task_id, not task_is_failed, message)
 
 
 def node_execution_monitor(get_output_data):
@@ -293,7 +284,6 @@ def node_execution_monitor(get_output_data):
                 break
 
         with monitor_call_context(
-                None,
                 extra_data,
                 f'comfy.{node_class_name}',
                 'comfyui',

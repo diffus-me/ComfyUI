@@ -4,6 +4,7 @@ import os
 import threading
 import time
 import uuid
+from contextlib import contextmanager
 
 import aiohttp.web_routedef
 from aiohttp import web
@@ -67,6 +68,7 @@ class _State:
         self.service_status = 'startup'
 
         self.current_task = ''
+        self.current_task_start_time = 0
         self.remaining_tasks = 0
 
     @property
@@ -84,6 +86,12 @@ def _setup_daemon_api(_task_state: _State, routes: aiohttp.web_routedef.RouteTab
 
     @routes.get("/daemon/v1/status")
     async def get_status(request):
+        if _task_state.current_task_start_time > 0:
+            busy_time = _task_state.busy_time + time.time() - _task_state.current_task_start_time
+        else:
+            busy_time = _task_state.busy_time
+        live_time = time.time() - service_started_at
+
         resp = ServiceStatusResponse(
             release_version=version.version,
             node_type=_task_state.node_type,
@@ -97,7 +105,7 @@ def _setup_daemon_api(_task_state: _State, routes: aiohttp.web_routedef.RouteTab
             failed_task_count=_task_state.failed_task_count,
             pending_task_count=_task_state.remaining_tasks,
             consecutive_failed_task_count=_task_state.consecutive_failed_task_count,
-            gpu_utilization=_task_state.busy_time / (time.time() - service_started_at),
+            gpu_utilization=busy_time / live_time,
         )
 
         return web.json_response(resp.model_dump())
@@ -197,8 +205,6 @@ def _fetch_task(_task_state: _State, fetch_task_timeout=5):
 
 class TaskDispatcher:
     def __init__(self, prompt_queue, routes: aiohttp.web_routedef.RouteTableDef):
-        self._task_time_consumption = {}
-
         self._task_state = _State()
         self._prompt_queue = prompt_queue
         self._t = threading.Thread(target=self._task_loop, name='comfy-task-dispatcher-thread')
@@ -229,22 +235,62 @@ class TaskDispatcher:
                 # 3. post task to service
                 if task:
                     _post_task(self._task_state, task)
+
+                    # sleep 3 seconds, let current_task of self._task_state to get updated
+                    time.sleep(3)
             except Exception as e:
                 _logger.exception(f'failed to fetch task from queue: {e.__str__()}')
                 time.sleep(3)
         _logger.info(f'daemon_main: service is {self._task_state.service_status}, exit task loop now')
 
-    def on_task_started(self, task_id):
-        _logger.info(f'on_task_started, {task_id}')
-        self._task_state.current_task = task_id
-        self._task_time_consumption[task_id] = time.time()
+    def _make_current_key_in_redis(self):
+        return f"diffus:comfyui:node-current-task:{self._task_state.host_ip}:{self._task_state.service_port}"
 
-    def on_task_finished(self, task_id, success, messages):
-        _logger.info(f'on_task_finished, {task_id} {success} {messages}')
-        if self._task_state.current_task != task_id:
+    def _publish_current_task_prams_to_redis(self, task_item):
+        context = task_item[-1]
+        user_id = context.user_id
+        self._task_state.redis_client.set(
+            self._make_current_key_in_redis(),
+            json.dumps({
+                "user_id": user_id,
+                "prompt": [
+                    0,
+                    task_item[1],
+                    task_item[2],
+                    {},
+                    task_item[4],
+                ],
+            }),
+            ex=3600,
+        )
+
+    def _remove_current_task_prams_from_redis(self):
+        self._task_state.redis_client.delete(self._make_current_key_in_redis())
+
+    @contextmanager
+    def dispatch(self, task_item):
+        prompt_id = task_item[1]
+
+        _logger.info(f'on_task_started, {prompt_id}')
+        self._publish_current_task_prams_to_redis(task_item)
+
+        self._task_state.current_task = prompt_id
+        self._task_state.current_task_start_time = time.time()
+
+        yield self._on_task_finished
+
+        if self._task_state.current_task != prompt_id:
             _logger.warning(
-                f'on_task_finished, task_state.current_task({self._task_state.current_task}) and task_id{task_id} are mismatched')
+                f'on_task_finished, task_state.current_task({self._task_state.current_task}) and task_id{prompt_id} are mismatched'
+            )
+        self._task_state.busy_time += time.time() - self._task_state.current_task_start_time
+        self._task_state.current_task_start_time = 0
         self._task_state.current_task = ''
+
+        self._remove_current_task_prams_from_redis()
+        _logger.info(f'on_task_finished, {prompt_id}')
+
+    def _on_task_finished(self, task_id, success, messages):
         if success:
             self._task_state.finished_task_count += 1
             self._task_state.consecutive_failed_task_count = 0
@@ -252,6 +298,3 @@ class TaskDispatcher:
             self._task_state.failed_task_count += 1
             self._task_state.consecutive_failed_task_count += 1
             self._task_state.last_error_message = messages
-
-        now = time.time()
-        self._task_state.busy_time += now - self._task_time_consumption.pop(task_id, now)
