@@ -2968,8 +2968,5 @@ def get_monitor_params(obj, obj_type, input_data_all):
     else:
         fixed_consumption = consumption
 
-    if fixed_consumption and 'opts' in fixed_consumption:
-        for opt in fixed_consumption['opts']:
-            opt["ratio"] = opt.get("ratio", 1) * 1.8
-
+    fixed_consumption["ratio"] = 2
     return fixed_consumption
