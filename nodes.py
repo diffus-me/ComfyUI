@@ -1826,6 +1826,9 @@ class LoadImageOutput(LoadImage):
                         "control_after_refresh": "first",
                     },
                 }),
+            },
+            "hidden": {
+                "context": "EXECUTION_CONTEXT",
             }
         }
 
