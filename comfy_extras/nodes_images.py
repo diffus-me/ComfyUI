@@ -19,6 +19,9 @@ import comfy.utils
 from comfy.comfy_types import FileLocator, IO
 from server import PromptServer
 
+import time
+import execution_context
+
 MAX_RESOLUTION = nodes.MAX_RESOLUTION
 
 class ImageCrop:
@@ -97,7 +100,6 @@ class ImageAddNoise:
 
 class SaveAnimatedWEBP:
     def __init__(self):
-        self.output_dir = folder_paths.get_output_directory()
         self.type = "output"
         self.prefix_append = ""
 
@@ -113,7 +115,7 @@ class SaveAnimatedWEBP:
                      "method": (list(s.methods.keys()),),
                      # "num_frames": ("INT", {"default": 0, "min": 0, "max": 8192}),
                      },
-                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
+                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO", "context": "EXECUTION_CONTEXT"},
                 }
 
     RETURN_TYPES = ()
@@ -123,10 +125,11 @@ class SaveAnimatedWEBP:
 
     CATEGORY = "image/animation"
 
-    def save_images(self, images, fps, filename_prefix, lossless, quality, method, num_frames=0, prompt=None, extra_pnginfo=None):
+    def save_images(self, images, fps, filename_prefix, lossless, quality, method, num_frames=0, prompt=None, extra_pnginfo=None, context:execution_context.ExecutionContext=None):
         method = self.methods.get(method)
         filename_prefix += self.prefix_append
-        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, self.output_dir, images[0].shape[1], images[0].shape[0])
+        output_dir = folder_paths.get_output_directory(context.user_hash)
+        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, output_dir, images[0].shape[1], images[0].shape[0])
         results: list[FileLocator] = []
         pil_images = []
         for image in images:
@@ -149,12 +152,13 @@ class SaveAnimatedWEBP:
 
         c = len(pil_images)
         for i in range(0, c, num_frames):
-            file = f"{filename}_{counter:05}_.webp"
+            file = f"{filename}_{counter:05}_{int(time.time()*1000)}.webp"
             pil_images[i].save(os.path.join(full_output_folder, file), save_all=True, duration=int(1000.0/fps), append_images=pil_images[i + 1:i + num_frames], exif=metadata, lossless=lossless, quality=quality, method=method)
             results.append({
                 "filename": file,
                 "subfolder": subfolder,
-                "type": self.type
+                "type": self.type,
+                "user_hash": context.user_hash,
             })
             counter += 1
 
@@ -163,7 +167,6 @@ class SaveAnimatedWEBP:
 
 class SaveAnimatedPNG:
     def __init__(self):
-        self.output_dir = folder_paths.get_output_directory()
         self.type = "output"
         self.prefix_append = ""
 
@@ -175,7 +178,7 @@ class SaveAnimatedPNG:
                      "fps": ("FLOAT", {"default": 6.0, "min": 0.01, "max": 1000.0, "step": 0.01}),
                      "compress_level": ("INT", {"default": 4, "min": 0, "max": 9})
                      },
-                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
+                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO", "user_hash": "USER_HASH"},
                 }
 
     RETURN_TYPES = ()
@@ -185,9 +188,10 @@ class SaveAnimatedPNG:
 
     CATEGORY = "image/animation"
 
-    def save_images(self, images, fps, compress_level, filename_prefix="ComfyUI", prompt=None, extra_pnginfo=None):
+    def save_images(self, images, fps, compress_level, filename_prefix="ComfyUI", prompt=None, extra_pnginfo=None, user_hash=''):
         filename_prefix += self.prefix_append
-        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, self.output_dir, images[0].shape[1], images[0].shape[0])
+        output_dir = folder_paths.get_output_directory(user_hash)
+        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, output_dir, images[0].shape[1], images[0].shape[0])
         results = list()
         pil_images = []
         for image in images:
@@ -204,12 +208,13 @@ class SaveAnimatedPNG:
                 for x in extra_pnginfo:
                     metadata.add(b"comf", x.encode("latin-1", "strict") + b"\0" + json.dumps(extra_pnginfo[x]).encode("latin-1", "strict"), after_idat=True)
 
-        file = f"{filename}_{counter:05}_.png"
+        file = f"{filename}_{counter:05}_{int(time.time()*1000)}.png"
         pil_images[0].save(os.path.join(full_output_folder, file), pnginfo=metadata, compress_level=compress_level, save_all=True, duration=int(1000.0/fps), append_images=pil_images[1:])
         results.append({
             "filename": file,
             "subfolder": subfolder,
-            "type": self.type
+            "type": self.type,
+            "user_hash": user_hash,
         })
 
         return { "ui": { "images": results, "animated": (True,)} }
@@ -477,7 +482,7 @@ class SaveSVGNode:
     """
 
     def __init__(self):
-        self.output_dir = folder_paths.get_output_directory()
+        # self.output_dir = folder_paths.get_output_directory()
         self.type = "output"
         self.prefix_append = ""
 
@@ -496,13 +501,15 @@ class SaveSVGNode:
             },
             "hidden": {
                 "prompt": "PROMPT",
-                "extra_pnginfo": "EXTRA_PNGINFO"
+                "extra_pnginfo": "EXTRA_PNGINFO",
+                "context": "EXECUTION_CONTEXT",
             }
         }
 
-    def save_svg(self, svg: SVG, filename_prefix="svg/ComfyUI", prompt=None, extra_pnginfo=None):
+    def save_svg(self, svg: SVG, filename_prefix="svg/ComfyUI", prompt=None, extra_pnginfo=None, context: execution_context.ExecutionContext=None):
         filename_prefix += self.prefix_append
-        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, self.output_dir)
+        output_dir = folder_paths.get_output_directory(context.user_hash)
+        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, output_dir)
         results = list()
 
         # Prepare metadata JSON
@@ -517,7 +524,7 @@ class SaveSVGNode:
 
         for batch_number, svg_bytes in enumerate(svg.data):
             filename_with_batch_num = filename.replace("%batch_num%", str(batch_number))
-            file = f"{filename_with_batch_num}_{counter:05}_.svg"
+            file = f"{filename_with_batch_num}_{counter:05}_{int(time.time()*1000)}.svg"
 
             # Read SVG content
             svg_bytes.seek(0)
@@ -547,7 +554,8 @@ class SaveSVGNode:
             results.append({
                 "filename": file,
                 "subfolder": subfolder,
-                "type": self.type
+                "type": self.type,
+                "user_hash": context.user_hash,
             })
             counter += 1
         return { "ui": { "images": results } }
@@ -572,7 +580,7 @@ class GetImageSize:
     CATEGORY = "image"
     DESCRIPTION = """Returns width and height of the image, and passes it through unchanged."""
 
-    def get_size(self, image, unique_id=None) -> tuple[int, int]:
+    def get_size(self, image, unique_id=None) -> tuple[int, int, int]:
         height = image.shape[1]
         width = image.shape[2]
         batch_size = image.shape[0]

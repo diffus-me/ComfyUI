@@ -8,6 +8,10 @@ import folder_paths
 import comfy.model_management
 from comfy.cli_args import args
 
+import execution_context
+import comfy.utils
+
+
 class EmptyLatentHunyuan3Dv2:
     @classmethod
     def INPUT_TYPES(s):
@@ -586,7 +590,7 @@ class SaveGLB:
     def INPUT_TYPES(s):
         return {"required": {"mesh": ("MESH", ),
                              "filename_prefix": ("STRING", {"default": "mesh/ComfyUI"}), },
-                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"}, }
+                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO", "context": "EXECUTION_CONTEXT"}, }
 
     RETURN_TYPES = ()
     FUNCTION = "save"
@@ -595,8 +599,8 @@ class SaveGLB:
 
     CATEGORY = "3d"
 
-    def save(self, mesh, filename_prefix, prompt=None, extra_pnginfo=None):
-        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, folder_paths.get_output_directory())
+    def save(self, mesh, filename_prefix, prompt=None, extra_pnginfo=None, context: execution_context.ExecutionContext=None):
+        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, folder_paths.get_output_directory(context.user_hash))
         results = []
 
         metadata = {}
@@ -613,7 +617,8 @@ class SaveGLB:
             results.append({
                 "filename": f,
                 "subfolder": subfolder,
-                "type": "output"
+                "type": "output",
+                "user_hash": context.user_hash,
             })
             counter += 1
         return {"ui": {"3d": results}}

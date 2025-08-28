@@ -14,6 +14,8 @@ from comfy_api.util import VideoCodec, VideoComponents, VideoContainer
 from comfy_api.latest import ComfyExtension, io, ui
 from comfy.cli_args import args
 
+import execution_context
+
 class SaveWEBM(io.ComfyNode):
     @classmethod
     def define_schema(cls):
@@ -29,17 +31,17 @@ class SaveWEBM(io.ComfyNode):
                 io.Float.Input("crf", default=32.0, min=0, max=63.0, step=1, tooltip="Higher crf means lower quality with a smaller file size, lower crf means higher quality higher filesize."),
             ],
             outputs=[],
-            hidden=[io.Hidden.prompt, io.Hidden.extra_pnginfo],
+            hidden=[io.Hidden.prompt, io.Hidden.extra_pnginfo, io.Hidden.exec_context],
             is_output_node=True,
         )
 
     @classmethod
-    def execute(cls, images, codec, fps, filename_prefix, crf) -> io.NodeOutput:
+    def execute(cls, images, codec, fps, filename_prefix, crf, context: execution_context.ExecutionContext) -> io.NodeOutput:
         full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(
-            filename_prefix, folder_paths.get_output_directory(), images[0].shape[1], images[0].shape[0]
+            filename_prefix, folder_paths.get_output_directory(user_hash=context.user_hash), images[0].shape[1], images[0].shape[0]
         )
 
-        file = f"{filename}_{counter:05}_.webm"
+        file = f"{filename}_{counter:05}_{int(time.time()*1000)}.webm"
         container = av.open(os.path.join(full_output_folder, file), mode="w")
 
         if cls.hidden.prompt is not None:
@@ -83,16 +85,16 @@ class SaveVideo(io.ComfyNode):
                 io.Combo.Input("codec", options=VideoCodec.as_input(), default="auto", tooltip="The codec to use for the video."),
             ],
             outputs=[],
-            hidden=[io.Hidden.prompt, io.Hidden.extra_pnginfo],
+            hidden=[io.Hidden.prompt, io.Hidden.extra_pnginfo, io.Hidden.extra_pnginfo],
             is_output_node=True,
         )
 
     @classmethod
-    def execute(cls, video: VideoInput, filename_prefix, format, codec) -> io.NodeOutput:
+    def execute(cls, video: VideoInput, filename_prefix, format, codec, exec_context: execution_context.ExecutionContext) -> io.NodeOutput:
         width, height = video.get_dimensions()
         full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(
             filename_prefix,
-            folder_paths.get_output_directory(),
+            folder_paths.get_output_directory(user_hash=exec_context.user_hash),
             width,
             height
         )
@@ -166,8 +168,8 @@ class GetVideoComponents(io.ComfyNode):
 
 class LoadVideo(io.ComfyNode):
     @classmethod
-    def define_schema(cls):
-        input_dir = folder_paths.get_input_directory()
+    def define_schema(cls, exec_context: execution_context.ExecutionContext):
+        input_dir = folder_paths.get_input_directory(user_hash=exec_context.user_hash)
         files = [f for f in os.listdir(input_dir) if os.path.isfile(os.path.join(input_dir, f))]
         files = folder_paths.filter_files_content_types(files, ["video"])
         return io.Schema(
@@ -180,24 +182,25 @@ class LoadVideo(io.ComfyNode):
             outputs=[
                 io.Video.Output(),
             ],
+            hidden=[io.Hidden.exec_context],
         )
 
     @classmethod
-    def execute(cls, file) -> io.NodeOutput:
-        video_path = folder_paths.get_annotated_filepath(file)
+    def execute(cls, file, exec_context: execution_context.ExecutionContext) -> io.NodeOutput:
+        video_path = folder_paths.get_annotated_filepath(file, user_hash=exec_context.user_hash)
         return io.NodeOutput(VideoFromFile(video_path))
 
     @classmethod
-    def fingerprint_inputs(s, file):
-        video_path = folder_paths.get_annotated_filepath(file)
+    def fingerprint_inputs(s, file, exec_context: execution_context.ExecutionContext):
+        video_path = folder_paths.get_annotated_filepath(file, user_hash=exec_context.user_hash)
         mod_time = os.path.getmtime(video_path)
         # Instead of hashing the file, we can just use the modification time to avoid
         # rehashing large files.
         return mod_time
 
     @classmethod
-    def validate_inputs(s, file):
-        if not folder_paths.exists_annotated_filepath(file):
+    def validate_inputs(s, file, exec_context: execution_context.ExecutionContext):
+        if not folder_paths.exists_annotated_filepath(file, user_hash=exec_context.user_hash):
             return "Invalid video file: {}".format(file)
 
         return True
