@@ -276,7 +276,7 @@ def node_execution_monitor(get_output_data):
 
     redis_client = get_redis_client()
 
-    def wrapper(obj, input_data_all, extra_data, execution_block_cb=None, pre_execute_cb=None):
+    async def wrapper(prompt_id, unique_id, obj, input_data_all, extra_data, execution_block_cb=None, pre_execute_cb=None, hidden_inputs=None):
         node_class_name = type(obj).__name__
         for k, v in nodes.NODE_CLASS_MAPPINGS.items():
             if type(obj) is v:
@@ -291,7 +291,7 @@ def node_execution_monitor(get_output_data):
                 is_intermediate=True,
         ) as result_encoder:
             try:
-                output_data = get_output_data(obj, input_data_all, extra_data, execution_block_cb, pre_execute_cb)
+                output_data = await get_output_data(prompt_id, unique_id, obj, input_data_all, extra_data, execution_block_cb=execution_block_cb, pre_execute_cb=pre_execute_cb, hidden_inputs=hidden_inputs)
                 result_encoder(True, None)
                 post_output_to_image_gallery(redis_client, obj, make_headers(extra_data), input_data_all, output_data)
                 return output_data

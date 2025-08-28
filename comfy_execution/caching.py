@@ -159,7 +159,7 @@ class BasicCache:
     async def set_prompt(self, context: execution_context.ExecutionContext, dynprompt, node_ids, is_changed_cache):
         self.dynprompt = dynprompt
         self.cache_key_set = self.key_class(context, dynprompt, node_ids, is_changed_cache)
-        await self.cache_key_set.add_keys(node_ids)
+        await self.cache_key_set.add_keys(context, node_ids)
         self.is_changed_cache = is_changed_cache
         self.initialized = True
 
