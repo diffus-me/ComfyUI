@@ -5,12 +5,15 @@ import nodes
 import torch
 import comfy_extras.nodes_slg
 
+import execution_context
+
 
 class TripleCLIPLoader:
     @classmethod
-    def INPUT_TYPES(s):
-        return {"required": { "clip_name1": (folder_paths.get_filename_list("text_encoders"), ), "clip_name2": (folder_paths.get_filename_list("text_encoders"), ), "clip_name3": (folder_paths.get_filename_list("text_encoders"), )
-                             }}
+    def INPUT_TYPES(s, context: execution_context.ExecutionContext):
+        return {"required": { "clip_name1": (folder_paths.get_filename_list(context, "text_encoders"), ), "clip_name2": (folder_paths.get_filename_list(context, "text_encoders"), ), "clip_name3": (folder_paths.get_filename_list(context, "text_encoders"), )
+                             },
+                "hidden": {"context": "EXECUTION_CONTEXT"}}
     RETURN_TYPES = ("CLIP",)
     FUNCTION = "load_clip"
 
@@ -18,10 +21,10 @@ class TripleCLIPLoader:
 
     DESCRIPTION = "[Recipes]\n\nsd3: clip-l, clip-g, t5"
 
-    def load_clip(self, clip_name1, clip_name2, clip_name3):
-        clip_path1 = folder_paths.get_full_path_or_raise("text_encoders", clip_name1)
-        clip_path2 = folder_paths.get_full_path_or_raise("text_encoders", clip_name2)
-        clip_path3 = folder_paths.get_full_path_or_raise("text_encoders", clip_name3)
+    def load_clip(self, clip_name1, clip_name2, clip_name3, context: execution_context.ExecutionContext):
+        clip_path1 = folder_paths.get_full_path_or_raise(context, "text_encoders", clip_name1)
+        clip_path2 = folder_paths.get_full_path_or_raise(context, "text_encoders", clip_name2)
+        clip_path3 = folder_paths.get_full_path_or_raise(context, "text_encoders", clip_name3)
         clip = comfy.sd.load_clip(ckpt_paths=[clip_path1, clip_path2, clip_path3], embedding_directory=folder_paths.get_folder_paths("embeddings"))
         return (clip,)
 
@@ -82,7 +85,7 @@ class CLIPTextEncodeSD3:
                 tokens["l"] += empty["l"]
             while len(tokens["l"]) > len(tokens["g"]):
                 tokens["g"] += empty["g"]
-        return (clip.encode_from_tokens_scheduled(tokens), )
+        return (clip.encode_from_tokens_scheduled(tokens, add_dict={"_origin_text_": " ".join([clip_l, clip_g, t5xxl])}), )
 
 
 class ControlNetApplySD3(nodes.ControlNetApplyAdvanced):

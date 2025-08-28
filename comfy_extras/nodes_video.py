@@ -5,15 +5,19 @@ import av
 import torch
 import folder_paths
 import json
+import time
 from typing import Optional, Literal
 from fractions import Fraction
 from comfy.comfy_types import IO, FileLocator, ComfyNodeABC
 from comfy_api.latest import Input, InputImpl, Types
 from comfy.cli_args import args
 
+
+import execution_context
+
 class SaveWEBM:
     def __init__(self):
-        self.output_dir = folder_paths.get_output_directory()
+        # self.output_dir = folder_paths.get_output_directory()
         self.type = "output"
         self.prefix_append = ""
 
@@ -26,7 +30,7 @@ class SaveWEBM:
                      "fps": ("FLOAT", {"default": 24.0, "min": 0.01, "max": 1000.0, "step": 0.01}),
                      "crf": ("FLOAT", {"default": 32.0, "min": 0, "max": 63.0, "step": 1, "tooltip": "Higher crf means lower quality with a smaller file size, lower crf means higher quality higher filesize."}),
                      },
-                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
+                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO", "context": "EXECUTION_CONTEXT"},
                 }
 
     RETURN_TYPES = ()
@@ -38,11 +42,13 @@ class SaveWEBM:
 
     EXPERIMENTAL = True
 
-    def save_images(self, images, codec, fps, filename_prefix, crf, prompt=None, extra_pnginfo=None):
-        filename_prefix += self.prefix_append
-        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, self.output_dir, images[0].shape[1], images[0].shape[0])
+    def save_images(self, images, codec, fps, filename_prefix, crf, prompt=None, extra_pnginfo=None, context: execution_context.ExecutionContext=None):
+        output_dir = folder_paths.get_output_directory(context.user_hash)
 
-        file = f"{filename}_{counter:05}_.webm"
+        filename_prefix += self.prefix_append
+        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, output_dir, images[0].shape[1], images[0].shape[0])
+
+        file = f"{filename}_{counter:05}_{int(time.time()*1000)}.webm"
         container = av.open(os.path.join(full_output_folder, file), mode="w")
 
         if prompt is not None:
@@ -72,19 +78,20 @@ class SaveWEBM:
         results: list[FileLocator] = [{
             "filename": file,
             "subfolder": subfolder,
-            "type": self.type
+            "type": self.type,
+            "user_hash": context.user_hash,
         }]
 
         return {"ui": {"images": results, "animated": (True,)}}  # TODO: frontend side
 
 class SaveVideo(ComfyNodeABC):
     def __init__(self):
-        self.output_dir = folder_paths.get_output_directory()
+        # self.output_dir = folder_paths.get_output_directory()
         self.type: Literal["output"] = "output"
         self.prefix_append = ""
 
     @classmethod
-    def INPUT_TYPES(cls):
+    def INPUT_TYPES(cls, context: execution_context.ExecutionContext):
         return {
             "required": {
                 "video": (IO.VIDEO, {"tooltip": "The video to save."}),
@@ -94,7 +101,8 @@ class SaveVideo(ComfyNodeABC):
             },
             "hidden": {
                 "prompt": "PROMPT",
-                "extra_pnginfo": "EXTRA_PNGINFO"
+                "extra_pnginfo": "EXTRA_PNGINFO",
+                "context": "EXECUTION_CONTEXT",
             },
         }
 
@@ -106,12 +114,13 @@ class SaveVideo(ComfyNodeABC):
     CATEGORY = "image/video"
     DESCRIPTION = "Saves the input images to your ComfyUI output directory."
 
-    def save_video(self, video: Input.Video, filename_prefix, format, codec, prompt=None, extra_pnginfo=None):
+    def save_video(self, video: Input.Video, filename_prefix, format, codec, prompt=None, extra_pnginfo=None, context: execution_context.ExecutionContext=None):
+        output_dir = folder_paths.get_output_directory(context.user_hash)
         filename_prefix += self.prefix_append
         width, height = video.get_dimensions()
         full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(
             filename_prefix,
-            self.output_dir,
+            output_dir,
             width,
             height
         )
@@ -125,7 +134,7 @@ class SaveVideo(ComfyNodeABC):
                 metadata["prompt"] = prompt
             if len(metadata) > 0:
                 saved_metadata = metadata
-        file = f"{filename}_{counter:05}_.{Types.VideoContainer.get_extension(format)}"
+        file = f"{filename}_{counter:05}_{int(time.time()*1000)}.{Types.VideoContainer.get_extension(format)}"
         video.save_to(
             os.path.join(full_output_folder, file),
             format=format,
@@ -136,7 +145,8 @@ class SaveVideo(ComfyNodeABC):
         results.append({
             "filename": file,
             "subfolder": subfolder,
-            "type": self.type
+            "type": self.type,
+            "user_hash": context.user_hash,
         })
         counter += 1
 
@@ -144,7 +154,7 @@ class SaveVideo(ComfyNodeABC):
 
 class CreateVideo(ComfyNodeABC):
     @classmethod
-    def INPUT_TYPES(cls):
+    def INPUT_TYPES(cls, context: execution_context.ExecutionContext):
         return {
             "required": {
                 "images": (IO.IMAGE, {"tooltip": "The images to create a video from."}),
@@ -172,7 +182,7 @@ class CreateVideo(ComfyNodeABC):
 
 class GetVideoComponents(ComfyNodeABC):
     @classmethod
-    def INPUT_TYPES(cls):
+    def INPUT_TYPES(cls, context: execution_context.ExecutionContext):
         return {
             "required": {
                 "video": (IO.VIDEO, {"tooltip": "The video to extract components from."}),
@@ -192,33 +202,35 @@ class GetVideoComponents(ComfyNodeABC):
 
 class LoadVideo(ComfyNodeABC):
     @classmethod
-    def INPUT_TYPES(cls):
-        input_dir = folder_paths.get_input_directory()
+    def INPUT_TYPES(cls, context: execution_context.ExecutionContext):
+        input_dir = folder_paths.get_input_directory(context.user_hash)
         files = [f for f in os.listdir(input_dir) if os.path.isfile(os.path.join(input_dir, f))]
         files = folder_paths.filter_files_content_types(files, ["video"])
         return {"required":
                     {"file": (sorted(files), {"video_upload": True})},
+                "hidden":
+                    {"context": "EXECUTION_CONTEXT",}
                 }
 
     CATEGORY = "image/video"
 
     RETURN_TYPES = (IO.VIDEO,)
     FUNCTION = "load_video"
-    def load_video(self, file):
-        video_path = folder_paths.get_annotated_filepath(file)
+    def load_video(self, file, context: execution_context.ExecutionContext):
+        video_path = folder_paths.get_annotated_filepath(file, context.user_hash)
         return (InputImpl.VideoFromFile(video_path),)
 
     @classmethod
-    def IS_CHANGED(cls, file):
-        video_path = folder_paths.get_annotated_filepath(file)
+    def IS_CHANGED(cls, file, context: execution_context.ExecutionContext):
+        video_path = folder_paths.get_annotated_filepath(file, context.user_hash)
         mod_time = os.path.getmtime(video_path)
         # Instead of hashing the file, we can just use the modification time to avoid
         # rehashing large files.
         return mod_time
 
     @classmethod
-    def VALIDATE_INPUTS(cls, file):
-        if not folder_paths.exists_annotated_filepath(file):
+    def VALIDATE_INPUTS(cls, file, context: execution_context.ExecutionContext):
+        if not folder_paths.exists_annotated_filepath(file, context.user_hash):
             return "Invalid video file: {}".format(file)
 
         return True

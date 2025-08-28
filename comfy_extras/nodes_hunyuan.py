@@ -2,7 +2,7 @@ import nodes
 import node_helpers
 import torch
 import comfy.model_management
-
+import comfy.utils
 
 class CLIPTextEncodeHunyuanDiT:
     @classmethod
@@ -21,7 +21,7 @@ class CLIPTextEncodeHunyuanDiT:
         tokens = clip.tokenize(bert)
         tokens["mt5xl"] = clip.tokenize(mt5xl)["mt5xl"]
 
-        return (clip.encode_from_tokens_scheduled(tokens), )
+        return (clip.encode_from_tokens_scheduled(tokens, add_dict={"_origin_text_": bert + " " + mt5xl}), )
 
 class EmptyHunyuanLatentVideo:
     @classmethod

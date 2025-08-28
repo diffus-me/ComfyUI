@@ -13,6 +13,8 @@ import folder_paths
 from .app_settings import AppSettings
 from typing import TypedDict
 
+import execution_context
+
 default_user = "default"
 
 
@@ -34,26 +36,27 @@ def get_file_info(path: str, relative_to: str) -> FileInfo:
 
 class UserManager():
     def __init__(self):
-        user_directory = folder_paths.get_user_directory()
+        # user_directory = folder_paths.get_user_directory('')
 
         self.settings = AppSettings(self)
-        if not os.path.exists(user_directory):
-            os.makedirs(user_directory, exist_ok=True)
-            if not args.multi_user:
-                logging.warning("****** User settings have been changed to be stored on the server instead of browser storage. ******")
-                logging.warning("****** For multi-user setups add the --multi-user CLI argument to enable multiple user profiles. ******")
+        # if not os.path.exists(user_directory):
+        #     os.makedirs(user_directory, exist_ok=True)
+        #     if not args.multi_user:
+        #         logging.warning("****** User settings have been changed to be stored on the server instead of browser storage. ******")
+        #         logging.warning("****** For multi-user setups add the --multi-user CLI argument to enable multiple user profiles. ******")
 
-        if args.multi_user:
-            if os.path.isfile(self.get_users_file()):
-                with open(self.get_users_file()) as f:
-                    self.users = json.load(f)
-            else:
-                self.users = {}
-        else:
-            self.users = {"default": "default"}
+        # if args.multi_user:
+        #     if os.path.isfile(self.get_users_file()):
+        #         with open(self.get_users_file()) as f:
+        #             self.users = json.load(f)
+        #     else:
+        #         self.users = {}
+        # else:
+        #     self.users = {"default": "default"}
+        self.users = {"default": "default"}
 
-    def get_users_file(self):
-        return os.path.join(folder_paths.get_user_directory(), "users.json")
+    def get_users_file(self, context: execution_context.ExecutionContext):
+        return os.path.join(folder_paths.get_user_directory(context.user_hash), "users.json")
 
     def get_request_user_id(self, request):
         user = "default"
@@ -65,16 +68,25 @@ class UserManager():
 
         return user
 
+    def get_default_user_filepath(self, file, type="userdata"):
+        return self._get_request_user_filepath("default", file, type, False)
+
     def get_request_user_filepath(self, request, file, type="userdata", create_dir=True):
-        user_directory = folder_paths.get_user_directory()
+        context = execution_context.ExecutionContext(request)
+        if not context.user_hash:
+            raise Exception("user hash is not provided")
+        return self._get_request_user_filepath(context.user_hash, file, type, create_dir)
+
+    def _get_request_user_filepath(self, user_hash, file, type="userdata", create_dir=True):
+        user_directory = folder_paths.get_user_directory(user_hash)
 
         if type == "userdata":
             root_dir = user_directory
         else:
             raise KeyError("Unknown filepath type:" + type)
 
-        user = self.get_request_user_id(request)
-        path = user_root = os.path.abspath(os.path.join(root_dir, user))
+        # user = self.get_request_user_id(request)
+        path = user_root = os.path.abspath(root_dir)
 
         # prevent leaving /{type}
         if os.path.commonpath((root_dir, user_root)) != root_dir:
@@ -97,7 +109,7 @@ class UserManager():
 
         return path
 
-    def add_user(self, name):
+    def add_user(self, context: execution_context.ExecutionContext, name):
         name = name.strip()
         if not name:
             raise ValueError("username not provided")
@@ -106,7 +118,7 @@ class UserManager():
 
         self.users[user_id] = name
 
-        with open(self.get_users_file(), "w") as f:
+        with open(self.get_users_file(context), "w") as f:
             json.dump(self.users, f)
 
         return user_id
@@ -127,13 +139,14 @@ class UserManager():
 
         @routes.post("/users")
         async def post_users(request):
-            body = await request.json()
-            username = body["username"]
-            if username in self.users.values():
-                return web.json_response({"error": "Duplicate username."}, status=400)
-
-            user_id = self.add_user(username)
-            return web.json_response(user_id)
+            # body = await request.json()
+            # username = body["username"]
+            # if username in self.users.values():
+            #     return web.json_response({"error": "Duplicate username."}, status=400)
+            #
+            # user_id = self.add_user(username)
+            # return web.json_response(user_id)
+            return web.Response(status=403, text="Forbidden")
 
         @routes.get("/userdata")
         async def listuserdata(request):
@@ -385,61 +398,32 @@ class UserManager():
 
         @routes.delete("/userdata/{file}")
         async def delete_userdata(request):
-            path = get_user_data_path(request, check_exists=True)
-            if not isinstance(path, str):
-                return path
-
-            os.remove(path)
-
-            return web.Response(status=204)
+            # path = get_user_data_path(request, check_exists=True)
+            # if not isinstance(path, str):
+            #     return path
+            #
+            # os.remove(path)
+            #
+            # return web.Response(status=204)
+            return web.Response(status=403, text="Forbidden")
 
         @routes.post("/userdata/{file}/move/{dest}")
         async def move_userdata(request):
-            """
-            Move or rename a user data file.
-
-            This endpoint handles moving or renaming files within a user's data directory, with options for
-            controlling overwrite behavior and response format.
-
-            Path Parameters:
-            - file: The source file path (URL encoded if necessary)
-            - dest: The destination file path (URL encoded if necessary)
-
-            Query Parameters:
-            - overwrite (optional): If "false", prevents overwriting existing files. Defaults to "true".
-            - full_info (optional): If "true", returns detailed file information (path, size, modified time).
-                                  If "false", returns only the relative file path.
-
-            Returns:
-            - 400: If either 'file' or 'dest' parameter is missing
-            - 403: If either requested path is not allowed
-            - 404: If the source file does not exist
-            - 409: If overwrite=false and the destination file already exists
-            - 200: JSON response with either:
-                  - Full file information (if full_info=true)
-                  - Relative file path (if full_info=false)
-            """
-            source = get_user_data_path(request, check_exists=True)
-            if not isinstance(source, str):
-                return source
-
-            dest = get_user_data_path(request, check_exists=False, param="dest")
-            if not isinstance(source, str):
-                return dest
-
-            overwrite = request.query.get("overwrite", 'true') != "false"
-            full_info = request.query.get('full_info', 'false').lower() == "true"
-
-            if not overwrite and os.path.exists(dest):
-                return web.Response(status=409, text="File already exists")
-
-            logging.info(f"moving '{source}' -> '{dest}'")
-            shutil.move(source, dest)
-
-            user_path = self.get_request_user_filepath(request, None)
-            if full_info:
-                resp = get_file_info(dest, user_path)
-            else:
-                resp = os.path.relpath(dest, user_path)
-
-            return web.json_response(resp)
+            # source = get_user_data_path(request, check_exists=True)
+            # if not isinstance(source, str):
+            #     return source
+            #
+            # dest = get_user_data_path(request, check_exists=False, param="dest")
+            # if not isinstance(source, str):
+            #     return dest
+            #
+            # overwrite = request.query["overwrite"] != "false"
+            # if not overwrite and os.path.exists(dest):
+            #     return web.Response(status=409)
+            #
+            # print(f"moving '{source}' -> '{dest}'")
+            # shutil.move(source, dest)
+            #
+            # resp = os.path.relpath(dest, self.get_request_user_filepath(request, None))
+            # return web.json_response(resp)
+            return web.Response(status=403, text="Forbidden")

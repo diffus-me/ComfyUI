@@ -1,9 +1,13 @@
+import inspect
 import hashlib
 import torch
 
 from comfy.cli_args import args
 
 from PIL import ImageFile, UnidentifiedImageError
+
+import execution_context
+
 
 def conditioning_set_values(conditioning, values={}, append=False):
     c = []
@@ -33,6 +37,30 @@ def pillow(fn, arg):
         if prev_value is not None:
             ImageFile.LOAD_TRUNCATED_IMAGES = prev_value
     return x
+
+
+def get_node_input_types(context: execution_context.ExecutionContext, node_class):
+    signature = inspect.signature(node_class.INPUT_TYPES)
+    positional_args = []
+    inputs = []
+    for i, param in enumerate(signature.parameters.values()):
+        if param.kind not in (param.POSITIONAL_ONLY, param.POSITIONAL_OR_KEYWORD):
+            break
+        positional_args.append(param)
+    for i, param in enumerate(positional_args):
+        if (param.annotation == str or param.annotation == "str") and param.name == 'user_hash':
+            inputs.insert(i, context.user_hash)
+        if param.annotation == execution_context.ExecutionContext or param.annotation == "execution_context.ExecutionContext":
+            inputs.insert(i, context)
+    while len(inputs) < len(positional_args):
+        i = len(inputs)
+        param = positional_args[i]
+        if param.default == param.empty:
+            inputs.append(None)
+        else:
+            inputs.append(param.default)
+    return node_class.INPUT_TYPES(*inputs)
+
 
 def hasher():
     hashfuncs = {

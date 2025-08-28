@@ -37,6 +37,8 @@ def make_batch_extra_option_dict(d, indicies, full_size=None):
         new_dict[k] = newv
     return new_dict
 
+import execution_context
+
 
 class TrainSampler(comfy.samplers.Sampler):
     def __init__(self, loss_fn, optimizer, loss_callback=None, batch_size=1, grad_acc=1, total_steps=1, seed=0, training_dtype=torch.bfloat16):
@@ -165,13 +167,13 @@ def load_and_process_images(image_files, input_dir, resize_method="None", w=None
 
 class LoadImageSetNode:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(s, context: execution_context.ExecutionContext):
         return {
             "required": {
                 "images": (
                     [
                         f
-                        for f in os.listdir(folder_paths.get_input_directory())
+                        for f in os.listdir(folder_paths.get_input_directory(context.user_hash))
                         if f.endswith((".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".jpe", ".apng", ".tif", ".tiff"))
                     ],
                     {"image_upload": True, "allow_batch": True},
@@ -183,6 +185,9 @@ class LoadImageSetNode:
                     {"default": "None"},
                 ),
             },
+            "hidden": {
+                "context": "EXECUTION_CONTEXT",
+            }
         }
 
     INPUT_IS_LIST = True
@@ -193,16 +198,16 @@ class LoadImageSetNode:
     DESCRIPTION = "Loads a batch of images from a directory for training."
 
     @classmethod
-    def VALIDATE_INPUTS(s, images, resize_method):
+    def VALIDATE_INPUTS(s, images, resize_method, context: execution_context.ExecutionContext):
         filenames = images[0] if isinstance(images[0], list) else images
 
         for image in filenames:
-            if not folder_paths.exists_annotated_filepath(image):
+            if not folder_paths.exists_annotated_filepath(image, user_hash=context.user_hash):
                 return "Invalid image file: {}".format(image)
         return True
 
-    def load_images(self, input_files, resize_method):
-        input_dir = folder_paths.get_input_directory()
+    def load_images(self, input_files, resize_method, context: execution_context.ExecutionContext):
+        input_dir = folder_paths.get_input_directory(user_hash=context.user_hash)
         valid_extensions = [".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".jpe", ".apng", ".tif", ".tiff"]
         image_files = [
             f
@@ -215,10 +220,10 @@ class LoadImageSetNode:
 
 class LoadImageSetFromFolderNode:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(s, context: execution_context.ExecutionContext):
         return {
             "required": {
-                "folder": (folder_paths.get_input_subfolders(), {"tooltip": "The folder to load images from."})
+                "folder": (folder_paths.get_input_subfolders(context), {"tooltip": "The folder to load images from."})
             },
             "optional": {
                 "resize_method": (
@@ -226,6 +231,9 @@ class LoadImageSetFromFolderNode:
                     {"default": "None"},
                 ),
             },
+            "hidden": {
+                "context": "EXECUTION_CONTEXT",
+            }
         }
 
     RETURN_TYPES = ("IMAGE",)
@@ -234,8 +242,8 @@ class LoadImageSetFromFolderNode:
     EXPERIMENTAL = True
     DESCRIPTION = "Loads a batch of images from a directory for training."
 
-    def load_images(self, folder, resize_method):
-        sub_input_dir = os.path.join(folder_paths.get_input_directory(), folder)
+    def load_images(self, folder, resize_method, context: execution_context.ExecutionContext):
+        sub_input_dir = os.path.join(folder_paths.get_input_directory(user_hash=context.user_hash), folder)
         valid_extensions = [".png", ".jpg", ".jpeg", ".webp"]
         image_files = [
             f
@@ -248,10 +256,10 @@ class LoadImageSetFromFolderNode:
 
 class LoadImageTextSetFromFolderNode:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(s, context: execution_context.ExecutionContext):
         return {
             "required": {
-                "folder": (folder_paths.get_input_subfolders(), {"tooltip": "The folder to load images from."}),
+                "folder": (folder_paths.get_input_subfolders(context), {"tooltip": "The folder to load images from."}),
                 "clip": (IO.CLIP, {"tooltip": "The CLIP model used for encoding the text."}),
             },
             "optional": {
@@ -280,6 +288,9 @@ class LoadImageTextSetFromFolderNode:
                     },
                 )
             },
+            "hidden": {
+                "context": "EXECUTION_CONTEXT",
+            }
         }
 
     RETURN_TYPES = ("IMAGE", IO.CONDITIONING,)
@@ -288,13 +299,13 @@ class LoadImageTextSetFromFolderNode:
     EXPERIMENTAL = True
     DESCRIPTION = "Loads a batch of images and caption from a directory for training."
 
-    def load_images(self, folder, clip, resize_method, width=None, height=None):
+    def load_images(self, folder, clip, resize_method, width=None, height=None, context: execution_context.ExecutionContext = None):
         if clip is None:
             raise RuntimeError("ERROR: clip input is invalid: None\n\nIf the clip is from a checkpoint loader node your checkpoint does not contain a valid clip or text encoder model.")
 
         logging.info(f"Loading images from folder: {folder}")
 
-        sub_input_dir = os.path.join(folder_paths.get_input_directory(), folder)
+        sub_input_dir = os.path.join(folder_paths.get_input_directory(context.user_hash), folder)
         valid_extensions = [".png", ".jpg", ".jpeg", ".webp"]
 
         image_files = []
@@ -396,7 +407,7 @@ def unpatch(m):
 
 class TrainLoraNode:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(s, context: execution_context.ExecutionContext):
         return {
             "required": {
                 "model": (IO.MODEL, {"tooltip": "The model to train the LoRA on."}),
@@ -501,13 +512,16 @@ class TrainLoraNode:
                     }
                 ),
                 "existing_lora": (
-                    folder_paths.get_filename_list("loras") + ["[None]"],
+                    folder_paths.get_filename_list(context, "loras") + ["[None]"],
                     {
                         "default": "[None]",
                         "tooltip": "The existing LoRA to append to. Set to None for new LoRA.",
                     },
                 ),
             },
+            "hidden": {
+                "context": "EXECUTION_CONTEXT",
+            }
         }
 
     RETURN_TYPES = (IO.MODEL, IO.LORA_MODEL, IO.LOSS_MAP, IO.INT)
@@ -534,6 +548,7 @@ class TrainLoraNode:
         algorithm,
         gradient_checkpointing,
         existing_lora,
+        context: execution_context.ExecutionContext,
     ):
         mp = model.clone()
         dtype = node_helpers.string_to_torch_dtype(training_dtype)
@@ -559,7 +574,7 @@ class TrainLoraNode:
             existing_weights = {}
             existing_steps = 0
             if existing_lora != "[None]":
-                lora_path = folder_paths.get_full_path_or_raise("loras", existing_lora)
+                lora_path = folder_paths.get_full_path_or_raise(context, "loras", existing_lora)
                 # Extract steps from filename like "trained_lora_10_steps_20250225_203716"
                 existing_steps = int(existing_lora.split("_steps_")[0].split("_")[-1])
                 if lora_path:
@@ -719,7 +734,8 @@ class LoraModelLoader:
 
 class SaveLoRA:
     def __init__(self):
-        self.output_dir = folder_paths.get_output_directory()
+        # self.output_dir = folder_paths.get_output_directory()
+        pass
 
     @classmethod
     def INPUT_TYPES(s):
@@ -748,6 +764,9 @@ class SaveLoRA:
                     },
                 ),
             },
+            "hidden": {
+                "context": "EXECUTION_CONTEXT",
+            }
         }
 
     RETURN_TYPES = ()
@@ -756,8 +775,9 @@ class SaveLoRA:
     EXPERIMENTAL = True
     OUTPUT_NODE = True
 
-    def save(self, lora, prefix, steps=None):
-        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(prefix, self.output_dir)
+    def save(self, lora, prefix, steps=None, context: execution_context.ExecutionContext=None):
+        output_dir = folder_paths.get_output_directory(user_hash=context.user_hash)
+        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(prefix, output_dir)
         if steps is None:
             output_checkpoint = f"{filename}_{counter:05}_.safetensors"
         else:
@@ -769,7 +789,8 @@ class SaveLoRA:
 
 class LossGraphNode:
     def __init__(self):
-        self.output_dir = folder_paths.get_temp_directory()
+        # self.output_dir = folder_paths.get_temp_directory()
+        pass
 
     @classmethod
     def INPUT_TYPES(s):
@@ -778,7 +799,7 @@ class LossGraphNode:
                 "loss": (IO.LOSS_MAP, {"default": {}}),
                 "filename_prefix": (IO.STRING, {"default": "loss_graph"}),
             },
-            "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
+            "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO", "context": "EXECUTION_CONTEXT"},
         }
 
     RETURN_TYPES = ()
@@ -788,7 +809,7 @@ class LossGraphNode:
     EXPERIMENTAL = True
     DESCRIPTION = "Plots the loss graph and saves it to the output directory."
 
-    def plot_loss(self, loss, filename_prefix, prompt=None, extra_pnginfo=None):
+    def plot_loss(self, loss, filename_prefix, prompt=None, extra_pnginfo=None, context: execution_context.ExecutionContext=None):
         loss_values = loss["loss"]
         width, height = 800, 480
         margin = 40
@@ -841,8 +862,9 @@ class LossGraphNode:
                     metadata.add_text(x, json.dumps(extra_pnginfo[x]))
 
         date = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_dir = folder_paths.get_temp_directory(user_hash=context.user_hash)
         img.save(
-            os.path.join(self.output_dir, f"{filename_prefix}_{date}.png"),
+            os.path.join(output_dir, f"{filename_prefix}_{date}.png"),
             pnginfo=metadata,
         )
         return {
@@ -852,6 +874,7 @@ class LossGraphNode:
                         "filename": f"{filename_prefix}_{date}.png",
                         "subfolder": "",
                         "type": "temp",
+                        "user_hash": context.user_hash,
                     }
                 ]
             }
@@ -859,19 +882,19 @@ class LossGraphNode:
 
 
 NODE_CLASS_MAPPINGS = {
-    "TrainLoraNode": TrainLoraNode,
-    "SaveLoRANode": SaveLoRA,
-    "LoraModelLoader": LoraModelLoader,
-    "LoadImageSetFromFolderNode": LoadImageSetFromFolderNode,
-    "LoadImageTextSetFromFolderNode": LoadImageTextSetFromFolderNode,
-    "LossGraphNode": LossGraphNode,
+    # "TrainLoraNode": TrainLoraNode,
+    # "SaveLoRANode": SaveLoRA,
+    # "LoraModelLoader": LoraModelLoader,
+    # "LoadImageSetFromFolderNode": LoadImageSetFromFolderNode,
+    # "LoadImageTextSetFromFolderNode": LoadImageTextSetFromFolderNode,
+    # "LossGraphNode": LossGraphNode,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "TrainLoraNode": "Train LoRA",
-    "SaveLoRANode": "Save LoRA Weights",
-    "LoraModelLoader": "Load LoRA Model",
-    "LoadImageSetFromFolderNode": "Load Image Dataset from Folder",
-    "LoadImageTextSetFromFolderNode": "Load Image and Text Dataset from Folder",
-    "LossGraphNode": "Plot Loss Graph",
+    # "TrainLoraNode": "Train LoRA",
+    # "SaveLoRANode": "Save LoRA Weights",
+    # "LoraModelLoader": "Load LoRA Model",
+    # "LoadImageSetFromFolderNode": "Load Image Dataset from Folder",
+    # "LoadImageTextSetFromFolderNode": "Load Image and Text Dataset from Folder",
+    # "LossGraphNode": "Plot Loss Graph",
 }
