@@ -9,6 +9,8 @@ import comfy.model_management
 import comfy.ldm.common_dit
 import comfy.latent_formats
 
+import execution_context
+
 
 class BlockWiseControlBlock(torch.nn.Module):
     # [linear, gelu, linear]
@@ -194,11 +196,11 @@ class SigLIPMultiFeatProjModel(torch.nn.Module):
 class ModelPatchLoader:
     @classmethod
     def INPUT_TYPES(s, exec_context: execution_context.ExecutionContext):
-        return {"required": { "name": (folder_paths.get_filename_list(exec_context, "model_patches"), ),
+        return {
+            "required": { "name": (folder_paths.get_filename_list(exec_context, "model_patches"), ),
                               },
-                "hidden": {
-                    "exec_context": "EXECUTION_CONTEXT",
-                }}
+            "hidden": {"exec_context": "EXECUTION_CONTEXT"},
+        }
     RETURN_TYPES = ("MODEL_PATCH",)
     FUNCTION = "load_model_patch"
     EXPERIMENTAL = True

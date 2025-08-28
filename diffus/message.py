@@ -58,6 +58,22 @@ class PromptState(str, Enum):
     finished = "finished"
 
 
+class NodeProgressState(BaseModel):
+    value: int
+    max: int
+    state: str
+    node_id: str
+    prompt_id: str
+    display_node_id: str | None = None
+    parent_node_id: str | None = None
+    real_node_id: str | None = None
+
+
+class ProgressState(BaseModel):
+    prompt_id: str
+    nodes: dict[str, NodeProgressState] | None = None
+
+
 class MsgData(BaseModel):
     prompt_id: str
     node: str | None = None
@@ -78,6 +94,7 @@ class MsgData(BaseModel):
     monitor_info: MonitorInfo | None = None
     message: dict | None = None
     executed: str | list[str] | None = None
+    progress_state: ProgressState | None = None
 
 
 class PromptMessages(BaseModel):
@@ -107,6 +124,7 @@ class PromptStatus(BaseModel):
     state: PromptState = PromptState.waiting  # started, executing, success, error, interrupted
     success: bool | None = None
     preview_img: str | None = None
+    progress_state: ProgressState | None = None
     last_msg: PromptMessages | None = None
 
     @property
@@ -226,6 +244,8 @@ def _process_prompt_message(
         result.result = msg.data
     elif msg.type == "preview":
         result.preview_img = msg.data.preview_img
+    elif msg.type == "progress_state":
+        result.progress_state = msg.data.progress_state
     else:
         logger.warning(f"unknown comfyui prompt message type: {msg.type}")
     result.last_msg = msg

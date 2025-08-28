@@ -89,7 +89,7 @@ def post_output_to_image_gallery(redis_client, node_obj, header_dict, input_data
         logger.warning(f"post result to gallery is disabled")
         return
 
-    result_data, ui_data, _ = output_data
+    result_data, ui_data, _, _ = output_data
 
     if not isinstance(ui_data, dict):
         return

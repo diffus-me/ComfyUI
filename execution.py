@@ -142,7 +142,7 @@ SENSITIVE_EXTRA_DATA_KEYS = ("auth_token_comfy_org", "api_key_comfy_org")
 def get_input_data(context: execution_context.ExecutionContext, inputs, class_def, unique_id, outputs=None, dynprompt=None, extra_data={}):
     is_v3 = issubclass(class_def, _ComfyNodeInternal)
     if is_v3:
-        valid_inputs, schema = class_def.INPUT_TYPES(include_hidden=False, return_schema=True)
+        valid_inputs, schema = node_helpers.get_node_input_types(context, class_def, include_hidden=False, return_schema=True)
     else:
         valid_inputs = node_helpers.get_node_input_types(context, class_def)
     input_data_all = {}
@@ -188,6 +188,8 @@ def get_input_data(context: execution_context.ExecutionContext, inputs, class_de
                 hidden_inputs_v3[io.Hidden.api_key_comfy_org] = extra_data.get("api_key_comfy_org", None)
             if io.Hidden.exec_context in schema.hidden:
                 hidden_inputs_v3[io.Hidden.exec_context] = context
+            if io.Hidden.user_hash in schema.hidden:
+                hidden_inputs_v3[io.Hidden.user_hash] = context.user_hash
     else:
         if "hidden" in valid_inputs:
             h = valid_inputs["hidden"]
@@ -322,7 +324,7 @@ def merge_result_data(results, obj):
     return output
 
 @diffus.system_monitor.node_execution_monitor
-async def get_output_data(prompt_id, unique_id, obj, input_data_all, execution_block_cb=None, pre_execute_cb=None, hidden_inputs=None):
+async def get_output_data(prompt_id, unique_id, obj, input_data_all, extra_data, execution_block_cb=None, pre_execute_cb=None, hidden_inputs=None):
     return_values = await _async_map_node_over_list(prompt_id, unique_id, obj, input_data_all, obj.FUNCTION, allow_interrupt=True, execution_block_cb=execution_block_cb, pre_execute_cb=pre_execute_cb, hidden_inputs=hidden_inputs)
     has_pending_task = any(isinstance(r, asyncio.Task) and not r.done() for r in return_values)
     if has_pending_task:
@@ -504,7 +506,7 @@ async def execute(server, context: execution_context.ExecutionContext, dynprompt
             def pre_execute_cb(call_index):
                 # TODO - How to handle this with async functions without contextvars (which requires Python 3.12)?
                 GraphBuilder.set_default_prefix(unique_id, call_index, 0)
-            output_data, output_ui, has_subgraph, has_pending_tasks = await get_output_data(prompt_id, unique_id, obj, input_data_all, execution_block_cb=execution_block_cb, pre_execute_cb=pre_execute_cb, hidden_inputs=hidden_inputs)
+            output_data, output_ui, has_subgraph, has_pending_tasks = await get_output_data(prompt_id, unique_id, obj, input_data_all, extra_data, execution_block_cb=execution_block_cb, pre_execute_cb=pre_execute_cb, hidden_inputs=hidden_inputs)
             if has_pending_tasks:
                 pending_async_nodes[unique_id] = output_data
                 unblock = execution_list.add_external_block(unique_id)
@@ -830,6 +832,7 @@ async def validate_inputs(context: execution_context.ExecutionContext, prompt_id
                     valid = False
                     continue
             except Exception as ex:
+                logging.exception(ex)
                 typ, _, tb = sys.exc_info()
                 valid = False
                 exception_type = full_type_name(typ)
