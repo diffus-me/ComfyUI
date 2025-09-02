@@ -458,10 +458,11 @@ def _sampler_custom_advanced_consumption(noise, guider, sampler, sigmas, latent_
     return {'opts': [__sample_opt_from_latent(context, guider.model_patcher, latent_image, steps, )]}
 
 
-def _k_sampler_inspire_consumption(model, seed, steps, cfg, sampler_name, scheduler, positive, negative, latent_image,
-                                   denoise, noise_mode, batch_seed_mode="comfy", variation_seed=None,
-                                   variation_strength=None, variation_method="linear",
-                                   context=None):
+def _inspire_k_sampler_consumption(model, seed, steps, cfg, sampler_name, scheduler, positive, negative, latent_image,
+                                   denoise, noise_mode,
+                                   batch_seed_mode="comfy", variation_seed=None, variation_strength=None,
+                                   variation_method="linear", scheduler_func_opt=None,
+                                   internal_seed=None, context: execution_context.ExecutionContext = None):
     context.set_geninfo(
         positive_prompt=positive,
         negative_prompt=negative,
@@ -469,6 +470,92 @@ def _k_sampler_inspire_consumption(model, seed, steps, cfg, sampler_name, schedu
         sampler=sampler_name,
         cfg_scale=cfg,
         seed=seed,
+    )
+    return {'opts': [__sample_opt_from_latent(context, model, latent_image, steps, )]}
+
+
+def _inspire_k_sampler_advanced_consumption(model, add_noise, noise_seed, steps, cfg, sampler_name, scheduler, positive,
+                                            negative, latent_image, start_at_step, end_at_step, noise_mode,
+                                            return_with_leftover_noise,
+                                            denoise=1.0, batch_seed_mode="comfy", variation_seed=None,
+                                            variation_strength=None, noise_opt=None, callback=None,
+                                            variation_method="linear", scheduler_func_opt=None, internal_seed=None,
+                                            context: execution_context.ExecutionContext = None):
+    context.set_geninfo(
+        positive_prompt=positive,
+        negative_prompt=negative,
+        steps=steps,
+        sampler=sampler_name,
+        cfg_scale=cfg,
+        seed=noise_seed,
+    )
+    return {'opts': [__sample_opt_from_latent(context, model, latent_image, steps, )]}
+
+
+def _inspire_k_sampler_pipe_consumption(basic_pipe, seed, steps, cfg, sampler_name, scheduler, latent_image, denoise,
+                                        noise_mode, batch_seed_mode="comfy",
+                                        variation_seed=None, variation_strength=None, scheduler_func_opt=None,
+                                        internal_seed=None,
+                                        context: execution_context.ExecutionContext = None):
+    model, clip, vae, positive, negative = basic_pipe
+    context.set_geninfo(
+        positive_prompt=positive,
+        negative_prompt=negative,
+        steps=steps,
+        sampler=sampler_name,
+        cfg_scale=cfg,
+        seed=seed,
+    )
+    return {'opts': [__sample_opt_from_latent(context, model, latent_image, steps, )]}
+
+
+def _inspire_k_sampler_advanced_pipe_consumption(basic_pipe, add_noise, noise_seed, steps, cfg, sampler_name, scheduler,
+                                                 latent_image, start_at_step, end_at_step, noise_mode,
+                                                 return_with_leftover_noise,
+                                                 denoise=1.0, batch_seed_mode="comfy", variation_seed=None,
+                                                 variation_strength=None, noise_opt=None, scheduler_func_opt=None,
+                                                 internal_seed=None,
+                                                 context: execution_context.ExecutionContext = None):
+    model, clip, vae, positive, negative = basic_pipe
+    context.set_geninfo(
+        positive_prompt=positive,
+        negative_prompt=negative,
+        steps=steps,
+        sampler=sampler_name,
+        cfg_scale=cfg,
+        seed=noise_seed,
+    )
+    return {'opts': [__sample_opt_from_latent(context, model, latent_image, steps, )]}
+
+
+def _inspire_ksampler_progress_consumption(model, seed, steps, cfg, sampler_name, scheduler, positive, negative,
+                                           latent_image, denoise, noise_mode,
+                                           interval, omit_start_latent, omit_final_latent, scheduler_func_opt=None,
+                                           context: execution_context.ExecutionContext = None):
+    context.set_geninfo(
+        positive_prompt=positive,
+        negative_prompt=negative,
+        steps=steps,
+        sampler=sampler_name,
+        cfg_scale=cfg,
+        seed=seed,
+    )
+    return {'opts': [__sample_opt_from_latent(context, model, latent_image, steps, )]}
+
+
+def _inspire_ksampleradvanced_progress_consumption(model, add_noise, noise_seed, steps, cfg, sampler_name, scheduler,
+                                                   positive, negative, latent_image,
+                                                   start_at_step, end_at_step, noise_mode, return_with_leftover_noise,
+                                                   interval, omit_start_latent, omit_final_latent,
+                                                   prev_progress_latent_opt=None, scheduler_func_opt=None,
+                                                   context: execution_context.ExecutionContext = None):
+    context.set_geninfo(
+        positive_prompt=positive,
+        negative_prompt=negative,
+        steps=steps,
+        sampler=sampler_name,
+        cfg_scale=cfg,
+        seed=noise_seed,
     )
     return {'opts': [__sample_opt_from_latent(context, model, latent_image, steps, )]}
 
@@ -1973,7 +2060,6 @@ _NODE_CONSUMPTION_MAPPING = {
     'UltimateSDUpscaleNoUpscale': _ultimate_sd_upscale_no_upscale_consumption,
     'CR Upscale Image': _cr_upscale_image_consumption,
     "CR Apply Multi Upscale": _cr_apply_multi_upscale_consumption,
-    'KSampler //Inspire': _k_sampler_inspire_consumption,
     'KSampler Cycle': _was_k_sampler_cycle_consumption,
     'ImpactSimpleDetectorSEGS_for_AD': _impact_simple_detector_segs_for_ad_consumption,
     'DetailerForEach': _detailer_for_each_consumption,
@@ -2950,6 +3036,14 @@ _NODE_CONSUMPTION_MAPPING = {
     "CreateVideo": _none_consumption_maker,
     "TrimVideoLatent": _none_consumption_maker,
     "WanVaceToVideo": _none_consumption_maker,
+
+    "KSamplerProgress //Inspire": _inspire_ksampler_progress_consumption,
+    "KSamplerAdvancedProgress //Inspire": _inspire_ksampleradvanced_progress_consumption,
+    "KSampler //Inspire": _inspire_k_sampler_consumption,
+    "KSamplerAdvanced //Inspire": _inspire_k_sampler_advanced_consumption,
+    "KSamplerPipe //Inspire": _inspire_k_sampler_pipe_consumption,
+    "KSamplerAdvancedPipe //Inspire": _inspire_k_sampler_advanced_pipe_consumption,
+
 }
 
 
