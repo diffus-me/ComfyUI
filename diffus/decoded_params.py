@@ -1148,6 +1148,8 @@ def _detailer_for_each_consumption(image, segs, model, clip, vae, guide_size, gu
                                    scheduler, positive, negative, denoise, feather, noise_mask, force_inpaint, wildcard,
                                    cycle=1,
                                    detailer_hook=None, inpaint_model=False, noise_mask_feather=0,
+                                   scheduler_func_opt=None,
+                                   tiled_encode=False, tiled_decode=False, max_retries=1,
                                    context: execution_context.ExecutionContext = None):
     image_width = image.shape[2]
     image_height = image.shape[1]
@@ -1167,7 +1169,8 @@ def _detailer_for_each_pipe_consumption(image, segs, guide_size, guide_size_for,
                                         sampler_name, scheduler,
                                         denoise, feather, noise_mask, force_inpaint, basic_pipe, wildcard,
                                         refiner_ratio=None, detailer_hook=None, refiner_basic_pipe_opt=None,
-                                        cycle=1, inpaint_model=False, noise_mask_feather=0,
+                                        cycle=1, inpaint_model=False, noise_mask_feather=0, scheduler_func_opt=None,
+                                        tiled_encode=False, tiled_decode=False,
                                         context: execution_context.ExecutionContext = None):
     image_width = image.shape[2]
     image_height = image.shape[1]
