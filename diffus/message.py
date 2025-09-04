@@ -119,7 +119,7 @@ class PromptStatus(BaseModel):
     prompt_id: str
     client_id: str | None = None
     progress: ProgressProgress | None = None
-    outputs: list[PromptOutput] | None = None
+    outputs: list[PromptOutput|None] | None = None
     result: ProgressResult | None = None
     state: PromptState = PromptState.waiting  # started, executing, success, error, interrupted
     success: bool | None = None

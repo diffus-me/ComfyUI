@@ -210,6 +210,23 @@ def _tsc_ksampler_advanced_consumption(model, add_noise, noise_seed, steps, cfg,
     return {'opts': [__sample_opt_from_latent(context, model, latent_image, steps, )]}
 
 
+def _tsc_ksampler_consumption(model, seed, steps, cfg, sampler_name, scheduler, positive, negative, latent_image,
+                              preview_method, vae_decode, denoise=1.0, prompt=None, extra_pnginfo=None,
+                              my_unique_id=None,
+                              context: execution_context.ExecutionContext = None,
+                              optional_vae=(None,), script=None, add_noise=None, start_at_step=None, end_at_step=None,
+                              return_with_leftover_noise=None, sampler_type="regular"):
+    context.set_geninfo(
+        positive_prompt=positive,
+        negative_prompt=negative,
+        steps=steps,
+        sampler=sampler_name,
+        cfg_scale=cfg,
+        seed=seed,
+    )
+    return {'opts': [__sample_opt_from_latent(context, model, latent_image, steps, )]}
+
+
 def _tsc_ksampler_sdxl_consumption(sdxl_tuple, noise_seed, steps, cfg, sampler_name, scheduler, latent_image,
                                    start_at_step, refine_at_step, preview_method, vae_decode, prompt=None,
                                    extra_pnginfo=None,
@@ -225,6 +242,21 @@ def _tsc_ksampler_sdxl_consumption(sdxl_tuple, noise_seed, steps, cfg, sampler_n
         seed=noise_seed,
     )
     model = sdxl_tuple[0]
+    return {'opts': [__sample_opt_from_latent(context, model, latent_image, steps, )]}
+
+
+def _tiled_ksampler_provider_consumption(seed, steps, cfg, sampler_name, scheduler, denoise,
+                                         tile_width, tile_height, tiling_strategy, basic_pipe,
+                                         context: execution_context.ExecutionContext):
+    model, _, _, positive, negative = basic_pipe
+    context.set_geninfo(
+        positive_prompt=positive,
+        negative_prompt=negative,
+        steps=steps,
+        sampler=sampler_name,
+        cfg_scale=cfg,
+        seed=noise_seed,
+    )
     return {'opts': [__sample_opt_from_latent(context, model, latent_image, steps, )]}
 
 
@@ -453,7 +485,8 @@ def _sampler_custom_consumption(model, add_noise, noise_seed, cfg, positive, neg
     return {'opts': [__sample_opt_from_latent(context, model, latent_image, steps, )]}
 
 
-def _sampler_custom_advanced_consumption(noise, guider, sampler, sigmas, latent_image, context):
+def _sampler_custom_advanced_consumption(noise, guider, sampler, sigmas, latent_image,
+                                         context: execution_context.ExecutionContext):
     steps = len(sigmas)
     return {'opts': [__sample_opt_from_latent(context, guider.model_patcher, latent_image, steps, )]}
 
@@ -642,6 +675,19 @@ def _was_k_sampler_cycle_consumption(model, seed, steps, cfg, sampler_name, sche
     return {'opts': result}
 
 
+def _was_ksampler_consumption(model, seed, steps, cfg, sampler_name, scheduler, positive, negative, latent_image,
+                              denoise=1.0, context: execution_context.ExecutionContext = None):
+    context.set_geninfo(
+        positive_prompt=positive,
+        negative_prompt=negative,
+        steps=steps,
+        sampler=sampler_name,
+        cfg_scale=cfg,
+        seed=seed,
+    )
+    return {'opts': [__sample_opt_from_latent(context, model, latent_image, steps, )]}
+
+
 def _searge_sdxl_image2image_sampler2_consumption(base_model, base_positive, base_negative, refiner_model,
                                                   refiner_positive, refiner_negative,
                                                   image, vae, noise_seed, steps, cfg, sampler_name, scheduler,
@@ -760,8 +806,8 @@ def _wan_video_sampler_consumption(
         cache_args=None, teacache_args=None, flowedit_args=None, batched_cfg=False, slg_args=None,
         rope_function="default", loop_args=None,
         experimental_args=None, sigmas=None, unianimate_poses=None, fantasytalking_embeds=None, uni3c_embeds=None,
-        multitalk_embeds=None, freeinit_args=None,
-        context: execution_context.ExecutionContext = None
+        multitalk_embeds=None, freeinit_args=None, start_step=0, end_step=-1, add_noise_to_samples=False,
+        exec_context: execution_context.ExecutionContext = None
 ):
     patcher = model
     model_name = patcher.model["model_name"]
@@ -1015,9 +1061,10 @@ def _cr_apply_multi_upscale_consumption(image, resampling_method, supersample, r
 
 
 def _vhs_video_combine_consumption(
-        images,
         frame_rate: int,
         loop_count: int,
+        images=None,
+        latents=None,
         filename_prefix="AnimateDiff",
         format="image/gif",
         pingpong=False,
@@ -1028,7 +1075,8 @@ def _vhs_video_combine_consumption(
         unique_id=None,
         manual_format_widgets=None,
         meta_batch=None,
-        context: execution_context.ExecutionContext = None,
+        vae=None,
+        **kwargs
 ):
     return {
         'opts': [{
@@ -1101,6 +1149,7 @@ def _face_detailer_consumption(image, model, clip, vae, guide_size, guide_size_f
                                sam_mask_hint_use_negative, drop_size, bbox_detector, wildcard, cycle=1,
                                sam_model_opt=None, segm_detector_opt=None, detailer_hook=None, inpaint_model=False,
                                noise_mask_feather=0,
+                               scheduler_func_opt=None, tiled_encode=False, tiled_decode=False,
                                context: execution_context.ExecutionContext = None):
     image_width = image.shape[2]
     image_height = image.shape[1]
@@ -1149,7 +1198,7 @@ def _detailer_for_each_consumption(image, segs, model, clip, vae, guide_size, gu
                                    cycle=1,
                                    detailer_hook=None, inpaint_model=False, noise_mask_feather=0,
                                    scheduler_func_opt=None,
-                                   tiled_encode=False, tiled_decode=False, max_retries=1,
+                                   tiled_encode=False, tiled_decode=False,
                                    context: execution_context.ExecutionContext = None):
     image_width = image.shape[2]
     image_height = image.shape[1]
@@ -1591,6 +1640,35 @@ def _ksampler_gradually_adding_more_denoise_consumption(
         sampler=sampler_name,
         cfg_scale=cfg,
         seed=seed,
+    )
+    return {'opts': [__sample_opt_from_latent(context, model, latent_image, steps, )]}
+
+
+def _ksampler_variations_stochastic_plus_consumption(model, latent_image, noise_seed, steps, cfg, sampler, scheduler,
+                                                     positive, negative, variation_seed, variation_strength, cfg_scale,
+                                                     variation_sampler="dpmpp_2m_sde",
+                                                     context: execution_context.ExecutionContext = None):
+    context.set_geninfo(
+        positive_prompt=positive,
+        negative_prompt=negative,
+        steps=steps,
+        sampler=sampler,
+        cfg_scale=cfg,
+        seed=noise_seed,
+    )
+    return {'opts': [__sample_opt_from_latent(context, model, latent_image, steps, )]}
+
+
+def _ksampler_variations_with_noise_plus_consumption(model, latent_image, main_seed, steps, cfg, sampler_name,
+                                                     scheduler, positive, negative, variation_strength, variation_seed,
+                                                     denoise, context: execution_context.ExecutionContext = None):
+    context.set_geninfo(
+        positive_prompt=positive,
+        negative_prompt=negative,
+        steps=steps,
+        sampler=sampler_name,
+        cfg_scale=cfg,
+        seed=main_seed,
     )
     return {'opts': [__sample_opt_from_latent(context, model, latent_image, steps, )]}
 
@@ -2037,6 +2115,8 @@ _NODE_CONSUMPTION_MAPPING = {
     'KSampler (Efficient)': _tsc_k_sampler_consumption,
     'KSampler Adv. (Efficient)': _tsc_ksampler_advanced_consumption,
     'KSampler SDXL (Eff.)': _tsc_ksampler_sdxl_consumption,
+    "TiledKSamplerProvider": _tiled_ksampler_provider_consumption,
+    "TSC_KSampler": _tsc_ksampler_consumption,
     'XlabsSampler': _xlabs_sampler_consumption,
     'ImpactKSamplerBasicPipe': _impact_k_sampler_basic_pipe_consumption,
     'ReActorRestoreFace': _reactor_restore_face_consumption,
@@ -2059,11 +2139,13 @@ _NODE_CONSUMPTION_MAPPING = {
     "HyVideoSampler": _hy_video_sampler_consumption,
     "MaskDetailerPipe": _mask_detailer_pipe_consumption,
     "KSampler Gradually Adding More Denoise (efficient)": _ksampler_gradually_adding_more_denoise_consumption,
-
+    "KSamplerVariationsStochastic+": _ksampler_variations_stochastic_plus_consumption,
+    "KSamplerVariationsWithNoise+": _ksampler_variations_with_noise_plus_consumption,
     'UltimateSDUpscaleNoUpscale': _ultimate_sd_upscale_no_upscale_consumption,
     'CR Upscale Image': _cr_upscale_image_consumption,
     "CR Apply Multi Upscale": _cr_apply_multi_upscale_consumption,
     'KSampler Cycle': _was_k_sampler_cycle_consumption,
+    "KSampler (WAS)": _was_ksampler_consumption,
     'ImpactSimpleDetectorSEGS_for_AD': _impact_simple_detector_segs_for_ad_consumption,
     'DetailerForEach': _detailer_for_each_consumption,
     'DetailerForEachPipe': _detailer_for_each_pipe_consumption,

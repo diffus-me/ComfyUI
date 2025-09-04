@@ -1,6 +1,7 @@
 import math
 import comfy.samplers
 import comfy.sample
+import execution_context
 from comfy.k_diffusion import sampling as k_diffusion_sampling
 from comfy.k_diffusion import sa_solver
 from comfy.comfy_types import IO, ComfyNodeABC, InputTypeDict
@@ -819,7 +820,7 @@ class SamplerCustomAdvanced:
 
     CATEGORY = "sampling/custom_sampling"
 
-    def sample(self, noise, guider, sampler, sigmas, latent_image, context):
+    def sample(self, noise, guider, sampler, sigmas, latent_image, context: execution_context.ExecutionContext):
         latent = latent_image
         latent_image = latent["samples"]
         latent = latent.copy()
