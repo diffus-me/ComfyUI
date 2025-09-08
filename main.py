@@ -387,7 +387,7 @@ def start_comfyui(asyncio_loop=None):
     hook_breaker_ac10a0.restore_functions()
 
     cuda_malloc_warning()
-    setup_database()
+    # setup_database()
 
     prompt_server.add_routes()
     hijack_progress(prompt_server)

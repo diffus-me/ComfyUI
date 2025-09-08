@@ -85,13 +85,14 @@ class SaveVideo(io.ComfyNode):
                 io.Combo.Input("codec", options=VideoCodec.as_input(), default="auto", tooltip="The codec to use for the video."),
             ],
             outputs=[],
-            hidden=[io.Hidden.prompt, io.Hidden.extra_pnginfo, io.Hidden.extra_pnginfo],
+            hidden=[io.Hidden.prompt, io.Hidden.extra_pnginfo, io.Hidden.extra_pnginfo, io.Hidden.exec_context],
             is_output_node=True,
         )
 
     @classmethod
-    def execute(cls, video: VideoInput, filename_prefix, format, codec, exec_context: execution_context.ExecutionContext) -> io.NodeOutput:
+    def execute(cls, video: VideoInput, filename_prefix, format, codec) -> io.NodeOutput:
         width, height = video.get_dimensions()
+        exec_context = cls.hidden.exec_context
         full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(
             filename_prefix,
             folder_paths.get_output_directory(user_hash=exec_context.user_hash),
@@ -169,9 +170,12 @@ class GetVideoComponents(io.ComfyNode):
 class LoadVideo(io.ComfyNode):
     @classmethod
     def define_schema(cls, exec_context: execution_context.ExecutionContext):
-        input_dir = folder_paths.get_input_directory(user_hash=exec_context.user_hash)
-        files = [f for f in os.listdir(input_dir) if os.path.isfile(os.path.join(input_dir, f))]
-        files = folder_paths.filter_files_content_types(files, ["video"])
+        if exec_context:
+            input_dir = folder_paths.get_input_directory(user_hash=exec_context.user_hash)
+            files = [f for f in os.listdir(input_dir) if os.path.isfile(os.path.join(input_dir, f))]
+            files = folder_paths.filter_files_content_types(files, ["video"])
+        else:
+            files = []
         return io.Schema(
             node_id="LoadVideo",
             display_name="Load Video",

@@ -2101,6 +2101,24 @@ def _SegmentV2_consumption(
     return {'opts': opts}
 
 
+def _layermask_person_mask_ultra_v2_consumption(
+    image, sam_model, grounding_dino_model, threshold,
+                                  detail_method, detail_erode, detail_dilate,
+                                  black_point, white_point, process_detail, prompt,
+                                  device, max_megapixels, cache_model
+):
+    image_width = image.shape[2]
+    image_height = image.shape[1]
+    batch_size = image.shape[0]
+    opts = [{
+        'opt_type': 'SegmentAnythingUltraV2',
+        'width': image_width,
+        'height': image_height,
+        'batch_size': batch_size,
+    }]
+    return {'opts': opts}
+
+
 def _default_consumption_maker(*args, **kwargs):
     return {}
 
@@ -3147,6 +3165,8 @@ _NODE_CONSUMPTION_MAPPING = {
     "Image or Latent Size (rgthree)": _none_consumption_maker,
     "Image Resize (rgthree)": _none_consumption_maker,
     "Power Puter (rgthree)": _none_consumption_maker,
+
+    "LayerMask: SegmentAnythingUltra V2": _layermask_person_mask_ultra_v2_consumption,
 }
 
 

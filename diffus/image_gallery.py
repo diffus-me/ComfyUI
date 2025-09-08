@@ -13,6 +13,16 @@ import folder_paths
 
 logger = logging.getLogger(__name__)
 
+from json import JSONEncoder
+
+
+class _MyEncoder(JSONEncoder):
+    def default(self, obj):
+        if hasattr(obj, '__json__'):
+            return obj.__json__()
+        else:
+            return super().default(obj)
+
 
 def _do_post_image_to_gallery(
         post_url,
@@ -30,6 +40,7 @@ def _do_post_image_to_gallery(
 ):
     if image_type != "output":
         return
+
     post_json = {
         "task_id": task_id,
         "path": os.path.join(
@@ -38,7 +49,7 @@ def _do_post_image_to_gallery(
             image_filename,
         ),
         "feature": "COMFYUI",
-        "pnginfo": json.dumps(pnginfo),
+        "pnginfo": json.dumps(pnginfo, cls=_MyEncoder),
         "base": model_base,
         "prompt": positive_prompt,  # positive prompt
         "model_ids": model_ids,  # checkpoint, loras
@@ -71,27 +82,30 @@ def _do_post_image_to_gallery(
         return None
 
 
-def post_output_to_image_gallery(redis_client, node_obj, header_dict, input_data, output_data):
+def post_output_to_image_gallery(redis_client, node_obj, header_dict, input_data, output_data, hidden_inputs=None):
     if not output_data:
         return
 
-    user_hash = _find_user_hash_from_input_data(input_data)
+    user_hash = header_dict.get('x-diffus-user-hash', None) or header_dict.get('X-Diffus-User-Hash', None)
     if not user_hash:
+        logger.warning("post_output_to_image_gallery, no user_hash, returning")
         return
 
     user_id = header_dict.get('user-id', None) or header_dict.get('User-Id', None)
     if not user_id:
+        logger.warning("post_output_to_image_gallery, no user_id, returning")
         return
     user_tier = header_dict.get('user-tier', None) or header_dict.get('User-Tier', None)
 
     disable_post = header_dict.get('x-disable-gallery-post', None) or header_dict.get('X-Disable-Gallery-Post', None)
     if disable_post and disable_post.lower() == "true":
-        logger.warning(f"post result to gallery is disabled")
+        logger.warning(f"post result to gallery is disabled, returning")
         return
 
     result_data, ui_data, _, _ = output_data
 
     if not isinstance(ui_data, dict):
+        logger.warning("post_output_to_image_gallery, no ui_data, returning")
         return
 
     proceeded_files = set()
@@ -162,14 +176,23 @@ def post_output_to_image_gallery(redis_client, node_obj, header_dict, input_data
                     proceeded_files.add(filename)
 
 
-def _find_user_hash_from_input_data(input_data):
-    if not isinstance(input_data, dict):
+def _find_user_hash_from_input_data(input_data, hidden_inputs=None):
+    if not isinstance(input_data, dict) and hidden_inputs is None:
         return ""
-    for key, value in input_data.items():
-        if key == "user_hash":
-            return value[0]
-        elif key == "context":
-            return value[0].user_hash
+
+    if isinstance(input_data, dict):
+        for key, value in input_data.items():
+            if key == "user_hash":
+                return value[0]
+            elif key == "context":
+                return value[0].user_hash
+    if hidden_inputs is not None:
+        from comfy_api.latest import io
+        context =  hidden_inputs.get(io.Hidden.exec_context, None)
+        if context:
+            return context.user_hash
+        return hidden_inputs.get(io.Hidden.user_hash, None)
+
     return ""
 
 

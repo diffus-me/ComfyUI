@@ -293,7 +293,7 @@ def node_execution_monitor(get_output_data):
             try:
                 output_data = await get_output_data(prompt_id, unique_id, obj, input_data_all, extra_data, execution_block_cb=execution_block_cb, pre_execute_cb=pre_execute_cb, hidden_inputs=hidden_inputs)
                 result_encoder(True, None)
-                post_output_to_image_gallery(redis_client, obj, make_headers(extra_data), input_data_all, output_data)
+                post_output_to_image_gallery(redis_client, obj, make_headers(extra_data), input_data_all, output_data, hidden_inputs=hidden_inputs)
                 return output_data
             except Exception as ex:
                 result_encoder(False, ex)
