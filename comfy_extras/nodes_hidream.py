@@ -49,7 +49,7 @@ class CLIPTextEncodeHiDream:
         tokens["l"] = clip.tokenize(clip_l)["l"]
         tokens["t5xxl"] = clip.tokenize(t5xxl)["t5xxl"]
         tokens["llama"] = clip.tokenize(llama)["llama"]
-        return (clip.encode_from_tokens_scheduled(tokens), )
+        return (clip.encode_from_tokens_scheduled(tokens, add_dict={"_origin_text_": "".join([clip_l, clip_g, t5xxl, llama])}), )
 
 NODE_CLASS_MAPPINGS = {
     "QuadrupleCLIPLoader": QuadrupleCLIPLoader,

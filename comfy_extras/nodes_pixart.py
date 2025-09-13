@@ -17,7 +17,7 @@ class CLIPTextEncodePixArtAlpha:
 
     def encode(self, clip, width, height, text):
         tokens = clip.tokenize(text)
-        return (clip.encode_from_tokens_scheduled(tokens, add_dict={"width": width, "height": height}),)
+        return (clip.encode_from_tokens_scheduled(tokens, add_dict={"width": width, "height": height, "_origin_text_": text}),)
 
 NODE_CLASS_MAPPINGS = {
     "CLIPTextEncodePixArtAlpha": CLIPTextEncodePixArtAlpha,
