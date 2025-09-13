@@ -245,9 +245,11 @@ def _tsc_ksampler_sdxl_consumption(sdxl_tuple, noise_seed, steps, cfg, sampler_n
     return {'opts': [__sample_opt_from_latent(context, model, latent_image, steps, )]}
 
 
-def _tiled_ksampler_provider_consumption(seed, steps, cfg, sampler_name, scheduler, denoise,
-                                         tile_width, tile_height, tiling_strategy, basic_pipe,
-                                         context: execution_context.ExecutionContext):
+def _tiled_ksampler_provider_consumption(
+        seed, steps, cfg, sampler_name, scheduler, denoise,
+        tile_width, tile_height, tiling_strategy, basic_pipe,
+        context: execution_context.ExecutionContext
+):
     model, _, _, positive, negative = basic_pipe
     context.set_geninfo(
         positive_prompt=positive,
@@ -255,9 +257,17 @@ def _tiled_ksampler_provider_consumption(seed, steps, cfg, sampler_name, schedul
         steps=steps,
         sampler=sampler_name,
         cfg_scale=cfg,
-        seed=noise_seed,
+        seed=seed,
     )
-    return {'opts': [__sample_opt_from_latent(context, model, latent_image, steps, )]}
+    return {'opts': [{
+        'opt_type': 'ksampler',
+        'width': 1024,
+        'height': 1024,
+        'steps': steps,
+        'n_iter': 1,
+        'batch_size': 1,
+        "ratio": _sample_consumption_ratio(context, model)
+    }]}
 
 
 def _tsc_k_sampler_consumption(model, seed, steps, cfg, sampler_name, scheduler, positive, negative, latent_image,
@@ -320,6 +330,50 @@ def _tiled_k_sampler_consumption(model, seed, tile_width, tile_height, tiling_st
         seed=seed,
     )
     return {'opts': [__sample_opt_from_latent(context, model, latent_image, steps, )]}
+
+
+def _chibi_simple_sampler_consumption(
+        model,
+        sampler,
+        positive,
+        negative,
+        latents,
+        mode,
+        seed=None,
+        scheduler="normal",
+        sampler_name="euler",
+        exec_context: execution_context.ExecutionContext = None
+):
+    match sampler:
+        case "Normal - euler":
+            sampler_name = "uni_pc"
+            steps = 20
+            cfg = 7
+        case "Normal - uni_pc":
+            sampler_name = "uni_pc"
+            steps = 20
+            cfg = 7
+        case "LCM Lora - lcm":
+            sampler_name = "lcm"
+            steps = 8
+            cfg = 1.8
+        case "SDXL Turbo - dpmpp_sde karras":
+            sampler_name = "ddmpp_sde"
+            steps = 8
+            cfg = 1.8
+            scheduler = "karras"
+        case _:
+            steps = 20
+            cfg = 7
+    exec_context.set_geninfo(
+        positive_prompt=positive,
+        negative_prompt=negative,
+        steps=steps,
+        sampler=sampler_name,
+        cfg_scale=cfg,
+        seed=seed,
+    )
+    return {'opts': [__sample_opt_from_latent(exec_context, model, latents, steps, )]}
 
 
 def _easy_full_k_sampler_consumption(
@@ -2102,10 +2156,10 @@ def _SegmentV2_consumption(
 
 
 def _layermask_person_mask_ultra_v2_consumption(
-    image, sam_model, grounding_dino_model, threshold,
-                                  detail_method, detail_erode, detail_dilate,
-                                  black_point, white_point, process_detail, prompt,
-                                  device, max_megapixels, cache_model
+        image, sam_model, grounding_dino_model, threshold,
+        detail_method, detail_erode, detail_dilate,
+        black_point, white_point, process_detail, prompt,
+        device, max_megapixels, cache_model
 ):
     image_width = image.shape[2]
     image_height = image.shape[1]
@@ -3167,6 +3221,26 @@ _NODE_CONSUMPTION_MAPPING = {
     "Power Puter (rgthree)": _none_consumption_maker,
 
     "LayerMask: SegmentAnythingUltra V2": _layermask_person_mask_ultra_v2_consumption,
+
+    "Loader": _none_consumption_maker,
+    "SimpleSampler": _chibi_simple_sampler_consumption,
+    "Prompts": _none_consumption_maker,
+    "ImageTool": _none_consumption_maker,
+    "Wildcards": _none_consumption_maker,
+    "LoadEmbedding": _none_consumption_maker,
+    "ConditionText": _none_consumption_maker,
+    "ConditionTextPrompts": _none_consumption_maker,
+    "ConditionTextMulti": _none_consumption_maker,
+    "Textbox": _none_consumption_maker,
+    "ImageSizeInfo": _none_consumption_maker,
+    "ImageSimpleResize": _none_consumption_maker,
+    "ImageAddText": _none_consumption_maker,
+    "Int2String": _none_consumption_maker,
+    "LoadImageExtended": _none_consumption_maker,
+    "SeedGenerator": _none_consumption_maker,
+    "SaveImages": _none_consumption_maker,
+    "TextSplit": _none_consumption_maker,
+    "RandomResolutionLatent": _none_consumption_maker,
 }
 
 
