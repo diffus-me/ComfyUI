@@ -117,7 +117,7 @@ import gc
 if os.name == "nt":
     os.environ['MIMALLOC_PURGE_DELAY'] = '0'
 
-if __name__ == "__main__":
+def init_cuda_device():
     if args.default_device is not None:
         default_dev = args.default_device
         devices = list(range(32))
@@ -140,7 +140,10 @@ if __name__ == "__main__":
         if 'CUBLAS_WORKSPACE_CONFIG' not in os.environ:
             os.environ['CUBLAS_WORKSPACE_CONFIG'] = ":4096:8"
 
-    import cuda_malloc
+
+init_cuda_device()
+
+import cuda_malloc
 
 if 'torch' in sys.modules:
     logging.warning("WARNING: Potential Error in code: Torch already imported, torch should never be imported before this point.")
@@ -414,10 +417,10 @@ def start_comfyui(asyncio_loop=None):
         await run(prompt_server, address=args.listen, port=args.port, verbose=not args.dont_print_server, call_on_start=call_on_start)
 
     # Returning these so that other code can integrate with the ComfyUI loop and server
-    return asyncio_loop, prompt_server, start_all
+    return asyncio_loop, prompt_server, start_all, task_dispatcher
 
 
-if __name__ == "__main__":
+def main():
     # Running directly, just start ComfyUI.
     logging.info("Python version: {}".format(sys.version))
     logging.info("ComfyUI version: {}".format(comfyui_version.__version__))
@@ -425,7 +428,7 @@ if __name__ == "__main__":
     if sys.version_info.major == 3 and sys.version_info.minor < 10:
         logging.warning("WARNING: You are using a python version older than 3.10, please upgrade to a newer one. 3.12 and above is recommended.")
 
-    event_loop, _, start_all_func = start_comfyui()
+    event_loop, _, start_all_func, task_dispatcher = start_comfyui()
     try:
         x = start_all_func()
         app.logger.print_startup_warnings()
@@ -434,4 +437,6 @@ if __name__ == "__main__":
         logging.info("\nStopped server")
         task_dispatcher.stop()
 
-    # cleanup_temp()
+
+if __name__ == "__main__":
+    main()
