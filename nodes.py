@@ -1076,7 +1076,7 @@ class StyleModelLoader:
 
     CATEGORY = "loaders"
 
-    def load_style_model(self, style_model_name, context):
+    def load_style_model(self, style_model_name, context: execution_context.ExecutionContext):
         style_model_path = folder_paths.get_full_path_or_raise(context, "style_models", style_model_name)
         style_model = comfy.sd.load_style_model(style_model_path)
         return (style_model,)
