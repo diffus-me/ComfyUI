@@ -966,92 +966,8 @@ def _image_upscale_with_model_consumption(upscale_model, image):
     }
 
 
-model_upscale_cache = {
-    '16xPSNR.pth': 16,
-    '1x_NMKD-BrightenRedux_200k.pth': 1,
-    '1x_NMKD-YandereInpaint_375000_G.pth': 1,
-    '1x_NMKDDetoon_97500_G.pth': 1,
-    '1x_NoiseToner-Poisson-Detailed_108000_G.pth': 1,
-    '1x_NoiseToner-Uniform-Detailed_100000_G.pth': 1,
-    '4x-AnimeSharp.pth': 4,
-    '4x-UltraSharp.pth': 4,
-    '4xPSNR.pth': 4,
-    '4x_CountryRoads_377000_G.pth': 4,
-    '4x_Fatality_Comix_260000_G.pth': 4,
-    '4x_NMKD-Siax_200k.pth': 4,
-    '4x_NMKD-Superscale-Artisoftject_210000_G.pth': 4,
-    '4x_NMKD-Superscale-SP_178000_G.pth': 4,
-    '4x_NMKD-UltraYandere-Lite_280k.pth': 4,
-    '4x_NMKD-UltraYandere_300k.pth': 4,
-    '4x_NMKD-YandereNeoXL_200k.pth': 4,
-    '4x_NMKDSuperscale_Artisoft_120000_G.pth': 4,
-    '4x_NickelbackFS_72000_G.pth': 4,
-    '4x_Nickelback_70000G.pth': 4,
-    '4x_RealisticRescaler_100000_G.pth': 4,
-    '4x_UniversalUpscalerV2-Neutral_115000_swaG.pth': 4,
-    '4x_UniversalUpscalerV2-Sharp_101000_G.pth': 4,
-    '4x_UniversalUpscalerV2-Sharper_103000_G.pth': 4,
-    '4x_Valar_v1.pth': 4,
-    '4x_fatal_Anime_500000_G.pth': 4,
-    '4x_foolhardy_Remacri.pth': 4,
-    '4x_foolhardy_Remacri_ExtraSmoother.pth': 4,
-    "4x-AnimeSharp.onnx": 4,
-    "4x-UltraSharp.onnx": 4,
-    "4x-WTP-UDS-Esrgan.onnx": 4,
-    "4x_NMKD-Siax_200k.onnx": 4,
-    "4x_RealisticRescaler_100000_G.onnx": 4,
-    "4x_foolhardy_Remacri.onnx": 4,
-    "RealESRGAN_x4.onnx": 4,
-    "4xNomos2_otf_esrgan.onnx": 4,
-    '8xPSNR.pth': 8,
-    '8x_NMKD-Superscale_150000_G.pth': 8,
-    '8x_NMKD-Typescale_175k.pth': 8,
-    "A_ESRGAN_Single.pth": 4,
-    "BSRGAN.pth": 4,
-    'BSRGANx2.pth': 2,
-    "BSRNet.pth": 4,
-    'ESRGAN_4x.pth': 4,
-    "LADDIER1_282500_G.pth": 4,
-    'RealESRGAN_x4plus.pth': 4,
-    'RealESRGAN_x4plus_anime_6B.pth': 4,
-    'SwinIR_4x.pth': 4,
-    "WaifuGAN_v3_30000.pth": 4,
-    "lollypop.pth": 4,
-}
-
-model_upscale_keywords = {
-    "1x": 1,
-    "x1": 1,
-    "2x": 2,
-    "x2": 2,
-    "4x": 4,
-    "x4": 4,
-    "8x": 8,
-    "x8": 8,
-    "16x": 16,
-    "x16": 16,
-    "32x": 32,
-    "x32": 32,
-}
-
-
 def _get_upscale_model_size(context, model_name):
-    if model_name not in model_upscale_cache:
-        for k, v in model_upscale_keywords.items():
-            if k in model_name:
-                return v
-        try:
-            import folder_paths
-            import comfy
-            from comfy_extras.chainner_models import model_loading
-            model_path = folder_paths.get_full_path(context, "upscale_models", model_name)
-            sd = comfy.utils.load_torch_file(model_path, safe_load=True)
-            upscale_model = model_loading.load_state_dict(sd).eval()
-            model_upscale_cache[model_name] = upscale_model.scale
-            del upscale_model
-        except Exception as e:
-            model_upscale_cache[model_name] = 2
-    return model_upscale_cache[model_name]
+    return 2
 
 
 def _easy_hires_fix_consumption(
@@ -1557,14 +1473,7 @@ def _ani_doc_sampler_consumption(
         controlnet_images,
         reference_image,
         repeat_matching=False,
-        cotracker={
-            "tracking": False,
-            "tracker": None,
-            "grid_size": 8,
-            "grid_query_frame": 0,
-            "backward_tracking": False,
-            "max_points": 50,
-        },
+        cotracker=None,
         fps=7,
         steps=25,
         noise_aug=0.02,
