@@ -11,8 +11,7 @@ from collections.abc import Collection
 from comfy.cli_args import args
 
 import execution_context
-import diffus.models
-import diffus.repository
+from diffus.constant import FAVORITE_MODEL_TYPES
 
 supported_pt_extensions: set[str] = {'.ckpt', '.pt', '.pt2', '.bin', '.pth', '.safetensors', '.pkl', '.sft'}
 
@@ -340,9 +339,10 @@ def filter_files_extensions(files: Collection[str], extensions: Collection[str])
 
 def get_full_path(context: execution_context.ExecutionContext, folder_name: str, filename: str) -> str | None:
     _check_execution_context(context)
-    if folder_name in diffus.models.FAVORITE_MODEL_TYPES:
+    if folder_name in FAVORITE_MODEL_TYPES:
         model_info = context.get_model(folder_name, filename)
         if not model_info:
+            import diffus.repository
             model_info = diffus.repository.get_favorite_model_full_path(context.user_id, folder_name, filename)
             context.validate_model(folder_name, filename, model_info)
         return model_info
@@ -425,7 +425,8 @@ def cached_filename_list_(folder_name: str) -> tuple[list[str], dict[str, float]
 
 def get_filename_list(context: execution_context.ExecutionContext, folder_name: str, **kwargs) -> list[str]:
     _check_execution_context(context)
-    if folder_name in diffus.models.FAVORITE_MODEL_TYPES:
+    if folder_name in FAVORITE_MODEL_TYPES:
+        import diffus.repository
         return diffus.repository.list_favorite_model_by_model_type(context.user_id, folder_name, **kwargs)
     else:
         folder_name = map_legacy(folder_name)

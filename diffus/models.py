@@ -2,12 +2,6 @@ from sqlalchemy import Column, Integer, String, JSON
 
 from diffus.database import gallery, comfy
 
-FAVORITE_MODEL_TYPES = {
-    'checkpoints': 'CHECKPOINT',
-    'loras': 'LORA',
-    'lycoris': 'LYCORIS',
-}
-
 
 class Model(gallery.Base):
     __tablename__ = "models"

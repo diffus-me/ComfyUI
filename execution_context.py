@@ -1,8 +1,6 @@
-import datetime
 import uuid
 
-import diffus.models
-import diffus.repository
+from diffus.constant import FAVORITE_MODEL_TYPES
 
 
 class Geninfo:
@@ -28,9 +26,12 @@ class Geninfo:
 
 
 class ExecutionContext:
-    def __init__(self, request, extra_data={}):
+    def __init__(self, request, extra_data=None):
         self._headers = dict(request.headers)
-        self._extra_data = extra_data
+        if extra_data:
+            self._extra_data = extra_data
+        else:
+            self._extra_data = {}
         self._used_models: dict[str, dict] = {}
         self._checkpoints_model_base = ""
         self._task_id = self._headers.get('x-task-id', str(uuid.uuid4()))
@@ -38,12 +39,13 @@ class ExecutionContext:
         self._geninfo = Geninfo(self._task_id)
 
     def validate_model(self, model_type, model_name, model_info=None):
-        if model_type not in diffus.models.FAVORITE_MODEL_TYPES:
+        if model_type not in FAVORITE_MODEL_TYPES:
             return
         if model_type not in self._used_models:
             self._used_models[model_type] = {}
         if model_name not in self._used_models[model_type]:
             if not model_info:
+                import diffus.repository
                 model_info = diffus.repository.get_favorite_model_full_path(self.user_id, model_type, model_name)
             self._used_models[model_type][model_name] = model_info
 
@@ -69,7 +71,7 @@ class ExecutionContext:
     @property
     def loaded_model_ids(self):
         result = []
-        for model_type in diffus.models.FAVORITE_MODEL_TYPES:
+        for model_type in FAVORITE_MODEL_TYPES:
             result += [model_info.id for model_info in self._used_models.get(model_type, {}).values()]
         return result
 

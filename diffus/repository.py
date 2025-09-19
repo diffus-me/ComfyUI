@@ -6,7 +6,7 @@ from typing import Literal
 from pydantic import BaseModel
 from sqlalchemy.orm import Session, Query
 
-from diffus import models
+from diffus import constant, models
 from diffus.database import gallery, comfy
 
 logger = logging.getLogger(__name__)
@@ -81,9 +81,9 @@ def create_task_record(number: int, record: models.ComfyTaskRecord) -> TaskInfo 
 
 
 def list_favorite_model_by_model_type(user_id: str, folder_name: str, **kwargs):
-    if folder_name not in models.FAVORITE_MODEL_TYPES:
+    if folder_name not in constant.FAVORITE_MODEL_TYPES:
         return []
-    model_type = models.FAVORITE_MODEL_TYPES[folder_name]
+    model_type = constant.FAVORITE_MODEL_TYPES[folder_name]
     with gallery.Database() as session:
         model_base = kwargs.get('model_base', None)
         query = _make_favorite_model_query(session)
@@ -92,9 +92,9 @@ def list_favorite_model_by_model_type(user_id: str, folder_name: str, **kwargs):
 
 
 def get_favorite_model_full_path(user_id: str, folder_name: str, filename: str) -> ModelInfo | None:
-    if folder_name not in models.FAVORITE_MODEL_TYPES:
+    if folder_name not in constant.FAVORITE_MODEL_TYPES:
         return None
-    model_type = models.FAVORITE_MODEL_TYPES[folder_name]
+    model_type = constant.FAVORITE_MODEL_TYPES[folder_name]
     with gallery.Database() as session:
         query = _make_favorite_model_query(session)
         query = _filter_favorite_model_by_model_type(query, user_id, model_type, None)
