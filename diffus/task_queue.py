@@ -207,17 +207,23 @@ class TaskDispatcher:
     def __init__(self, prompt_queue, routes: aiohttp.web_routedef.RouteTableDef):
         self._task_state = _State()
         self._prompt_queue = prompt_queue
-        self._t = threading.Thread(target=self._task_loop, name='comfy-task-dispatcher-thread')
+        self._disable_embedded_task_dispatcher = os.getenv('DISABLE_EMBEDDED_TASK_DISPATCHER', False)
+        if not self._disable_embedded_task_dispatcher:
+            self._t = threading.Thread(target=self._task_loop, name='comfy-task-dispatcher-thread')
+        else:
+            self._t = None
         _setup_daemon_api(self._task_state, routes)
 
     def start(self):
         self._task_state.service_status = 'up'
         self._task_state.service_ready = True
-        self._t.start()
+        if self._t:
+            self._t.start()
 
     def stop(self):
         self._task_state.service_interrupted = True
-        self._t.join()
+        if self._t:
+            self._t.join()
 
     def _task_loop(self):
         while not self._task_state.service_interrupted \
