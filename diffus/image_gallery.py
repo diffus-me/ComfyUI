@@ -8,7 +8,6 @@ from typing import Iterable
 import requests
 
 import execution_context
-from diffus.service_registrar import get_service_node
 import folder_paths
 
 logger = logging.getLogger(__name__)
@@ -26,6 +25,7 @@ class _MyEncoder(JSONEncoder):
 
 def _do_post_image_to_gallery(
         post_url,
+        api_secret,
         task_id,
         user_id,
         user_tier,
@@ -61,6 +61,7 @@ def _do_post_image_to_gallery(
             headers={
                 "user-id": user_id,
                 "user-tier": user_tier,
+                "Api-Secret": api_secret,
             },
             json=post_json
         )
@@ -86,18 +87,18 @@ def post_output_to_image_gallery(redis_client, node_obj, header_dict, input_data
     if not output_data:
         return
 
-    user_hash = header_dict.get('x-diffus-user-hash', None) or header_dict.get('X-Diffus-User-Hash', None)
+    user_hash = header_dict.get('x-diffus-user-hash', None)
     if not user_hash:
         logger.warning("post_output_to_image_gallery, no user_hash, returning")
         return
 
-    user_id = header_dict.get('user-id', None) or header_dict.get('User-Id', None)
+    user_id = header_dict.get('user-id', None)
     if not user_id:
         logger.warning("post_output_to_image_gallery, no user_id, returning")
         return
     user_tier = header_dict.get('user-tier', None) or header_dict.get('User-Tier', None)
 
-    disable_post = header_dict.get('x-disable-gallery-post', None) or header_dict.get('X-Disable-Gallery-Post', None)
+    disable_post = header_dict.get('x-disable-gallery-post', None)
     if disable_post and disable_post.lower() == "true":
         logger.warning(f"post result to gallery is disabled, returning")
         return
@@ -111,11 +112,9 @@ def post_output_to_image_gallery(redis_client, node_obj, header_dict, input_data
     proceeded_files = set()
 
     task_id = header_dict.get('x-task-id', str(uuid.uuid4()))
-    gallery_service_node = get_service_node(redis_client, "gallery")
-    if not gallery_service_node:
-        logger.warning("no gallery service node is found")
-        return
-    image_server_endpoint = f"{gallery_service_node.host_url}/gallery-api/v1/images"
+
+    gallery_endpoint = header_dict.get('x-diffus-gallery-url', None)
+    gallery_secret = header_dict.get('x-diffus-gallery-secret', None)
 
     exec_context = _find_execution_context_from_input_data(input_data)
     for images_key in ("images", "gifs", "video", "3d"):
@@ -136,7 +135,8 @@ def post_output_to_image_gallery(redis_client, node_obj, header_dict, input_data
             if image_filename in proceeded_files:
                 continue
             presigned_url = _do_post_image_to_gallery(
-                post_url=image_server_endpoint,
+                post_url=gallery_endpoint,
+                api_secret=gallery_secret,
                 task_id=task_id,
                 user_id=user_id,
                 user_tier=user_tier,
@@ -160,7 +160,8 @@ def post_output_to_image_gallery(redis_client, node_obj, header_dict, input_data
                     if filename in proceeded_files:
                         continue
                     _do_post_image_to_gallery(
-                        post_url=image_server_endpoint,
+                        post_url=gallery_endpoint,
+                        api_secret=gallery_secret,
                         task_id=task_id,
                         user_id=user_id,
                         user_hash=user_hash,
@@ -188,7 +189,7 @@ def _find_user_hash_from_input_data(input_data, hidden_inputs=None):
                 return value[0].user_hash
     if hidden_inputs is not None:
         from comfy_api.latest import io
-        context =  hidden_inputs.get(io.Hidden.exec_context, None)
+        context = hidden_inputs.get(io.Hidden.exec_context, None)
         if context:
             return context.user_hash
         return hidden_inputs.get(io.Hidden.user_hash, None)
