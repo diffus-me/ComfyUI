@@ -41,13 +41,43 @@ def _do_post_image_to_gallery(
     if image_type != "output":
         return
 
-    post_json = {
-        "task_id": task_id,
-        "path": os.path.join(
-            folder_paths.get_relative_output_directory(user_hash),
+    relative_file_path = str(os.path.join(
+        folder_paths.get_relative_output_directory(user_hash),
+        image_subfolder,
+        image_filename,
+    ))
+    jfs_volume = os.getenv("JFS_VOLUME_NAME", "")
+    jfs_token = os.getenv("JFS_TOKEN", "")
+    if jfs_volume and jfs_token:
+        import juicefs
+        import shutil
+        ak = os.getenv("JFS_ACCESS_KEY", "")
+        sk = os.getenv("JFS_SECRET_KEY", "")
+        jfs = juicefs.Client(
+            name=jfs_volume,
+            token=jfs_token,
+            access_key=ak,
+            secret_key=sk
+        )
+        fsrc_path = os.path.join(
+            folder_paths.get_output_directory(user_hash),
             image_subfolder,
             image_filename,
-        ),
+        )
+        fdst_path = pathlib.Path("/workdir", relative_file_path)
+        fdst_path_parent = str(fdst_path.parent)
+        if not jfs.exists(fdst_path_parent):
+            jfs.makedirs(fdst_path_parent, exist_ok=True)
+        with open(fsrc_path, "rb") as fsrc:
+            with jfs.open(
+                    path=str(fdst_path),
+                    mode="wb"
+            ) as fdst:
+                shutil.copyfileobj(fsrc, fdst)
+
+    post_json = {
+        "task_id": task_id,
+        "path": relative_file_path,
         "feature": "COMFYUI",
         "pnginfo": json.dumps(pnginfo, cls=_MyEncoder),
         "base": model_base,
