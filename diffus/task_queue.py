@@ -151,12 +151,27 @@ def _post_task(_task_state: _State, request_obj, retry=1):
     encoded_headers['X-Predict-Timeout'] = f'{timeout}'
     encoded_headers['X-Task-Timeout'] = f'{timeout}'
     encoded_headers['X-Task-Id'] = task_id
+
+    # read body from file if body_path is set
+    request_data = {}
+    if request_obj.get('body_path', None):
+        body_path = request_obj['body_path']
+        try:
+            with open(body_path, 'r') as f:
+                request_data = json.load(f)
+            os.remove(body_path)
+        except Exception as e:
+            _logger.warning(f'failed to remove temporary body file {body_path}: {e}')
+
+    if not request_data:
+        request_data = json.loads(request_obj.get('body', "{}"))
+
     # pack request headers to extra_data
-    request_data = json.loads(request_obj['body'])
     extra_data = request_data.get('extra_data', {})
     extra_data['diffus-request-headers'] = encoded_headers
     request_data['extra_data'] = extra_data
 
+    # post body to service
     try:
         request_url = f'http://localhost:{_task_state.service_port}{path}'
         request_timeout = timeout + 3
@@ -166,10 +181,10 @@ def _post_task(_task_state: _State, request_obj, retry=1):
                              json=request_data,
                              timeout=request_timeout)
         if not (199 < resp.status_code < 300):
+            return True
+        else:
             _logger.error(f"failed to post task to server: {resp.status_code} {resp.text}")
             return False
-        else:
-            return True
     except Exception as e:
         _logger.exception(f'failed to post task status to redis: {e}')
         _task_state.reset_redis_client()
