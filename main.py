@@ -272,7 +272,12 @@ def prompt_worker(q, server_instance, task_dispatcher: diffus.task_queue.TaskDis
                 else:
                     logging.info("Prompt executed in {:.2f} seconds".format(execution_time))
 
-                handle_dispatcher_result(task_id=prompt_id, success=e.success, messages=e.status_messages)
+                handle_dispatcher_result(
+                    task_id=prompt_id,
+                    success=e.success,
+                    messages=e.status_messages,
+                    monitor_error=monitor_error
+                )
 
         flags = q.get_flags()
         free_memory = flags.get("free_memory", False)

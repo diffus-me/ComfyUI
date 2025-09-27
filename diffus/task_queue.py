@@ -34,6 +34,8 @@ class ServiceStatusResponse(BaseModel):
     consecutive_failed_task_count: int = Field(title='ConsecutiveFailedTaskCount', default=0)
     gpu_utilization: float = Field(title='GpuUtilization', default=0)
 
+    last_error_message: str = Field(title='LastErrorMessage', default='')
+
 
 class ServiceStatusRequest(BaseModel):
     status: str = Field(title="Status", default='startup')
@@ -49,8 +51,8 @@ class _State:
 
         self.node_name = os.getenv('NODE_NAME')
         self.node_type = os.getenv("NODE_TYPE")
-        self.accepted_tiers: [str] = os.getenv('ACCEPTED_TIERS').split(',')
-        self.accepted_type_types: [str] = os.getenv('ACCEPTED_TASK_TYPES').split(',')
+        self.accepted_tiers: list[str] = os.getenv('ACCEPTED_TIERS').split(',')
+        self.accepted_type_types: list[str] = os.getenv('ACCEPTED_TASK_TYPES').split(',')
 
         self.service_ready = False
         self._redis_client = None
@@ -106,6 +108,7 @@ def _setup_daemon_api(_task_state: _State, routes: aiohttp.web_routedef.RouteTab
             pending_task_count=_task_state.remaining_tasks,
             consecutive_failed_task_count=_task_state.consecutive_failed_task_count,
             gpu_utilization=busy_time / live_time,
+            last_error_message=_task_state.last_error_message
         )
 
         return web.json_response(resp.model_dump())
@@ -205,24 +208,27 @@ def _fetch_task(_task_state: _State, fetch_task_timeout=5):
         if not queued_task:
             _logger.debug(f'not get any pending requests in {fetch_task_timeout} seconds from {queue_name_list}')
             # no task get, check service status, and fetch task again
-            return
+            return None
 
         queue_name, packed_request = queued_task[0], queued_task[1]
         if not packed_request or not queue_name:
             # no task get, check service status, and fetch task again
-            return
+            return None
 
         _logger.info(f'popped a task from {queue_name}: {packed_request}')
         return json.loads(packed_request.decode('utf-8'))
     else:
         time.sleep(fetch_task_timeout)
+        return None
 
 
 class TaskDispatcher:
     def __init__(self, prompt_queue, routes: aiohttp.web_routedef.RouteTableDef):
         self._task_state = _State()
         self._prompt_queue = prompt_queue
-        self._disable_embedded_task_dispatcher = os.getenv('DISABLE_EMBEDDED_TASK_DISPATCHER', False)
+        self._disable_embedded_task_dispatcher = os.getenv(
+            'DISABLE_EMBEDDED_TASK_DISPATCHER', "false"
+        ).lower() in ('true', '1')
         if not self._disable_embedded_task_dispatcher:
             self._t = threading.Thread(target=self._task_loop, name='comfy-task-dispatcher-thread')
         else:
@@ -311,11 +317,13 @@ class TaskDispatcher:
         self._remove_current_task_prams_from_redis()
         _logger.info(f'on_task_finished, {prompt_id}')
 
-    def _on_task_finished(self, task_id, success, messages):
-        if success:
+    def _on_task_finished(self, task_id, success, messages, monitor_error=None):
+        if success or monitor_error is not None:
             self._task_state.finished_task_count += 1
             self._task_state.consecutive_failed_task_count = 0
+            self._task_state.last_error_message = ""
         else:
             self._task_state.failed_task_count += 1
             self._task_state.consecutive_failed_task_count += 1
-            self._task_state.last_error_message = messages
+            if len(messages) > 0:
+                self._task_state.last_error_message = str(messages[-1])
