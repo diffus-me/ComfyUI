@@ -152,7 +152,7 @@ def insert_comfy_task_record(
     # simplify params:
     try:
         number, prompt_id, prompt_dict, extra_data, outputs_to_execute = params["prompt"]
-        if "extra_pnginfo" in extra_data and "workflow" in extra_data["extra_pnginfo"]:
+        if extra_data and ("extra_pnginfo" in extra_data) and ("workflow" in extra_data["extra_pnginfo"]):
             del extra_data["extra_pnginfo"]["workflow"]
         for node_param in prompt_dict.values():
             if node_param["class_type"] == "easy loadImageBase64":
