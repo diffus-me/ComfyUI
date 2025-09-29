@@ -33,3 +33,5 @@ PyMySQL
 SQLAlchemy
 requests
 redis
+
+sageattention~=1.0.6
