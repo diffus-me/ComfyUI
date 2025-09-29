@@ -24,11 +24,7 @@ class _MyEncoder(JSONEncoder):
 
 
 def _do_post_image_to_gallery(
-        post_url,
-        api_secret,
-        task_id,
-        user_id,
-        user_tier,
+        header_dict: dict,
         user_hash,
         image_type,
         image_subfolder,
@@ -39,7 +35,7 @@ def _do_post_image_to_gallery(
         model_ids: list[int],
 ):
     if image_type != "output":
-        return
+        return None
 
     relative_file_path = str(os.path.join(
         folder_paths.get_relative_output_directory(user_hash),
@@ -64,16 +60,42 @@ def _do_post_image_to_gallery(
             image_subfolder,
             image_filename,
         )
-        fdst_path = pathlib.Path("/workdir", relative_file_path)
-        fdst_path_parent = str(fdst_path.parent)
-        if not jfs.exists(fdst_path_parent):
-            jfs.makedirs(fdst_path_parent, exist_ok=True)
-        with open(fsrc_path, "rb") as fsrc:
-            with jfs.open(
-                    path=str(fdst_path),
-                    mode="wb"
-            ) as fdst:
-                shutil.copyfileobj(fsrc, fdst)
+        if os.path.exists(fsrc_path):
+            fdst_path = pathlib.Path("/workdir", relative_file_path)
+            fdst_path_parent = str(fdst_path.parent)
+            if not jfs.exists(fdst_path_parent):
+                jfs.makedirs(fdst_path_parent, exist_ok=True)
+            with open(fsrc_path, "rb") as fsrc:
+                with jfs.open(
+                        path=str(fdst_path),
+                        mode="wb"
+                ) as fdst:
+                    shutil.copyfileobj(fsrc, fdst)
+                    os.remove(fsrc_path)
+                    logger.info(f"_do_post_image_to_gallery: {fsrc_path} was copied to {fdst_path}")
+        else:
+            logger.warning(f"_do_post_image_to_gallery: {fsrc_path} not exists")
+    else:
+        logger.info(f"_do_post_image_to_gallery: no jfs_volume or jfs_token, skipping")
+
+    user_id = header_dict.get('user-id', None)
+    if not user_id:
+        logger.warning("post_output_to_image_gallery, no user_id, returning")
+        return None
+    user_tier = header_dict.get('user-tier', None) or header_dict.get('User-Tier', None)
+
+    disable_post = header_dict.get('x-disable-gallery-post', "")
+    if disable_post and disable_post.lower() == "true":
+        logger.warning(f"post result to gallery is disabled, returning")
+        return None
+
+    task_id = header_dict.get('x-task-id', str(uuid.uuid4()))
+
+    post_url = header_dict.get('x-diffus-gallery-url', "")
+    if not post_url:
+        return None
+
+    api_secret = header_dict.get('x-diffus-gallery-secret', "")
 
     post_json = {
         "task_id": task_id,
@@ -122,17 +144,6 @@ def post_output_to_image_gallery(redis_client, node_obj, header_dict, input_data
         logger.warning("post_output_to_image_gallery, no user_hash, returning")
         return
 
-    user_id = header_dict.get('user-id', None)
-    if not user_id:
-        logger.warning("post_output_to_image_gallery, no user_id, returning")
-        return
-    user_tier = header_dict.get('user-tier', None) or header_dict.get('User-Tier', None)
-
-    disable_post = header_dict.get('x-disable-gallery-post', None)
-    if disable_post and disable_post.lower() == "true":
-        logger.warning(f"post result to gallery is disabled, returning")
-        return
-
     result_data, ui_data, _, _ = output_data
 
     if not isinstance(ui_data, dict):
@@ -140,12 +151,6 @@ def post_output_to_image_gallery(redis_client, node_obj, header_dict, input_data
         return
 
     proceeded_files = set()
-
-    task_id = header_dict.get('x-task-id', str(uuid.uuid4()))
-
-    gallery_endpoint = header_dict.get('x-diffus-gallery-url', None)
-    gallery_secret = header_dict.get('x-diffus-gallery-secret', None)
-
     exec_context = _find_execution_context_from_input_data(input_data)
     for images_key in ("images", "gifs", "video", "3d"):
         if images_key not in ui_data:
@@ -161,15 +166,10 @@ def post_output_to_image_gallery(redis_client, node_obj, header_dict, input_data
             image_subfolder = image["subfolder"]
             image_filename = image["filename"]
             pnginfo = _find_extra_pnginfo_from_input_data(exec_context, input_data=input_data)
-
             if image_filename in proceeded_files:
                 continue
             presigned_url = _do_post_image_to_gallery(
-                post_url=gallery_endpoint,
-                api_secret=gallery_secret,
-                task_id=task_id,
-                user_id=user_id,
-                user_tier=user_tier,
+                header_dict=header_dict,
                 user_hash=user_hash,
                 image_type=image_type,
                 image_subfolder=image_subfolder,
@@ -190,12 +190,8 @@ def post_output_to_image_gallery(redis_client, node_obj, header_dict, input_data
                     if filename in proceeded_files:
                         continue
                     _do_post_image_to_gallery(
-                        post_url=gallery_endpoint,
-                        api_secret=gallery_secret,
-                        task_id=task_id,
-                        user_id=user_id,
+                        header_dict=header_dict,
                         user_hash=user_hash,
-                        user_tier=user_tier,
                         image_type="output",
                         image_subfolder="",
                         image_filename=filename,
