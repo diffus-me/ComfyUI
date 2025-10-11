@@ -752,13 +752,13 @@ class PromptServer():
 
         @routes.post("/prompt/valid")
         async def post_prompt(request):
-            logging.info("got prompt")
             json_data = await request.json()
             json_data = self.trigger_on_prompt(json_data)
             context = execution_context.ExecutionContext(request)
             if "prompt" in json_data:
                 prompt = json_data["prompt"]
                 prompt_id = str(json_data.get("prompt_id", uuid.uuid4()))
+                logging.info(f"got prompt validation {prompt_id}")
                 extra_data = {}
                 if "extra_data" in json_data:
                     extra_data = json_data["extra_data"]
@@ -781,7 +781,6 @@ class PromptServer():
 
         @routes.post("/prompt")
         async def post_prompt(request):
-            logging.info("got prompt")
             json_data =  await request.json()
             json_data = self.trigger_on_prompt(json_data)
             context = execution_context.ExecutionContext(request)
@@ -799,6 +798,7 @@ class PromptServer():
             if "prompt" in json_data:
                 prompt = json_data["prompt"]
                 prompt_id = str(json_data.get("prompt_id", uuid.uuid4()))
+                logging.info(f"got prompt {prompt_id}")
 
                 extra_data = {}
                 if "extra_data" in json_data:
