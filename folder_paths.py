@@ -348,20 +348,20 @@ def get_full_path(context: execution_context.ExecutionContext, folder_name: str,
         return model_info
     else:
         """
-    Get the full path of a file in a folder, has to be a file
-    """
-    global folder_names_and_paths
-    folder_name = map_legacy(folder_name)
-    if folder_name not in folder_names_and_paths:
-        return None
-    folders = folder_names_and_paths[folder_name]
-    filename = os.path.relpath(os.path.join("/", filename), "/")
-    for x in folders[0]:
-        full_path = os.path.join(x, filename)
-        if os.path.isfile(full_path):
-            return full_path
-        elif os.path.islink(full_path):
-            logging.warning("WARNING path {} exists but doesn't link anywhere, skipping.".format(full_path))
+        Get the full path of a file in a folder, has to be a file
+        """
+        global folder_names_and_paths
+        folder_name = map_legacy(folder_name)
+        if folder_name not in folder_names_and_paths:
+            return None
+        folders = folder_names_and_paths[folder_name]
+        filename = os.path.relpath(os.path.join("/", filename), "/")
+        for x in folders[0]:
+            full_path = os.path.join(x, filename)
+            if os.path.isfile(full_path):
+                return full_path
+            elif os.path.islink(full_path):
+                logging.warning("WARNING path {} exists but doesn't link anywhere, skipping.".format(full_path))
 
     return None
 
