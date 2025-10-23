@@ -758,7 +758,6 @@ class PromptServer():
             if "prompt" in json_data:
                 prompt = json_data["prompt"]
                 prompt_id = str(json_data.get("prompt_id", uuid.uuid4()))
-                logging.info(f"got prompt validation {prompt_id}")
                 extra_data = {}
                 if "extra_data" in json_data:
                     extra_data = json_data["extra_data"]
@@ -766,6 +765,7 @@ class PromptServer():
                 extra_data["client_id"] = context.user_id
 
                 context = execution_context.ExecutionContext(request=request, extra_data=extra_data)
+                logging.info(f"got prompt validation {prompt_id}, user {context.user_id}")
                 partial_execution_targets = None
                 if "partial_execution_targets" in json_data:
                     partial_execution_targets = json_data["partial_execution_targets"]

@@ -234,7 +234,8 @@ def _process_prompt_message(
     elif msg.type == "executed":
         if result.outputs is None:
             result.outputs = []
-        result.outputs.append(msg.data.output)
+        if msg.data.output:
+            result.outputs.append(msg.data.output)
     elif msg.type == "monitor_error":
         result.success = False
         result.state = PromptState.monitor_error

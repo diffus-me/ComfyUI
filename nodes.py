@@ -689,11 +689,12 @@ class LoraLoader:
 
     @classmethod
     def VALIDATE_INPUTS(cls, model, clip, lora_name, strength_model, strength_clip, context: execution_context.ExecutionContext):
-        context.validate_model("loras", lora_name)
+        if lora_name and lora_name != "None":
+            context.validate_model("loras", lora_name)
         return True
 
     def load_lora(self, model, clip, lora_name, strength_model, strength_clip, context: execution_context.ExecutionContext):
-        if strength_model == 0 and strength_clip == 0:
+        if (not lora_name or lora_name == "None") or (strength_model == 0 and strength_clip == 0):
             return (model, clip)
 
         lora_path = folder_paths.get_full_path_or_raise(context, "loras", lora_name)
@@ -824,7 +825,7 @@ class VAELoader:
 class ControlNetLoader:
     @classmethod
     def INPUT_TYPES(s, context: execution_context.ExecutionContext):
-        return {"required": { "control_net_name": (folder_paths.get_filename_list(context, "controlnet"), )},
+        return {"required": { "control_net_name": (["None"] + folder_paths.get_filename_list(context, "controlnet"), )},
                 "hidden": {"context": "EXECUTION_CONTEXT"}}
 
     RETURN_TYPES = ("CONTROL_NET",)
@@ -833,6 +834,8 @@ class ControlNetLoader:
     CATEGORY = "loaders"
 
     def load_controlnet(self, control_net_name, context: execution_context.ExecutionContext):
+        if not control_net_name or control_net_name == "None":
+            return (None,)
         controlnet_path = folder_paths.get_full_path_or_raise(context, "controlnet", control_net_name)
         controlnet = comfy.controlnet.load_controlnet(controlnet_path)
         if controlnet is None:
