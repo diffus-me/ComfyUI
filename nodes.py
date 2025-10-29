@@ -671,7 +671,7 @@ class LoraLoader:
             "required": {
                 "model": ("MODEL", {"tooltip": "The diffusion model the LoRA will be applied to."}),
                 "clip": ("CLIP", {"tooltip": "The CLIP model the LoRA will be applied to."}),
-                "lora_name": (folder_paths.get_filename_list(context, "loras"), {"tooltip": "The name of the LoRA."}),
+                "lora_name": (["None"] + folder_paths.get_filename_list(context, "loras"), {"tooltip": "The name of the LoRA."}),
                 "strength_model": ("FLOAT", {"default": 1.0, "min": -100.0, "max": 100.0, "step": 0.01, "tooltip": "How strongly to modify the diffusion model. This value can be negative."}),
                 "strength_clip": ("FLOAT", {"default": 1.0, "min": -100.0, "max": 100.0, "step": 0.01, "tooltip": "How strongly to modify the CLIP model. This value can be negative."}),
             },
@@ -716,7 +716,7 @@ class LoraLoaderModelOnly(LoraLoader):
     @classmethod
     def INPUT_TYPES(s, context: execution_context.ExecutionContext):
         return {"required": { "model": ("MODEL",),
-                              "lora_name": (folder_paths.get_filename_list(context, "loras"), ),
+                              "lora_name": (["None"] + folder_paths.get_filename_list(context, "loras"), ),
                               "strength_model": ("FLOAT", {"default": 1.0, "min": -100.0, "max": 100.0, "step": 0.01}),
                               },
                 "hidden": {"context": "EXECUTION_CONTEXT"}}
@@ -725,7 +725,8 @@ class LoraLoaderModelOnly(LoraLoader):
 
     @classmethod
     def VALIDATE_INPUTS(cls, model, lora_name, strength_model, context: execution_context.ExecutionContext):
-        context.validate_model("loras", lora_name)
+        if lora_name and lora_name != "None":
+            context.validate_model("loras", lora_name)
         return True
 
     def load_lora_model_only(self, model, lora_name, strength_model, context: execution_context.ExecutionContext):
