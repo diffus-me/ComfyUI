@@ -398,32 +398,30 @@ class UserManager():
 
         @routes.delete("/userdata/{file}")
         async def delete_userdata(request):
-            # path = get_user_data_path(request, check_exists=True)
-            # if not isinstance(path, str):
-            #     return path
-            #
-            # os.remove(path)
-            #
-            # return web.Response(status=204)
-            return web.Response(status=403, text="Forbidden")
+            path = get_user_data_path(request, check_exists=True)
+            if not isinstance(path, str):
+                return path
+
+            os.remove(path)
+
+            return web.Response(status=204)
 
         @routes.post("/userdata/{file}/move/{dest}")
         async def move_userdata(request):
-            # source = get_user_data_path(request, check_exists=True)
-            # if not isinstance(source, str):
-            #     return source
-            #
-            # dest = get_user_data_path(request, check_exists=False, param="dest")
-            # if not isinstance(source, str):
-            #     return dest
-            #
-            # overwrite = request.query["overwrite"] != "false"
-            # if not overwrite and os.path.exists(dest):
-            #     return web.Response(status=409)
-            #
-            # print(f"moving '{source}' -> '{dest}'")
-            # shutil.move(source, dest)
-            #
-            # resp = os.path.relpath(dest, self.get_request_user_filepath(request, None))
-            # return web.json_response(resp)
-            return web.Response(status=403, text="Forbidden")
+            source = get_user_data_path(request, check_exists=True)
+            if not isinstance(source, str):
+                return source
+
+            dest = get_user_data_path(request, check_exists=False, param="dest")
+            if not isinstance(source, str):
+                return dest
+
+            overwrite = request.query["overwrite"] != "false"
+            if not overwrite and os.path.exists(dest):
+                return web.Response(status=409)
+
+            print(f"moving '{source}' -> '{dest}'")
+            shutil.move(source, dest)
+
+            resp = os.path.relpath(dest, self.get_request_user_filepath(request, None))
+            return web.json_response(resp)
