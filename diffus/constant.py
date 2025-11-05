@@ -4,6 +4,7 @@ if os.getenv('SQL_DATABASE_URL_COMFY'):
         'checkpoints': 'CHECKPOINT',
         'loras': 'LORA',
         'lycoris': 'LYCORIS',
+        'embeddings': 'EMBEDDING',
     }
 else:
     FAVORITE_MODEL_TYPES = {}

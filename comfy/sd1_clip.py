@@ -389,41 +389,46 @@ def bundled_embed(embed, prefix, suffix): #bundled embedding in lora format
     return torch.cat(out_list, dim=0)
 
 def load_embed(embedding_name, embedding_directory, embedding_size, embed_key=None):
-    if isinstance(embedding_directory, str):
-        embedding_directory = [embedding_directory]
+    if hasattr(embedding_name, 'is_safetensors') and hasattr(embedding_name, 'filename'):
+        embed_path = embedding_name.filename
+        is_safetensors = embedding_name.is_safetensors
+    else:
+        if isinstance(embedding_directory, str):
+            embedding_directory = [embedding_directory]
 
-    embedding_directory = expand_directory_list(embedding_directory)
+        embedding_directory = expand_directory_list(embedding_directory)
 
-    valid_file = None
-    for embed_dir in embedding_directory:
-        embed_path = os.path.abspath(os.path.join(embed_dir, embedding_name))
-        embed_dir = os.path.abspath(embed_dir)
-        try:
-            if os.path.commonpath((embed_dir, embed_path)) != embed_dir:
+        valid_file = None
+        for embed_dir in embedding_directory:
+            embed_path = os.path.abspath(os.path.join(embed_dir, embedding_name))
+            embed_dir = os.path.abspath(embed_dir)
+            try:
+                if os.path.commonpath((embed_dir, embed_path)) != embed_dir:
+                    continue
+            except:
                 continue
-        except:
-            continue
-        if not os.path.isfile(embed_path):
-            extensions = ['.safetensors', '.pt', '.bin']
-            for x in extensions:
-                t = embed_path + x
-                if os.path.isfile(t):
-                    valid_file = t
-                    break
-        else:
-            valid_file = embed_path
-        if valid_file is not None:
-            break
+            if not os.path.isfile(embed_path):
+                extensions = ['.safetensors', '.pt', '.bin']
+                for x in extensions:
+                    t = embed_path + x
+                    if os.path.isfile(t):
+                        valid_file = t
+                        break
+            else:
+                valid_file = embed_path
+            if valid_file is not None:
+                break
 
-    if valid_file is None:
-        return None
+        if valid_file is None:
+            return None
 
-    embed_path = valid_file
+        embed_path = valid_file
+        is_safetensors = embed_path.lower().endswith(".safetensors")
 
     embed_out = None
 
     try:
-        if embed_path.lower().endswith(".safetensors"):
+        if is_safetensors:
             import safetensors.torch
             embed = safetensors.torch.load_file(embed_path, device="cpu")
         else:
