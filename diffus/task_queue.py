@@ -12,8 +12,19 @@ import requests
 from pydantic import BaseModel, Field
 import version
 import diffus.redis_client
+import diffus.constant
 
 _logger = logging.getLogger(__name__)
+
+
+class _InstalledModels(BaseModel):
+    checkpoints: list[str]
+    loras: list[str]
+    embeddings: list[str]
+    diffusion_models: list[str]
+
+
+_installed_models: _InstalledModels | None = None
 
 
 class ServiceStatusResponse(BaseModel):
@@ -83,6 +94,14 @@ class _State:
         self._redis_client = None
 
 
+def _get_model_name_list(model_type: str) -> list[str]:
+    if diffus.constant.FAVORITE_MODEL_TYPES:
+        return []
+    else:
+        import folder_paths
+        return folder_paths.get_filename_list_(model_type)[0]
+
+
 def _setup_daemon_api(_task_state: _State, routes: aiohttp.web_routedef.RouteTableDef):
     service_started_at = time.time()
 
@@ -124,6 +143,19 @@ def _setup_daemon_api(_task_state: _State, routes: aiohttp.web_routedef.RouteTab
         _logger.info(f'update_status: service status was set to {_task_state.service_status}')
         resp = await get_status(request)
         return resp
+
+    @routes.get("/daemon/v1/models")
+    async def get_installed_models(request):
+        global _installed_models
+
+        if _installed_models is None:
+            _installed_models = _InstalledModels(
+                checkpoints=_get_model_name_list("checkpoints"),
+                loras=_get_model_name_list("loras"),
+                embeddings=_get_model_name_list("embeddings"),
+                diffusion_models=_get_model_name_list("diffusion_models"),
+            )
+        return web.json_response(_installed_models.model_dump())
 
 
 def _service_is_alive(_task_state: _State):
