@@ -200,6 +200,7 @@ def prompt_worker(q, server_instance, task_dispatcher: diffus.task_queue.TaskDis
             server_instance.current_prompt_id = prompt_id
             context = item[-1]
             extra_data = item[3]
+            extra_data["prompt_id"] = prompt_id
 
             begin = time.time()
             monitor_error = None

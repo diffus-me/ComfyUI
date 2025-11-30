@@ -68,6 +68,7 @@ def make_headers(extra_data: dict):
 
 
 def _before_task_started(
+        extra_data: dict,
         header_dict: dict,
         api_name: str,
         function_name: str,
@@ -90,7 +91,7 @@ def _before_task_started(
     if not session_hash:
         logger.error(f'{job_id}: x-session-hash does not presented in headers')
         return None
-    task_id = header_dict.get('x-task-id', "")
+    task_id = extra_data.get("prompt_id", "") or header_dict.get('x-task-id', "")
     if not task_id:
         logger.error(f'{job_id}: x-task-id does not presented in headers')
         return None
@@ -239,6 +240,7 @@ def monitor_call_context(
 
     try:
         task_id = _before_task_started(
+            extra_data,
             header_dict,
             api_name,
             function_name,
