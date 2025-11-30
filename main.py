@@ -197,6 +197,7 @@ def prompt_worker(q, server_instance, task_dispatcher: diffus.task_queue.TaskDis
             execution_start_time = time.perf_counter()
             prompt_id = item[1]
             server_instance.last_prompt_id = prompt_id
+            server_instance.current_prompt_id = prompt_id
             context = item[-1]
             extra_data = item[3]
 
@@ -279,6 +280,7 @@ def prompt_worker(q, server_instance, task_dispatcher: diffus.task_queue.TaskDis
                     monitor_error=monitor_error
                 )
 
+            server_instance.current_prompt_id = None
         flags = q.get_flags()
         free_memory = flags.get("free_memory", False)
 
@@ -385,7 +387,7 @@ def start_comfyui(asyncio_loop=None):
         asyncio.set_event_loop(asyncio_loop)
     prompt_server = server.PromptServer(asyncio_loop)
     q = execution.PromptQueue(prompt_server)
-    task_dispatcher = diffus.task_queue.TaskDispatcher(q, prompt_server.routes)
+    task_dispatcher = diffus.task_queue.TaskDispatcher(prompt_server, q, prompt_server.routes)
 
     hook_breaker_ac10a0.save_functions()
     asyncio_loop.run_until_complete(nodes.init_extra_nodes(

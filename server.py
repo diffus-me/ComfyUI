@@ -209,6 +209,8 @@ class PromptServer():
         self.routes = routes
         self.last_node_id = None
         self.client_id = None
+        self.last_prompt_id = None
+        self.current_prompt_id = None
 
         self.on_prompt_handlers = []
 

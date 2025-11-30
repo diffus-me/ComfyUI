@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import os
@@ -102,7 +103,7 @@ def _get_model_name_list(model_type: str) -> list[str]:
         return folder_paths.get_filename_list_(model_type)[0]
 
 
-def _setup_daemon_api(_task_state: _State, routes: aiohttp.web_routedef.RouteTableDef):
+def _setup_daemon_api(_server_instance, _task_state: _State, routes: aiohttp.web_routedef.RouteTableDef):
     service_started_at = time.time()
 
     @routes.get("/daemon/v1/status")
@@ -112,7 +113,12 @@ def _setup_daemon_api(_task_state: _State, routes: aiohttp.web_routedef.RouteTab
         else:
             busy_time = _task_state.busy_time
         live_time = time.time() - service_started_at
-
+        current_task = ""
+        for i in range(3):
+            current_task = _task_state.current_task or _server_instance.current_prompt_id or ''
+            if current_task:
+                break
+            await asyncio.sleep(0.05)
         resp = ServiceStatusResponse(
             release_version=version.version,
             node_type=_task_state.node_type,
@@ -121,7 +127,7 @@ def _setup_daemon_api(_task_state: _State, routes: aiohttp.web_routedef.RouteTab
             accepted_type_types=_task_state.accepted_type_types,
 
             status=_task_state.service_status,
-            current_task=_task_state.current_task or '',
+            current_task=current_task,
             finished_task_count=_task_state.finished_task_count,
             failed_task_count=_task_state.failed_task_count,
             pending_task_count=_task_state.remaining_tasks,
@@ -255,8 +261,9 @@ def _fetch_task(_task_state: _State, fetch_task_timeout=5):
 
 
 class TaskDispatcher:
-    def __init__(self, prompt_queue, routes: aiohttp.web_routedef.RouteTableDef):
+    def __init__(self,service_instance, prompt_queue, routes: aiohttp.web_routedef.RouteTableDef):
         self._task_state = _State()
+        self._server_instance = service_instance
         self._prompt_queue = prompt_queue
         self._disable_embedded_task_dispatcher = os.getenv(
             'DISABLE_EMBEDDED_TASK_DISPATCHER', "false"
@@ -265,7 +272,7 @@ class TaskDispatcher:
             self._t = threading.Thread(target=self._task_loop, name='comfy-task-dispatcher-thread')
         else:
             self._t = None
-        _setup_daemon_api(self._task_state, routes)
+        _setup_daemon_api(self._server_instance, self._task_state, routes)
 
     def start(self):
         self._task_state.service_status = 'up'
