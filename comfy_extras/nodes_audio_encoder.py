@@ -1,3 +1,4 @@
+import execution_context
 import folder_paths
 import comfy.audio_encoders.audio_encoders
 import comfy.utils
@@ -7,22 +8,23 @@ from comfy_api.latest import ComfyExtension, io
 
 class AudioEncoderLoader(io.ComfyNode):
     @classmethod
-    def define_schema(cls) -> io.Schema:
+    def define_schema(cls, exec_context: execution_context.ExecutionContext) -> io.Schema:
         return io.Schema(
             node_id="AudioEncoderLoader",
             category="loaders",
             inputs=[
                 io.Combo.Input(
                     "audio_encoder_name",
-                    options=folder_paths.get_filename_list("audio_encoders"),
+                    options=folder_paths.get_filename_list(exec_context, "audio_encoders"),
                 ),
             ],
             outputs=[io.AudioEncoder.Output()],
+            hidden=[io.Hidden.exec_context],
         )
 
     @classmethod
-    def execute(cls, audio_encoder_name) -> io.NodeOutput:
-        audio_encoder_name = folder_paths.get_full_path_or_raise("audio_encoders", audio_encoder_name)
+    def execute(cls, audio_encoder_name, exec_context: execution_context.ExecutionContext) -> io.NodeOutput:
+        audio_encoder_name = folder_paths.get_full_path_or_raise(exec_context, "audio_encoders", audio_encoder_name)
         sd = comfy.utils.load_torch_file(audio_encoder_name, safe_load=True)
         audio_encoder = comfy.audio_encoders.audio_encoders.load_audio_encoder_from_sd(sd)
         if audio_encoder is None:

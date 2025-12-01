@@ -29,7 +29,7 @@ class CLIPTextEncodeFlux(io.ComfyNode):
         tokens = clip.tokenize(clip_l)
         tokens["t5xxl"] = clip.tokenize(t5xxl)["t5xxl"]
 
-        return io.NodeOutput(clip.encode_from_tokens_scheduled(tokens, add_dict={"guidance": guidance}))
+        return io.NodeOutput(clip.encode_from_tokens_scheduled(tokens, add_dict={"guidance": guidance, "_origin_text_": clip_l + " " + t5xxl}))
 
     encode = execute  # TODO: remove
 

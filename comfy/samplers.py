@@ -732,6 +732,13 @@ class KSAMPLER(Sampler):
         self.extra_options = extra_options
         self.inpaint_options = inpaint_options
 
+    @staticmethod
+    def __json__():
+        import json
+        return json.dumps({
+            "name": "comfy.samplers.KSAMPLER"
+        })
+
     def sample(self, model_wrap, sigmas, extra_args, callback, noise, latent_image=None, denoise_mask=None, disable_pbar=False):
         extra_args["denoise_mask"] = denoise_mask
         model_k = KSamplerX0Inpaint(model_wrap, sigmas)

@@ -7,6 +7,8 @@ import folder_paths
 from typing_extensions import override
 from comfy_api.latest import ComfyExtension, io
 
+import execution_context
+
 try:
     from spandrel_extra_arches import EXTRA_REGISTRY
     from spandrel import MAIN_REGISTRY
@@ -17,13 +19,16 @@ except:
 
 class UpscaleModelLoader(io.ComfyNode):
     @classmethod
-    def define_schema(cls):
+    def define_schema(cls, exec_context: execution_context.ExecutionContext):
         return io.Schema(
             node_id="UpscaleModelLoader",
             display_name="Load Upscale Model",
             category="loaders",
             inputs=[
-                io.Combo.Input("model_name", options=folder_paths.get_filename_list("upscale_models")),
+                io.Combo.Input("model_name", options=folder_paths.get_filename_list(exec_context, "upscale_models")),
+            ],
+            hidden=[
+                io.Hidden.exec_context,
             ],
             outputs=[
                 io.UpscaleModel.Output(),
@@ -31,8 +36,8 @@ class UpscaleModelLoader(io.ComfyNode):
         )
 
     @classmethod
-    def execute(cls, model_name) -> io.NodeOutput:
-        model_path = folder_paths.get_full_path_or_raise("upscale_models", model_name)
+    def execute(cls, model_name, exec_context: execution_context.ExecutionContext) -> io.NodeOutput:
+        model_path = folder_paths.get_full_path_or_raise(exec_context, "upscale_models", model_name)
         sd = comfy.utils.load_torch_file(model_path, safe_load=True)
         if "module.layers.0.residual_group.blocks.0.norm1.weight" in sd:
             sd = comfy.utils.state_dict_prefix_replace(sd, {"module.":""})

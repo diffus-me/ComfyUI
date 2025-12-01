@@ -83,6 +83,9 @@ def setup_logger(log_level: str = 'INFO', capacity: int = 300, use_stdout: bool 
 
     logger.addHandler(stream_handler)
 
+    filename = '/var/log/sd_comfyui/be/comfyui.log'
+    logger.addHandler(logging.FileHandler(filename))
+
 
 STARTUP_WARNINGS = []
 

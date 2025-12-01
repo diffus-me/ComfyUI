@@ -1,11 +1,15 @@
 import torch
 from torch import nn
+
+import execution_context
 import folder_paths
 import comfy.utils
 import comfy.ops
 import comfy.model_management
 import comfy.ldm.common_dit
 import comfy.latent_formats
+
+import execution_context
 
 
 class BlockWiseControlBlock(torch.nn.Module):
@@ -191,17 +195,20 @@ class SigLIPMultiFeatProjModel(torch.nn.Module):
 
 class ModelPatchLoader:
     @classmethod
-    def INPUT_TYPES(s):
-        return {"required": { "name": (folder_paths.get_filename_list("model_patches"), ),
-                              }}
+    def INPUT_TYPES(s, exec_context: execution_context.ExecutionContext):
+        return {
+            "required": { "name": (folder_paths.get_filename_list(exec_context, "model_patches"), ),
+                              },
+            "hidden": {"exec_context": "EXECUTION_CONTEXT"},
+        }
     RETURN_TYPES = ("MODEL_PATCH",)
     FUNCTION = "load_model_patch"
     EXPERIMENTAL = True
 
     CATEGORY = "advanced/loaders"
 
-    def load_model_patch(self, name):
-        model_patch_path = folder_paths.get_full_path_or_raise("model_patches", name)
+    def load_model_patch(self, name, exec_context: execution_context.ExecutionContext):
+        model_patch_path = folder_paths.get_full_path_or_raise(exec_context, "model_patches", name)
         sd = comfy.utils.load_torch_file(model_patch_path, safe_load=True)
         dtype = comfy.utils.weight_dtype(sd)
 

@@ -7,6 +7,9 @@ import comfy.ops
 from typing_extensions import override
 from comfy_api.latest import ComfyExtension, io
 
+
+import execution_context
+
 # code for model from: https://github.com/TencentARC/PhotoMaker/blob/main/photomaker/model.py under Apache License Version 2.0
 VISION_CONFIG_DICT = {
     "hidden_size": 1024,
@@ -120,22 +123,25 @@ class PhotoMakerIDEncoder(comfy.clip_model.CLIPVisionModelProjection):
 
 class PhotoMakerLoader(io.ComfyNode):
     @classmethod
-    def define_schema(cls):
+    def define_schema(cls, exec_context: execution_context.ExecutionContext):
         return io.Schema(
             node_id="PhotoMakerLoader",
             category="_for_testing/photomaker",
             inputs=[
-                io.Combo.Input("photomaker_model_name", options=folder_paths.get_filename_list("photomaker")),
+                io.Combo.Input("photomaker_model_name", options=folder_paths.get_filename_list(exec_context, "photomaker")),
             ],
             outputs=[
                 io.Photomaker.Output(),
+            ],
+            hidden=[
+                io.Hidden.exec_context,
             ],
             is_experimental=True,
         )
 
     @classmethod
-    def execute(cls, photomaker_model_name):
-        photomaker_model_path = folder_paths.get_full_path_or_raise("photomaker", photomaker_model_name)
+    def execute(cls, photomaker_model_name, exec_context: execution_context.ExecutionContext):
+        photomaker_model_path = folder_paths.get_full_path_or_raise(exec_context, "photomaker", photomaker_model_name)
         photomaker_model = PhotoMakerIDEncoder()
         data = comfy.utils.load_torch_file(photomaker_model_path, safe_load=True)
         if "id_encoder" in data:
@@ -191,7 +197,7 @@ class PhotoMakerEncode(io.ComfyNode):
         else:
             out = cond
 
-        return io.NodeOutput([[out, {"pooled_output": pooled}]])
+        return io.NodeOutput([[out, {"pooled_output": pooled, "_origin_text_": text}]])
 
 
 class PhotomakerExtension(ComfyExtension):

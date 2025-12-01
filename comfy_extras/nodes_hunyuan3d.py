@@ -12,6 +12,10 @@ from comfy_api.latest import ComfyExtension, IO, Types
 from comfy_api.latest._util import MESH, VOXEL  # only for backward compatibility if someone import it from this file (will be removed later) # noqa
 
 
+import execution_context
+import comfy.utils
+
+
 class EmptyLatentHunyuan3Dv2(IO.ComfyNode):
     @classmethod
     def define_schema(cls):
@@ -26,7 +30,6 @@ class EmptyLatentHunyuan3Dv2(IO.ComfyNode):
                 IO.Latent.Output(),
             ]
         )
-
     @classmethod
     def execute(cls, resolution, batch_size) -> IO.NodeOutput:
         latent = torch.zeros([batch_size, 64, resolution], device=comfy.model_management.intermediate_device())
@@ -615,7 +618,7 @@ def save_glb(vertices, faces, filepath, metadata=None):
 
 class SaveGLB(IO.ComfyNode):
     @classmethod
-    def define_schema(cls):
+    def define_schema(cls, exec_context: execution_context.ExecutionContext):
         return IO.Schema(
             node_id="SaveGLB",
             category="3d",
@@ -624,12 +627,12 @@ class SaveGLB(IO.ComfyNode):
                 IO.Mesh.Input("mesh"),
                 IO.String.Input("filename_prefix", default="mesh/ComfyUI"),
             ],
-            hidden=[IO.Hidden.prompt, IO.Hidden.extra_pnginfo]
+            hidden=[IO.Hidden.prompt, IO.Hidden.extra_pnginfo, IO.Hidden.exec_context]
         )
 
     @classmethod
-    def execute(cls, mesh, filename_prefix) -> IO.NodeOutput:
-        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, folder_paths.get_output_directory())
+    def execute(cls, mesh, filename_prefix, exec_context: execution_context.ExecutionContext) -> IO.NodeOutput:
+        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, folder_paths.get_output_directory(exec_context.user_hash))
         results = []
 
         metadata = {}
@@ -646,7 +649,8 @@ class SaveGLB(IO.ComfyNode):
             results.append({
                 "filename": f,
                 "subfolder": subfolder,
-                "type": "output"
+                "type": "output",
+                "user_hash": exec_context.user_hash,
             })
             counter += 1
         return IO.NodeOutput(ui={"3d": results})

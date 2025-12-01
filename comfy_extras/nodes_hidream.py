@@ -5,19 +5,24 @@ import comfy.sd
 import comfy.model_management
 from comfy_api.latest import ComfyExtension, io
 
+import execution_context
+
 
 class QuadrupleCLIPLoader(io.ComfyNode):
     @classmethod
-    def define_schema(cls):
+    def define_schema(cls, exec_context: execution_context.ExecutionContext):
         return io.Schema(
             node_id="QuadrupleCLIPLoader",
             category="advanced/loaders",
             description="[Recipes]\n\nhidream: long clip-l, long clip-g, t5xxl, llama_8b_3.1_instruct",
             inputs=[
-                io.Combo.Input("clip_name1", options=folder_paths.get_filename_list("text_encoders")),
-                io.Combo.Input("clip_name2", options=folder_paths.get_filename_list("text_encoders")),
-                io.Combo.Input("clip_name3", options=folder_paths.get_filename_list("text_encoders")),
-                io.Combo.Input("clip_name4", options=folder_paths.get_filename_list("text_encoders")),
+                io.Combo.Input("clip_name1", options=folder_paths.get_filename_list(exec_context, "text_encoders")),
+                io.Combo.Input("clip_name2", options=folder_paths.get_filename_list(exec_context, "text_encoders")),
+                io.Combo.Input("clip_name3", options=folder_paths.get_filename_list(exec_context, "text_encoders")),
+                io.Combo.Input("clip_name4", options=folder_paths.get_filename_list(exec_context, "text_encoders")),
+            ],
+            hidden=[
+                io.Hidden.exec_context
             ],
             outputs=[
                 io.Clip.Output(),
@@ -25,11 +30,11 @@ class QuadrupleCLIPLoader(io.ComfyNode):
         )
 
     @classmethod
-    def execute(cls, clip_name1, clip_name2, clip_name3, clip_name4):
-        clip_path1 = folder_paths.get_full_path_or_raise("text_encoders", clip_name1)
-        clip_path2 = folder_paths.get_full_path_or_raise("text_encoders", clip_name2)
-        clip_path3 = folder_paths.get_full_path_or_raise("text_encoders", clip_name3)
-        clip_path4 = folder_paths.get_full_path_or_raise("text_encoders", clip_name4)
+    def execute(cls, clip_name1, clip_name2, clip_name3, clip_name4, exec_context: execution_context.ExecutionContext):
+        clip_path1 = folder_paths.get_full_path_or_raise(exec_context, "text_encoders", clip_name1)
+        clip_path2 = folder_paths.get_full_path_or_raise(exec_context, "text_encoders", clip_name2)
+        clip_path3 = folder_paths.get_full_path_or_raise(exec_context, "text_encoders", clip_name3)
+        clip_path4 = folder_paths.get_full_path_or_raise(exec_context, "text_encoders", clip_name4)
         clip = comfy.sd.load_clip(ckpt_paths=[clip_path1, clip_path2, clip_path3, clip_path4], embedding_directory=folder_paths.get_folder_paths("embeddings"))
         return io.NodeOutput(clip)
 
@@ -57,8 +62,7 @@ class CLIPTextEncodeHiDream(io.ComfyNode):
         tokens["l"] = clip.tokenize(clip_l)["l"]
         tokens["t5xxl"] = clip.tokenize(t5xxl)["t5xxl"]
         tokens["llama"] = clip.tokenize(llama)["llama"]
-        return io.NodeOutput(clip.encode_from_tokens_scheduled(tokens))
-
+        return io.NodeOutput(clip.encode_from_tokens_scheduled(tokens, add_dict={"_origin_text_": "".join([clip_l, clip_g, t5xxl, llama])}))
 
 class HiDreamExtension(ComfyExtension):
     @override

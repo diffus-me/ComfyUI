@@ -1,6 +1,7 @@
 import torch
 import comfy.model_management
 import comfy.utils
+import execution_context
 import folder_paths
 import os
 import logging
@@ -96,17 +97,18 @@ class LoraSave(io.ComfyNode):
                     optional=True,
                 ),
             ],
+            hidden=[io.Hidden.exec_context],
             is_experimental=True,
             is_output_node=True,
         )
 
     @classmethod
-    def execute(cls, filename_prefix, rank, lora_type, bias_diff, model_diff=None, text_encoder_diff=None) -> io.NodeOutput:
+    def execute(cls, filename_prefix, rank, lora_type, bias_diff, model_diff=None, text_encoder_diff=None, exec_context: execution_context.ExecutionContext=None) -> io.NodeOutput:
         if model_diff is None and text_encoder_diff is None:
             return io.NodeOutput()
 
         lora_type = LORA_TYPES.get(lora_type)
-        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, folder_paths.get_output_directory())
+        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, folder_paths.get_output_directory(exec_context.user_hash))
 
         output_sd = {}
         if model_diff is not None:
@@ -125,7 +127,7 @@ class LoraSaveExtension(ComfyExtension):
     @override
     async def get_node_list(self) -> list[type[io.ComfyNode]]:
         return [
-            LoraSave,
+            # LoraSave,
         ]
 
 

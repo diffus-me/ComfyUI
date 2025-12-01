@@ -24,8 +24,7 @@ class CLIPTextEncodePixArtAlpha(io.ComfyNode):
     @classmethod
     def execute(cls, clip, width, height, text):
         tokens = clip.tokenize(text)
-        return io.NodeOutput(clip.encode_from_tokens_scheduled(tokens, add_dict={"width": width, "height": height}))
-
+        return io.NodeOutput(clip.encode_from_tokens_scheduled(tokens, add_dict={"width": width, "height": height, "_origin_text_": text}))
 
 class PixArtExtension(ComfyExtension):
     @override
