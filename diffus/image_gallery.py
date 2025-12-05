@@ -182,7 +182,7 @@ def post_output_to_image_gallery(redis_client, node_obj, header_dict, input_data
             image["presigned_url"] = presigned_url
             proceeded_files.add(image_filename)
 
-    if hasattr(node_obj, "RETURN_TYPES") and "VHS_FILENAMES" in node_obj.RETURN_TYPES:
+    if hasattr(node_obj, "RETURN_TYPES") and "VHS_FILENAMES" in list(filter(lambda k: k != "*", node_obj.RETURN_TYPES)):
         for node_result in result_data[node_obj.RETURN_TYPES.index("VHS_FILENAMES")]:
             if node_result[0]:
                 for filepath in node_result[1]:
