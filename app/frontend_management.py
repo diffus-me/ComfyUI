@@ -31,12 +31,14 @@ This error is happening because the ComfyUI frontend is no longer shipped as par
 """.strip()
 
 def parse_version(version: str) -> tuple[int, int, int]:
-        return tuple(map(int, version.split(".")))
+    return tuple(map(int, version.split(".")))
+
 
 def is_valid_version(version: str) -> bool:
     """Validate if a string is a valid semantic version (X.Y.Z format)."""
     pattern = r"^(\d+)\.(\d+)\.(\d+)$"
     return bool(re.match(pattern, version))
+
 
 def get_installed_frontend_version():
     """Get the currently installed frontend package version."""
@@ -261,10 +263,11 @@ comfyui-frontend-package is not installed.
     def template_asset_map(cls) -> Optional[Dict[str, str]]:
         """Return a mapping of template asset names to their absolute paths."""
         try:
-            from comfyui_workflow_templates import (
+            from .templates.comfyui_workflow_templates import (
                 get_asset_path,
                 iter_templates,
             )
+            logging.info(f"using embedded templates")
         except ImportError:
             logging.error(
                 f"""
@@ -277,7 +280,28 @@ comfyui-workflow-templates is not installed.
 ********** ERROR ***********
 """.strip()
             )
-            return None
+            get_asset_path = None
+            iter_templates = None
+
+        if not get_asset_path or not iter_templates:
+            try:
+                from comfyui_workflow_templates import (
+                    get_asset_path,
+                    iter_templates,
+                )
+            except ImportError:
+                logging.error(
+                    f"""
+********** ERROR ***********
+
+comfyui-workflow-templates is not installed.
+
+{frontend_install_warning_message()}
+
+********** ERROR ***********
+""".strip()
+                )
+                return None
 
         try:
             template_entries = list(iter_templates())
@@ -301,7 +325,6 @@ comfyui-workflow-templates is not installed.
             return None
 
         return asset_map
-
 
     @classmethod
     def legacy_templates_path(cls) -> Optional[str]:
@@ -360,7 +383,7 @@ comfyui-workflow-templates is not installed.
 
     @classmethod
     def init_frontend_unsafe(
-        cls, version_string: str, provider: Optional[FrontEndProvider] = None
+            cls, version_string: str, provider: Optional[FrontEndProvider] = None
     ) -> str:
         """
         Initializes the frontend for the specified version.
@@ -441,6 +464,7 @@ comfyui-workflow-templates is not installed.
             logging.info("Falling back to the default frontend.")
             check_frontend_version()
             return cls.default_frontend_path()
+
     @classmethod
     def template_asset_handler(cls):
         assets = cls.template_asset_map()
@@ -452,6 +476,9 @@ comfyui-workflow-templates is not installed.
             target = assets.get(rel_path)
             if target is None:
                 raise web.HTTPNotFound()
-            return web.FileResponse(target)
+            if isinstance(target, str):
+                return web.FileResponse(target)
+            else:
+                return web.json_response(target)
 
         return serve_template

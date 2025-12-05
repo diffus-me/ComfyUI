@@ -1021,20 +1021,21 @@ class PromptServer():
             self.app.add_routes([web.static('/extensions_builtin/' + name, dir)])
 
         installed_templates_version = FrontendManager.get_installed_templates_version()
-        use_legacy_templates = True
-        if installed_templates_version:
-            try:
-                use_legacy_templates = (
-                    parse_version(installed_templates_version)
-                    < parse_version("0.3.0")
-                )
-            except Exception as exc:
-                logging.warning(
-                    "Unable to parse templates version '%s': %s",
-                    installed_templates_version,
-                    exc,
-                )
+        # use_legacy_templates = True
+        # if installed_templates_version:
+        #     try:
+        #         use_legacy_templates = (
+        #             parse_version(installed_templates_version)
+        #             < parse_version("0.3.0")
+        #         )
+        #     except Exception as exc:
+        #         logging.warning(
+        #             "Unable to parse templates version '%s': %s",
+        #             installed_templates_version,
+        #             exc,
+        #         )
 
+        use_legacy_templates = False  # Force using new template system for now.
         if use_legacy_templates:
             workflow_templates_path = FrontendManager.legacy_templates_path()
             if workflow_templates_path:
