@@ -33,6 +33,8 @@ def get_file_info(path: str, relative_to: str) -> FileInfo:
         "created": os.path.getctime(path)
     }
 
+def user_hash(request):
+    return request.headers.get('X-Diffus-User-Hash', None) or self._headers.get('x-diffus-user-hash', '')
 
 class UserManager():
     def __init__(self):
@@ -128,6 +130,11 @@ class UserManager():
 
         @routes.get("/users")
         async def get_users(request):
+            if not user_hash(request):
+                return web.json_response({
+                    "storage": "server",
+                    "migrated": True
+                })
             if args.multi_user:
                 return web.json_response({"storage": "server", "users": self.users})
             else:
@@ -173,6 +180,8 @@ class UserManager():
             - full_info=true: List of dictionaries with file details.
             - split=true (and full_info=false): List of lists, each containing path components.
             """
+            if not user_hash(request):
+                return web.json_response([])
             directory = request.rel_url.query.get('dir', '')
             if not directory:
                 return web.Response(status=400, text="Directory not provided")
@@ -237,6 +246,9 @@ class UserManager():
                    - size (for files): The size in bytes.
                    - modified (for files): The last modified timestamp (Unix epoch).
             """
+            if not user_hash(request):
+                return web.json_response([])
+
             requested_rel_path = request.rel_url.query.get('path', '')
 
             # URL-decode the path parameter
@@ -335,6 +347,9 @@ class UserManager():
         @routes.get("/userdata/{file}")
         async def getuserdata(request):
             path = get_user_data_path(request, check_exists=True)
+            if not user_hash(request):
+                return path
+
             if not isinstance(path, str):
                 return path
 
@@ -369,6 +384,8 @@ class UserManager():
             path = get_user_data_path(request)
             if not isinstance(path, str):
                 return path
+            if not user_hash(request):
+                return path
 
             overwrite = request.query.get("overwrite", 'true') != "false"
             full_info = request.query.get('full_info', 'false').lower() == "true"
@@ -398,6 +415,9 @@ class UserManager():
 
         @routes.delete("/userdata/{file}")
         async def delete_userdata(request):
+            if not user_hash(request):
+                return web.Response(status=204)
+
             path = get_user_data_path(request, check_exists=True)
             if not isinstance(path, str):
                 return path
@@ -408,6 +428,8 @@ class UserManager():
 
         @routes.post("/userdata/{file}/move/{dest}")
         async def move_userdata(request):
+            if not user_hash(request):
+                return web.json_response([])
             source = get_user_data_path(request, check_exists=True)
             if not isinstance(source, str):
                 return source
