@@ -101,7 +101,7 @@ def get_favorite_model_full_path(user_id: str, folder_name: str, filename: str) 
         query = _filter_model_by_name(query, filename)
         record = session.scalar(query)
         if not record:
-            raise Exception(f"model is not found, [{folder_name}]/{filename}")
+            return None
         return create_model_info(record)
 
 

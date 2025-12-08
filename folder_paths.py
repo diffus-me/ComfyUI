@@ -348,23 +348,23 @@ def get_full_path(context: execution_context.ExecutionContext, folder_name: str,
             import diffus.repository
             model_info = diffus.repository.get_favorite_model_full_path(context.user_id, folder_name, filename)
             context.validate_model(folder_name, filename, model_info)
-        return model_info
-    else:
-        """
-        Get the full path of a file in a folder, has to be a file
-        """
-        global folder_names_and_paths
-        folder_name = map_legacy(folder_name)
-        if folder_name not in folder_names_and_paths:
-            return None
-        folders = folder_names_and_paths[folder_name]
-        filename = os.path.relpath(os.path.join("/", filename), "/")
-        for x in folders[0]:
-            full_path = os.path.join(x, filename)
-            if os.path.isfile(full_path):
-                return full_path
-            elif os.path.islink(full_path):
-                logging.warning("WARNING path {} exists but doesn't link anywhere, skipping.".format(full_path))
+        if model_info:
+            return model_info
+    """
+    Get the full path of a file in a folder, has to be a file
+    """
+    global folder_names_and_paths
+    folder_name = map_legacy(folder_name)
+    if folder_name not in folder_names_and_paths:
+        return None
+    folders = folder_names_and_paths[folder_name]
+    filename = os.path.relpath(os.path.join("/", filename), "/")
+    for x in folders[0]:
+        full_path = os.path.join(x, filename)
+        if os.path.isfile(full_path):
+            return full_path
+        elif os.path.islink(full_path):
+            logging.warning("WARNING path {} exists but doesn't link anywhere, skipping.".format(full_path))
 
     return None
 
@@ -427,20 +427,29 @@ def cached_filename_list_(folder_name: str) -> tuple[list[str], dict[str, float]
     return out
 
 def get_filename_list(context: execution_context.ExecutionContext, folder_name: str, **kwargs) -> list[str]:
+    from_repo = None
     if folder_name in FAVORITE_MODEL_TYPES:
         _check_execution_context(context)
         import diffus.repository
-        return diffus.repository.list_favorite_model_by_model_type(context.user_id, folder_name, **kwargs)
-    else:
-        folder_name = map_legacy(folder_name)
+        from_repo = diffus.repository.list_favorite_model_by_model_type(context.user_id, folder_name, **kwargs)
+
+    folder_name = map_legacy(folder_name)
     out = cached_filename_list_(folder_name)
     if out is None:
         out = get_filename_list_(folder_name)
         global filename_list_cache
         filename_list_cache[folder_name] = out
     cache_helper.set(folder_name, out)
-    return list(out[0])
-
+    from_fs = list(out[0])
+    
+    if from_fs and from_repo:
+        return from_fs + from_repo
+    elif from_fs:
+        return from_fs
+    elif from_repo:
+        return from_repo
+    else:
+        return []
 
 def get_save_image_path(filename_prefix: str, output_dir: str, image_width=0, image_height=0) -> tuple[str, str, int, str, str]:
     def map_filename(filename: str) -> tuple[int, str]:

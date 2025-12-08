@@ -72,7 +72,9 @@ class ExecutionContext:
     def loaded_model_ids(self):
         result = []
         for model_type in FAVORITE_MODEL_TYPES:
-            result += [model_info.id for model_info in self._used_models.get(model_type, {}).values()]
+            for model_info in self._used_models.get(model_type, {}).values():
+                if model_info:
+                    result.append(model_info.id)
         return result
 
     @property
