@@ -9,6 +9,7 @@ logs = None
 stdout_interceptor = None
 stderr_interceptor = None
 
+logging.basicConfig(level='INFO', format='%(asctime)s [%(levelname)s] (%(name)s:%(funcName)s:%(lineno)d): %(message)s')
 
 class LogInterceptor(io.TextIOWrapper):
     def __init__(self, stream,  *args, **kwargs):
