@@ -143,10 +143,12 @@ def _setup_daemon_api(_server_instance, _task_state: _State, routes: aiohttp.web
         request_data = await request.json()
         req = ServiceStatusRequest(**request_data)
         if req.status:
+            if  _task_state.service_status != req.status:
+                _logger.info(f'update_status: service status was set to {_task_state.service_status}')
             _task_state.service_status = req.status
         if req.accepted_tiers:
             _task_state.accepted_tiers = req.accepted_tiers
-        _logger.info(f'update_status: service status was set to {_task_state.service_status}')
+
         resp = await get_status(request)
         return resp
 
