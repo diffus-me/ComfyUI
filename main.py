@@ -211,9 +211,9 @@ def prompt_worker(q, server_instance, task_dispatcher: diffus.task_queue.TaskDis
 
             exec_context = item[-1]
 
-            begin = time.time()
-            monitor_error = None
             with task_dispatcher.dispatch(item) as handle_dispatcher_result:
+                monitor_error = None
+                begin = time.time()
                 try:
                     with diffus.system_monitor.monitor_call_context(
                             extra_data,
@@ -232,64 +232,66 @@ def prompt_worker(q, server_instance, task_dispatcher: diffus.task_queue.TaskDis
                     monitor_error = ex
                 except Exception as ex:
                     logging.exception(ex)
-                end = time.time()
-                need_gc = True
-                remove_sensitive = lambda prompt: prompt[:5] + prompt[6:]
-                q.task_done(item_id,
-                            e.history_result,
-                            status=execution.PromptQueue.ExecutionStatus(
-                                status_str='success' if e.success else 'error',
-                                completed=e.success,
-                                messages=e.status_messages), process_item=remove_sensitive)
-                if server_instance.client_id is not None:
-                    server_instance.send_sync("executing", {"node": None, "prompt_id": prompt_id}, server_instance.client_id)
-                    header_dict = diffus.system_monitor.make_headers(extra_data=extra_data)
-                    monitor_addr, system_monitor_api_secret = diffus.system_monitor.get_system_monitor_config(header_dict)
-                    monitor_info = {
-                        "monitor_addr": monitor_addr,
-                        "system_monitor_api_secret": system_monitor_api_secret,
-                    }
-                    if monitor_error is None:
-                        server_instance.send_sync(
-                            "finished",
-                            {
-                                "node": None,
-                                'prompt_id': prompt_id,
-                                'used_time': end - begin,
-                                'subscription_consumption': extra_data.get('subscription_consumption', None),
-                                "monitor_info": monitor_info
-                            },
-                            server_instance.client_id
-                        )
-                    else:
-                        server_instance.send_sync(
-                            "monitor_error",
-                            {
-                                "node": None,
-                                'prompt_id': prompt_id,
-                                'used_time': end - begin,
-                                'message': diffus.system_monitor.make_monitor_error_message(monitor_error),
-                                "monitor_info": monitor_info
-                            },
-                            server_instance.client_id
-                        )
+                try:
+                    end = time.time()
+                    need_gc = True
+                    remove_sensitive = lambda prompt: prompt[:5] + prompt[6:]
+                    q.task_done(item_id,
+                                e.history_result,
+                                status=execution.PromptQueue.ExecutionStatus(
+                                    status_str='success' if e.success else 'error',
+                                    completed=e.success,
+                                    messages=e.status_messages), process_item=remove_sensitive)
+                    if server_instance.client_id is not None:
+                        server_instance.send_sync("executing", {"node": None, "prompt_id": prompt_id}, server_instance.client_id)
+                        header_dict = diffus.system_monitor.make_headers(extra_data=extra_data)
+                        monitor_addr, system_monitor_api_secret = diffus.system_monitor.get_system_monitor_config(header_dict)
+                        monitor_info = {
+                            "monitor_addr": monitor_addr,
+                            "system_monitor_api_secret": system_monitor_api_secret,
+                        }
+                        if monitor_error is None:
+                            server_instance.send_sync(
+                                "finished",
+                                {
+                                    "node": None,
+                                    'prompt_id': prompt_id,
+                                    'used_time': end - begin,
+                                    'subscription_consumption': extra_data.get('subscription_consumption', None),
+                                    "monitor_info": monitor_info
+                                },
+                                server_instance.client_id
+                            )
+                        else:
+                            server_instance.send_sync(
+                                "monitor_error",
+                                {
+                                    "node": None,
+                                    'prompt_id': prompt_id,
+                                    'used_time': end - begin,
+                                    'message': diffus.system_monitor.make_monitor_error_message(monitor_error),
+                                    "monitor_info": monitor_info
+                                },
+                                server_instance.client_id
+                            )
 
-                    current_time = time.perf_counter()
-                    execution_time = current_time - execution_start_time
+                        current_time = time.perf_counter()
+                        execution_time = current_time - execution_start_time
 
-                    # Log Time in a more readable way after 10 minutes
-                    if execution_time > 600:
-                        execution_time = time.strftime("%H:%M:%S", time.gmtime(execution_time))
-                        logging.info(f"Prompt executed in {execution_time}")
-                    else:
-                        logging.info("Prompt executed in {:.2f} seconds".format(execution_time))
-
-                    handle_dispatcher_result(
-                        task_id=prompt_id,
-                        success=e.success,
-                        messages=e.status_messages,
-                        monitor_error=monitor_error
-                    )
+                        # Log Time in a more readable way after 10 minutes
+                        if execution_time > 600:
+                            execution_time = time.strftime("%H:%M:%S", time.gmtime(execution_time))
+                            logging.info(f"Prompt executed in {execution_time}")
+                        else:
+                            logging.info("Prompt executed in {:.2f} seconds".format(execution_time))
+                except Exception as ex:
+                    logging.exception(f"exception in post execution: {ex}")
+                handle_dispatcher_result(
+                    task_id=prompt_id,
+                    success=e.success,
+                    messages=e.status_messages,
+                    monitor_error=monitor_error
+                )
 
                 server_instance.current_prompt_id = None
             flags = q.get_flags()
