@@ -139,7 +139,7 @@ class FluxKontextImageScale(io.ComfyNode):
 
     @classmethod
     def execute(cls, image) -> io.NodeOutput:
-        if image:
+        if image is not None:
             width = image.shape[2]
             height = image.shape[1]
             aspect_ratio = width / height
