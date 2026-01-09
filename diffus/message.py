@@ -265,6 +265,12 @@ class MessageQueue:
             f'diffus:comfyui:message:{sid}'
         ]
 
+        try:
+            self._redis_client.ping()
+        except Exception as e:
+            logger.exception(f"failed to publish message to redis: {e}")
+            self._redis_client = diffus.redis_client.get_redis_client()
+
         for key in keys:
             if isinstance(message, str) and "monitor_info" in message:
                 msg_dict = json.loads(message)

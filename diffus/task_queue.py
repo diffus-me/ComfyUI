@@ -83,7 +83,6 @@ class _State:
 
         self.current_task = ''
         self.current_task_start_time = 0
-        self.remaining_tasks = 0
 
     @property
     def redis_client(self):
@@ -119,6 +118,8 @@ def _setup_daemon_api(_server_instance, _task_state: _State, routes: aiohttp.web
             if current_task:
                 break
             await asyncio.sleep(0.05)
+
+        _prompt_queue = _server_instance.prompt_queue
         resp = ServiceStatusResponse(
             release_version=version.version,
             node_type=_task_state.node_type,
@@ -130,7 +131,7 @@ def _setup_daemon_api(_server_instance, _task_state: _State, routes: aiohttp.web
             current_task=current_task,
             finished_task_count=_task_state.finished_task_count,
             failed_task_count=_task_state.failed_task_count,
-            pending_task_count=_task_state.remaining_tasks,
+            pending_task_count=_prompt_queue.get_tasks_remaining(),
             consecutive_failed_task_count=_task_state.consecutive_failed_task_count,
             gpu_utilization=busy_time / live_time,
             last_error_message=_task_state.last_error_message
@@ -143,7 +144,7 @@ def _setup_daemon_api(_server_instance, _task_state: _State, routes: aiohttp.web
         request_data = await request.json()
         req = ServiceStatusRequest(**request_data)
         if req.status:
-            if  _task_state.service_status != req.status:
+            if _task_state.service_status != req.status:
                 _logger.info(f'update_status: service status was set to {_task_state.service_status}')
             _task_state.service_status = req.status
         if req.accepted_tiers:
@@ -237,8 +238,8 @@ def _post_task(_task_state: _State, request_obj, retry=1):
             raise
 
 
-def _fetch_task(_task_state: _State, fetch_task_timeout=5):
-    if not _task_state.current_task and _task_state.remaining_tasks == 0:
+def _fetch_task(_task_state: _State, remaining_tasks: int, fetch_task_timeout=5):
+    if not _task_state.current_task and remaining_tasks == 0:
         queue_name_list = []
         for task_type in _task_state.accepted_type_types:
             queue_name_list += [f"SD-{task_type}-TASKS-{tier}" for tier in _task_state.accepted_tiers]
@@ -263,10 +264,10 @@ def _fetch_task(_task_state: _State, fetch_task_timeout=5):
 
 
 class TaskDispatcher:
-    def __init__(self,service_instance, prompt_queue, routes: aiohttp.web_routedef.RouteTableDef):
+    def __init__(self, service_instance, routes: aiohttp.web_routedef.RouteTableDef):
         self._task_state = _State()
         self._server_instance = service_instance
-        self._prompt_queue = prompt_queue
+        self._prompt_queue = service_instance.prompt_queue
         self._disable_embedded_task_dispatcher = os.getenv(
             'DISABLE_EMBEDDED_TASK_DISPATCHER', "false"
         ).lower() in ('true', '1')
@@ -297,9 +298,9 @@ class TaskDispatcher:
                 and self._task_state.service_status == 'up':
             try:
                 # 1. update current state
-                self._task_state.remaining_tasks = self._prompt_queue.get_tasks_remaining()
+                remaining_tasks = self._prompt_queue.get_tasks_remaining()
                 # 2. fetch a task from remote queue
-                task = _fetch_task(self._task_state, fetch_task_timeout=5)
+                task = _fetch_task(self._task_state, remaining_tasks, fetch_task_timeout=5)
                 # 3. post task to service
                 if task:
                     _post_task(self._task_state, task)

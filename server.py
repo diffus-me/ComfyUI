@@ -865,7 +865,7 @@ class PromptServer():
             if "prompt" in json_data:
                 prompt = json_data["prompt"]
                 prompt_id = str(json_data.get("prompt_id", uuid.uuid4()))
-                logging.info(f"got prompt {prompt_id}")
+                logging.info(f"[post_prompt] got prompt {prompt_id}")
 
                 extra_data = {}
                 if "extra_data" in json_data:
@@ -885,6 +885,7 @@ class PromptServer():
                     partial_execution_targets = json_data["partial_execution_targets"]
 
                 valid = await execution.validate_prompt(exec_context, prompt_id, prompt, partial_execution_targets)
+                logging.info(f"[post_prompt] validate_prompt {prompt_id}: {valid}")
                 if valid[0]:
                     if 'x-task-id' in request.headers:
                         prompt_id = request.headers['x-task-id']
@@ -898,12 +899,14 @@ class PromptServer():
                             sensitive[sensitive_val] = extra_data.pop(sensitive_val)
                     extra_data["create_time"] = int(time.time() * 1000)  # timestamp in milliseconds
                     self.prompt_queue.put((number, prompt_id, prompt, extra_data, outputs_to_execute, sensitive, exec_context))
+                    logging.info(f"[post_prompt] prompt {prompt_id} was put to prompt_queue")
                     response = {"prompt_id": prompt_id, "number": number, "node_errors": valid[3]}
                     return web.json_response(response)
                 else:
-                    logging.warning("invalid prompt: {}".format(valid[1]))
+                    logging.warning("[post_prompt] invalid prompt: {}".format(valid[1]))
                     return web.json_response({"error": valid[1], "node_errors": valid[3]}, status=400)
             else:
+                logging.warning(f"got empty prompt")
                 error = {
                     "type": "no_prompt",
                     "message": "No prompt provided",

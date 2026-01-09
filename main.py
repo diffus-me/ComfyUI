@@ -196,6 +196,7 @@ def prompt_worker(q, server_instance, task_dispatcher: diffus.task_queue.TaskDis
             timeout = max(gc_collect_interval - (current_time - last_gc_collect), 0.0)
 
         queue_item = q.get(timeout=timeout)
+        logging.info(f"[prompt_worker] popped item: {queue_item is not None}")
         if queue_item is not None:
             item, item_id = queue_item
             execution_start_time = time.perf_counter()
@@ -210,7 +211,7 @@ def prompt_worker(q, server_instance, task_dispatcher: diffus.task_queue.TaskDis
                 extra_data[k] = sensitive[k]
 
             exec_context = item[-1]
-
+            logging.info(f"[prompt_worker] prepare to execute prompt {prompt_id}, extra_data: {extra_data}")
             with task_dispatcher.dispatch(item) as handle_dispatcher_result:
                 monitor_error = None
                 begin = time.time()
@@ -223,16 +224,22 @@ def prompt_worker(q, server_instance, task_dispatcher: diffus.task_queue.TaskDis
                             is_intermediate=False,
                             only_available_for=['basic', 'plus', 'pro', 'api'],
                     ) as result_encoder:
+                        logging.info(f"[prompt_worker] begin to execute prompt {prompt_id}")
                         e.execute(exec_context, item[2], prompt_id, extra_data, item[4])
+                        logging.info(f"[prompt_worker] finished execute prompt {prompt_id}, success: {e.success}, message: {e.status_messages}")
                         need_gc = True
                         result_encoder(e.success, e.status_messages)
+                        logging.info(f"[prompt_worker] finished execute prompt {prompt_id}, result was encoded by task_dispatcher")
                 except diffus.system_monitor.MonitorException as ex:
+                    logging.warning(f"[prompt_worker] failed execute prompt {prompt_id}, MonitorException")
                     monitor_error = ex
                 except diffus.system_monitor.MonitorTierMismatchedException as ex:
+                    logging.warning(f"[prompt_worker] failed execute prompt {prompt_id}, MonitorTierMismatchedException")
                     monitor_error = ex
                 except Exception as ex:
-                    logging.exception(ex)
+                    logging.exception(f"[prompt_worker] failed execute prompt {prompt_id}, {ex}")
                 try:
+                    logging.info(f"[prompt_worker] begin post_execution for prompt {prompt_id}")
                     end = time.time()
                     need_gc = True
                     remove_sensitive = lambda prompt: prompt[:5] + prompt[6:]
@@ -242,6 +249,7 @@ def prompt_worker(q, server_instance, task_dispatcher: diffus.task_queue.TaskDis
                                     status_str='success' if e.success else 'error',
                                     completed=e.success,
                                     messages=e.status_messages), process_item=remove_sensitive)
+                    logging.info(f"[prompt_worker] queue task_done event handled")
                     if server_instance.client_id is not None:
                         server_instance.send_sync("executing", {"node": None, "prompt_id": prompt_id}, server_instance.client_id)
                         header_dict = diffus.system_monitor.make_headers(extra_data=extra_data)
@@ -274,23 +282,27 @@ def prompt_worker(q, server_instance, task_dispatcher: diffus.task_queue.TaskDis
                                 },
                                 server_instance.client_id
                             )
+                        logging.info(f"[prompt_worker] monitor_info was sent")
 
-                        current_time = time.perf_counter()
-                        execution_time = current_time - execution_start_time
+                    current_time = time.perf_counter()
+                    execution_time = current_time - execution_start_time
 
-                        # Log Time in a more readable way after 10 minutes
-                        if execution_time > 600:
-                            execution_time = time.strftime("%H:%M:%S", time.gmtime(execution_time))
-                            logging.info(f"Prompt executed in {execution_time}")
-                        else:
-                            logging.info("Prompt executed in {:.2f} seconds".format(execution_time))
+                    # Log Time in a more readable way after 10 minutes
+                    if execution_time > 600:
+                        execution_time = time.strftime("%H:%M:%S", time.gmtime(execution_time))
+                        logging.info(f"[prompt_worker] Prompt executed in {execution_time}")
+                    else:
+                        logging.info("[prompt_worker] Prompt executed in {:.2f} seconds".format(execution_time))
                 except Exception as ex:
-                    logging.exception(f"exception in post execution: {ex}")
+                    logging.exception(f"[prompt_worker] exception in post execution: {ex}")
                 handle_dispatcher_result(
                     task_id=prompt_id,
                     success=e.success,
                     messages=e.status_messages,
                     monitor_error=monitor_error
+                )
+                logging.info(
+                    "[prompt_worker] handle_dispatcher_result finished, {prompt_id} everything is done, ready to accept next prompt"
                 )
 
                 server_instance.current_prompt_id = None
@@ -394,8 +406,7 @@ def start_comfyui(asyncio_loop=None):
         asyncio_loop = asyncio.new_event_loop()
         asyncio.set_event_loop(asyncio_loop)
     prompt_server = server.PromptServer(asyncio_loop)
-    q = execution.PromptQueue(prompt_server)
-    task_dispatcher = diffus.task_queue.TaskDispatcher(prompt_server, q, prompt_server.routes)
+    task_dispatcher = diffus.task_queue.TaskDispatcher(prompt_server, prompt_server.routes)
 
     hook_breaker_ac10a0.save_functions()
     asyncio_loop.run_until_complete(nodes.init_extra_nodes(
