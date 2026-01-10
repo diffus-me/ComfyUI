@@ -22,7 +22,7 @@ class ReferenceLatent(io.ComfyNode):
 
     @classmethod
     def execute(cls, conditioning, latent=None, enable: bool=True) -> io.NodeOutput:
-        if latent is not None:
+        if latent is not None and enable:
             conditioning = node_helpers.conditioning_set_values(conditioning, {"reference_latents": [latent["samples"]]}, append=True)
         return io.NodeOutput(conditioning)
 
