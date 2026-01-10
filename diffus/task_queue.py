@@ -23,6 +23,7 @@ class _InstalledModels(BaseModel):
     loras: list[str]
     embeddings: list[str]
     diffusion_models: list[str]
+    unet_gguf: list[str]
 
 
 _installed_models: _InstalledModels | None = None
@@ -163,6 +164,7 @@ def _setup_daemon_api(_server_instance, _task_state: _State, routes: aiohttp.web
                 loras=_get_model_name_list("loras"),
                 embeddings=_get_model_name_list("embeddings"),
                 diffusion_models=_get_model_name_list("diffusion_models"),
+                unet_gguf=_get_model_name_list("unet_gguf"),
             )
         return web.json_response(_installed_models.model_dump())
 
