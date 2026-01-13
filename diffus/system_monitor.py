@@ -233,8 +233,9 @@ def monitor_call_context(
         except Exception as ex:
             logger.error(f'{task_id}: Json encode result failed {ex}.')
 
-    skip_monitor = header_dict.get("x-disable-monitor-logs", None) or header_dict.get("X-Disable-Monitor-Logs", None)
+    skip_monitor = header_dict.get("x-disable-monitor-logs", "") or header_dict.get("X-Disable-Monitor-Logs", "")
     if skip_monitor and skip_monitor.lower() == "true":
+        logger.info(f'monitor log was skipped: {task_id}')
         yield result_encoder
         return
 
@@ -248,7 +249,8 @@ def monitor_call_context(
             decoded_params,
             is_intermediate,
             refund_if_task_failed,
-            only_available_for)
+            only_available_for,
+        )
         yield result_encoder
         if task_is_failed:
             status = 'failed'
@@ -278,7 +280,16 @@ def node_execution_monitor(get_output_data):
 
     redis_client = get_redis_client()
 
-    async def wrapper(prompt_id, unique_id, obj, input_data_all, extra_data, execution_block_cb=None, pre_execute_cb=None, hidden_inputs=None):
+    async def wrapper(
+            prompt_id,
+            unique_id,
+            obj,
+            input_data_all,
+            extra_data,
+            execution_block_cb=None,
+            pre_execute_cb=None,
+            hidden_inputs=None,
+    ):
         node_class_name = type(obj).__name__
         for k, v in nodes.NODE_CLASS_MAPPINGS.items():
             if type(obj) is v:
@@ -293,9 +304,25 @@ def node_execution_monitor(get_output_data):
                 is_intermediate=True,
         ) as result_encoder:
             try:
-                output_data = await get_output_data(prompt_id, unique_id, obj, input_data_all, extra_data, execution_block_cb=execution_block_cb, pre_execute_cb=pre_execute_cb, hidden_inputs=hidden_inputs)
+                output_data = await get_output_data(
+                    prompt_id,
+                    unique_id,
+                    obj,
+                    input_data_all,
+                    extra_data,
+                    execution_block_cb=execution_block_cb,
+                    pre_execute_cb=pre_execute_cb,
+                    hidden_inputs=hidden_inputs,
+                )
                 result_encoder(True, None)
-                post_output_to_image_gallery(redis_client, obj, make_headers(extra_data), input_data_all, output_data, hidden_inputs=hidden_inputs)
+                post_output_to_image_gallery(
+                    redis_client,
+                    obj,
+                    make_headers(extra_data),
+                    input_data_all,
+                    output_data,
+                    hidden_inputs=hidden_inputs,
+                )
                 return output_data
             except Exception as ex:
                 result_encoder(False, ex)

@@ -146,13 +146,16 @@ def _setup_daemon_api(_server_instance, _task_state: _State, routes: aiohttp.web
         req = ServiceStatusRequest(**request_data)
         if req.status:
             if _task_state.service_status != req.status:
-                _logger.info(f'update_status: service status was set to {_task_state.service_status}')
-            _task_state.service_status = req.status
+                _task_state.service_status = req.status
+                _logger.info(f'update_status: service status was set to {req.status}')
         if req.accepted_tiers:
             _task_state.accepted_tiers = req.accepted_tiers
 
-        resp = await get_status(request)
-        return resp
+        return web.json_response(
+            {
+                "status": _task_state.service_status
+            }
+        )
 
     @routes.get("/daemon/v1/models")
     async def get_installed_models(request):
