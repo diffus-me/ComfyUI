@@ -15,6 +15,9 @@ from typing_extensions import override
 
 SVG = IO.SVG.Type  # TODO: temporary solution for backward compatibility, will be removed later.
 
+import time
+import execution_context
+
 MAX_RESOLUTION = nodes.MAX_RESOLUTION
 
 class ImageCrop(IO.ComfyNode):
@@ -139,14 +142,15 @@ class SaveAnimatedWEBP(IO.ComfyNode):
                 IO.Combo.Input("method", options=list(cls.COMPRESS_METHODS.keys())),
                 # "num_frames": ("INT", {"default": 0, "min": 0, "max": 8192}),
             ],
-            hidden=[IO.Hidden.prompt, IO.Hidden.extra_pnginfo],
+            hidden=[IO.Hidden.prompt, IO.Hidden.extra_pnginfo, IO.Hidden.exec_context],
             is_output_node=True,
         )
 
     @classmethod
-    def execute(cls, images, fps, filename_prefix, lossless, quality, method, num_frames=0) -> IO.NodeOutput:
+    def execute(cls, images, fps, filename_prefix, lossless, quality, method, num_frames=0, exec_context: execution_context.ExecutionContext=None) -> IO.NodeOutput:
         return IO.NodeOutput(
             ui=UI.ImageSaveHelper.get_save_animated_webp_ui(
+                exec_context=exec_context,
                 images=images,
                 filename_prefix=filename_prefix,
                 cls=cls,
@@ -173,14 +177,15 @@ class SaveAnimatedPNG(IO.ComfyNode):
                 IO.Float.Input("fps", default=6.0, min=0.01, max=1000.0, step=0.01),
                 IO.Int.Input("compress_level", default=4, min=0, max=9),
             ],
-            hidden=[IO.Hidden.prompt, IO.Hidden.extra_pnginfo],
+            hidden=[IO.Hidden.prompt, IO.Hidden.extra_pnginfo, IO.Hidden.exec_context],
             is_output_node=True,
         )
 
     @classmethod
-    def execute(cls, images, fps, compress_level, filename_prefix="ComfyUI") -> IO.NodeOutput:
+    def execute(cls, images, fps, compress_level, filename_prefix="ComfyUI", exec_context: execution_context.ExecutionContext=None) -> IO.NodeOutput:
         return IO.NodeOutput(
             ui=UI.ImageSaveHelper.get_save_animated_png_ui(
+                exec_context=exec_context,
                 images=images,
                 filename_prefix=filename_prefix,
                 cls=cls,
@@ -435,13 +440,13 @@ class SaveSVGNode(IO.ComfyNode):
                     tooltip="The prefix for the file to save. This may include formatting information such as %date:yyyy-MM-dd% or %Empty Latent Image.width% to include values from nodes.",
                 ),
             ],
-            hidden=[IO.Hidden.prompt, IO.Hidden.extra_pnginfo],
+            hidden=[IO.Hidden.prompt, IO.Hidden.extra_pnginfo, IO.Hidden.exec_context],
             is_output_node=True,
         )
 
     @classmethod
-    def execute(cls, svg: IO.SVG.Type, filename_prefix="svg/ComfyUI") -> IO.NodeOutput:
-        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, folder_paths.get_output_directory())
+    def execute(cls, svg: IO.SVG.Type, filename_prefix="svg/ComfyUI", exec_context: execution_context.ExecutionContext=None) -> IO.NodeOutput:
+        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, folder_paths.get_output_directory(user_hash=exec_context.user_hash))
         results: list[UI.SavedResult] = []
 
         # Prepare metadata JSON
@@ -457,7 +462,7 @@ class SaveSVGNode(IO.ComfyNode):
 
         for batch_number, svg_bytes in enumerate(svg.data):
             filename_with_batch_num = filename.replace("%batch_num%", str(batch_number))
-            file = f"{filename_with_batch_num}_{counter:05}_.svg"
+            file = f"{filename_with_batch_num}_{counter:05}_{int(time.time()*1000)}.svg"
 
             # Read SVG content
             svg_bytes.seek(0)
@@ -512,7 +517,7 @@ class GetImageSize(IO.ComfyNode):
         )
 
     @classmethod
-    def execute(cls, image) -> IO.NodeOutput:
+    def execute(cls, image, unique_id=None) -> IO.NodeOutput:
         height = image.shape[1]
         width = image.shape[2]
         batch_size = image.shape[0]

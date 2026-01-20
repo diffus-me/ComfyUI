@@ -9,6 +9,7 @@ logs = None
 stdout_interceptor = None
 stderr_interceptor = None
 
+logging.basicConfig(level='INFO', format='%(asctime)s [%(levelname)s] (%(name)s:%(funcName)s:%(lineno)d): %(message)s')
 
 class LogInterceptor(io.TextIOWrapper):
     def __init__(self, stream,  *args, **kwargs):
@@ -82,6 +83,9 @@ def setup_logger(log_level: str = 'INFO', capacity: int = 300, use_stdout: bool 
         logger.addHandler(stdout_handler)
 
     logger.addHandler(stream_handler)
+
+    filename = '/var/log/sd_comfyui/be/comfyui.log'
+    logger.addHandler(logging.FileHandler(filename))
 
 
 STARTUP_WARNINGS = []

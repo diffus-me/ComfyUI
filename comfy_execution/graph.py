@@ -10,6 +10,9 @@ from comfy.comfy_types.node_typing import ComfyNodeABC, InputTypeDict, InputType
 # NOTE: ExecutionBlocker code got moved to graph_utils.py to prevent torch being imported too soon during unit tests
 ExecutionBlocker = ExecutionBlocker
 
+import execution_context
+import node_helpers
+
 class DependencyCycleError(Exception):
     pass
 
@@ -63,6 +66,7 @@ class DynamicPrompt:
         return self.original_prompt
 
 def get_input_info(
+    context: execution_context.ExecutionContext,
     class_def: Type[ComfyNodeABC],
     input_name: str,
     valid_inputs: InputTypeDict | None = None
@@ -78,7 +82,7 @@ def get_input_info(
         tuple[str, str, dict] | tuple[None, None, None]: The input type, category, and extra info for the input name.
     """
 
-    valid_inputs = valid_inputs or class_def.INPUT_TYPES()
+    valid_inputs = valid_inputs or node_helpers.get_node_input_types(context, class_def)
     input_info = None
     input_category = None
     if "required" in valid_inputs and input_name in valid_inputs["required"]:
@@ -113,12 +117,12 @@ class TopologicalSort:
         self.externalBlocks = 0
         self.unblockedEvent = asyncio.Event()
 
-    def get_input_info(self, unique_id, input_name):
+    def get_input_info(self, context, unique_id, input_name):
         class_type = self.dynprompt.get_node(unique_id)["class_type"]
         class_def = nodes.NODE_CLASS_MAPPINGS[class_type]
-        return get_input_info(class_def, input_name)
+        return get_input_info(context, class_def, input_name)
 
-    def make_input_strong_link(self, to_node_id, to_input):
+    def make_input_strong_link(self, context, to_node_id, to_input):
         inputs = self.dynprompt.get_node(to_node_id)["inputs"]
         if to_input not in inputs:
             raise NodeInputError(f"Node {to_node_id} says it needs input {to_input}, but there is no input to that node at all")
@@ -126,17 +130,17 @@ class TopologicalSort:
         if not is_link(value):
             raise NodeInputError(f"Node {to_node_id} says it needs input {to_input}, but that value is a constant")
         from_node_id, from_socket = value
-        self.add_strong_link(from_node_id, from_socket, to_node_id)
+        self.add_strong_link(context, from_node_id, from_socket, to_node_id)
 
-    def add_strong_link(self, from_node_id, from_socket, to_node_id):
+    def add_strong_link(self, context, from_node_id, from_socket, to_node_id):
         if not self.is_cached(from_node_id):
-            self.add_node(from_node_id)
+            self.add_node(context, from_node_id)
             if to_node_id not in self.blocking[from_node_id]:
                 self.blocking[from_node_id][to_node_id] = {}
                 self.blockCount[to_node_id] += 1
             self.blocking[from_node_id][to_node_id][from_socket] = True
 
-    def add_node(self, node_unique_id, include_lazy=False, subgraph_nodes=None):
+    def add_node(self, context, node_unique_id, include_lazy=False, subgraph_nodes=None):
         node_ids = [node_unique_id]
         links = []
 
@@ -156,7 +160,7 @@ class TopologicalSort:
                     from_node_id, from_socket = value
                     if subgraph_nodes is not None and from_node_id not in subgraph_nodes:
                         continue
-                    _, _, input_info = self.get_input_info(unique_id, input_name)
+                    _, _, input_info = self.get_input_info(context, unique_id, input_name)
                     is_lazy = input_info is not None and "lazy" in input_info and input_info["lazy"]
                     if (include_lazy or not is_lazy):
                         if not self.is_cached(from_node_id):
@@ -164,7 +168,7 @@ class TopologicalSort:
                         links.append((from_node_id, from_socket, unique_id))
 
         for link in links:
-            self.add_strong_link(*link)
+            self.add_strong_link(context, *link)
 
     def add_external_block(self, node_id):
         assert node_id in self.blockCount, "Can't add external block to a node that isn't pending"
@@ -230,8 +234,8 @@ class ExecutionList(TopologicalSort):
                 if to_node_id in self.execution_cache:
                     self.execution_cache[to_node_id][node_id] = value
 
-    def add_strong_link(self, from_node_id, from_socket, to_node_id):
-        super().add_strong_link(from_node_id, from_socket, to_node_id)
+    def add_strong_link(self, context, from_node_id, from_socket, to_node_id):
+        super().add_strong_link(context, from_node_id, from_socket, to_node_id)
         self.cache_link(from_node_id, to_node_id)
 
     async def stage_node_execution(self):

@@ -22,6 +22,7 @@ from io import BytesIO
 
 import aiohttp
 from aiohttp import web
+from aiohttp import hdrs
 import logging
 
 import mimetypes
@@ -55,6 +56,9 @@ def _remove_sensitive_from_queue(queue: list) -> list:
     """Remove sensitive data (index 5) from queue item tuples."""
     return [item[:5] for item in queue]
 
+
+import diffus.message
+import execution_context
 
 async def send_socket_catch_exception(function, message):
     try:
@@ -95,6 +99,28 @@ async def compress_body(request: web.Request, handler):
     if response.body and "gzip" in accept_encoding:
         response.enable_compression()
     return response
+
+
+
+@web.middleware
+async def compress_middleware(
+    request: web.Request, handler
+) -> web.StreamResponse:
+
+    accept_encoding = request.headers.get(hdrs.ACCEPT_ENCODING, "").lower()
+
+    if web.ContentCoding.gzip.value in accept_encoding:
+        compressor = web.ContentCoding.gzip.value
+    elif web.ContentCoding.deflate.value in accept_encoding:
+        compressor = web.ContentCoding.deflate.value
+    else:
+        return await handler(request)
+
+    resp = await handler(request)
+    if resp.content_length is not None and resp.content_length > 0:
+        resp.headers[hdrs.CONTENT_ENCODING] = compressor
+        resp.enable_compression()
+    return resp
 
 
 def create_cors_middleware(allowed_origin: str):
@@ -186,13 +212,25 @@ def create_block_external_middleware():
         else:
             response = await handler(request)
 
-        response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' data:; frame-src 'self'; object-src 'self';"
+        policies = [
+            "default-src 'self';",
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:;",
+            "style-src 'self' 'unsafe-inline' 'unsafe-eval';",
+            "img-src 'self' data: blob:;",
+            "font-src 'self';",
+            "connect-src 'self' data:;",
+            "frame-src 'self';",
+            "object-src 'self';"
+        ]
+        response.headers['Content-Security-Policy'] = " ".join(policies)
         return response
 
     return block_external_middleware
 
 
 class PromptServer():
+    instance = None
+
     def __init__(self, loop):
         PromptServer.instance = self
 
@@ -215,7 +253,6 @@ class PromptServer():
         middlewares = [cache_control, deprecation_warning]
         if args.enable_compress_response_body:
             middlewares.append(compress_body)
-
         if args.enable_cors_header:
             middlewares.append(create_cors_middleware(args.enable_cors_header))
         else:
@@ -242,8 +279,12 @@ class PromptServer():
         self.routes = routes
         self.last_node_id = None
         self.client_id = None
+        self.last_prompt_id = None
+        self.current_prompt_id = None
 
         self.on_prompt_handlers = []
+
+        self.dffis_message_queue = diffus.message.MessageQueue()
 
         @routes.get('/ws')
         async def websocket_handler(request):
@@ -305,6 +346,14 @@ class PromptServer():
                 self.sockets_metadata.pop(sid, None)
             return ws
 
+        @routes.get("/comfy")
+        async def get_root(request):
+            return web.FileResponse(os.path.join(self.web_root, "index.html"))
+
+        @routes.get("/comfy/")
+        async def get_root_slash(request):
+            raise web.HTTPFound('../comfy')
+
         @routes.get("/")
         async def get_root(request):
             response = web.FileResponse(os.path.join(self.web_root, "index.html"))
@@ -314,8 +363,8 @@ class PromptServer():
             return response
 
         @routes.get("/embeddings")
-        def get_embeddings(request):
-            embeddings = folder_paths.get_filename_list("embeddings")
+        async def get_embeddings(request):
+            embeddings = folder_paths.get_filename_list(execution_context.ExecutionContext(request), "embeddings")
             return web.json_response(list(map(lambda a: os.path.splitext(a)[0], embeddings)))
 
         @routes.get("/models")
@@ -329,12 +378,15 @@ class PromptServer():
             folder = request.match_info.get("folder", None)
             if folder not in folder_paths.folder_names_and_paths:
                 return web.Response(status=404)
-            files = folder_paths.get_filename_list(folder)
+            context = execution_context.ExecutionContext(request)
+            files = folder_paths.get_filename_list(context, folder)
             return web.json_response(files)
 
         @routes.get("/extensions")
         async def get_extensions(request):
             files = glob.glob(os.path.join(
+                glob.escape(self.web_root), 'extensions_builtin/**/*.js'), recursive=True)
+            files += glob.glob(os.path.join(
                 glob.escape(self.web_root), 'extensions/**/*.js'), recursive=True)
 
             extensions = list(map(lambda f: "/" + os.path.relpath(f, self.web_root).replace("\\", "/"), files))
@@ -346,16 +398,21 @@ class PromptServer():
 
             return web.json_response(extensions)
 
-        def get_dir_by_type(dir_type):
+        @routes.get("/health/check")
+        async def health_check(request):
+            return web.json_response({'message': 'OK'})
+
+
+        def get_dir_by_type(dir_type, user_hash):
             if dir_type is None:
                 dir_type = "input"
 
             if dir_type == "input":
-                type_dir = folder_paths.get_input_directory()
+                type_dir = folder_paths.get_input_directory(user_hash)
             elif dir_type == "temp":
-                type_dir = folder_paths.get_temp_directory()
+                type_dir = folder_paths.get_temp_directory(user_hash)
             elif dir_type == "output":
-                type_dir = folder_paths.get_output_directory()
+                type_dir = folder_paths.get_output_directory(user_hash)
 
             return type_dir, dir_type
 
@@ -373,13 +430,13 @@ class PromptServer():
                 return a.hexdigest() == b.hexdigest()
             return False
 
-        def image_upload(post, image_save_function=None):
+        def image_upload(context: execution_context.ExecutionContext, post, image_save_function=None):
             image = post.get("image")
             overwrite = post.get("overwrite")
             image_is_duplicate = False
 
             image_upload_type = post.get("type")
-            upload_dir, image_upload_type = get_dir_by_type(image_upload_type)
+            upload_dir, image_upload_type = get_dir_by_type(image_upload_type, context.user_hash)
 
             if image and image.file:
                 filename = image.filename
@@ -424,16 +481,17 @@ class PromptServer():
         @routes.post("/upload/image")
         async def upload_image(request):
             post = await request.post()
-            return image_upload(post)
+            context = execution_context.ExecutionContext(request=request)
+            return image_upload(context, post)
 
 
         @routes.post("/upload/mask")
         async def upload_mask(request):
             post = await request.post()
-
+            context = execution_context.ExecutionContext(request=request)
             def image_save_function(image, post, filepath):
                 original_ref = json.loads(post.get("original_ref"))
-                filename, output_dir = folder_paths.annotated_filepath(original_ref['filename'])
+                filename, output_dir = folder_paths.annotated_filepath(original_ref['filename'], context.user_hash)
 
                 if not filename:
                     return web.Response(status=400)
@@ -444,7 +502,7 @@ class PromptServer():
 
                 if output_dir is None:
                     type = original_ref.get("type", "output")
-                    output_dir = folder_paths.get_directory_by_type(type)
+                    output_dir = folder_paths.get_directory_by_type(type, context.user_hash)
 
                 if output_dir is None:
                     return web.Response(status=400)
@@ -471,13 +529,14 @@ class PromptServer():
                         original_pil.putalpha(new_alpha)
                         original_pil.save(filepath, compress_level=4, pnginfo=metadata)
 
-            return image_upload(post, image_save_function)
+            return image_upload(context, post, image_save_function)
 
         @routes.get("/view")
         async def view_image(request):
+            context = execution_context.ExecutionContext(request=request)
             if "filename" in request.rel_url.query:
                 filename = request.rel_url.query["filename"]
-                filename, output_dir = folder_paths.annotated_filepath(filename)
+                filename, output_dir = folder_paths.annotated_filepath(filename, context.user_hash)
 
                 if not filename:
                     return web.Response(status=400)
@@ -488,8 +547,7 @@ class PromptServer():
 
                 if output_dir is None:
                     type = request.rel_url.query.get("type", "output")
-                    output_dir = folder_paths.get_directory_by_type(type)
-
+                    output_dir = folder_paths.get_directory_by_type(type, context.user_hash)
                 if output_dir is None:
                     return web.Response(status=400)
 
@@ -589,7 +647,8 @@ class PromptServer():
             if not filename.endswith(".safetensors"):
                 return web.Response(status=404)
 
-            safetensors_path = folder_paths.get_full_path(folder_name, filename)
+            context = execution_context.ExecutionContext(request)
+            safetensors_path = folder_paths.get_full_path(context, folder_name, filename)
             if safetensors_path is None:
                 return web.Response(status=404)
             out = comfy.utils.safetensors_header(safetensors_path, max_size=1024*1024)
@@ -625,17 +684,17 @@ class PromptServer():
                     "python_version": sys.version,
                     "pytorch_version": comfy.model_management.torch_version,
                     "embedded_python": os.path.split(os.path.split(sys.executable)[0])[1] == "python_embeded",
-                    "argv": sys.argv
+                    "argv": []
                 },
                 "devices": [
                     {
-                        "name": device_name,
-                        "type": device.type,
-                        "index": device.index,
-                        "vram_total": vram_total,
-                        "vram_free": vram_free,
-                        "torch_vram_total": torch_vram_total,
-                        "torch_vram_free": torch_vram_free,
+                        "name": "",
+                        "type": "",
+                        "index": "",
+                        "vram_total": 0,
+                        "vram_free": 0,
+                        "torch_vram_total": 0,
+                        "torch_vram_free": 0,
                     }
                 ]
             }
@@ -649,15 +708,21 @@ class PromptServer():
         async def get_prompt(request):
             return web.json_response(self.get_queue_info())
 
-        def node_info(node_class):
+        def node_info(context: execution_context.ExecutionContext, node_class):
             obj_class = nodes.NODE_CLASS_MAPPINGS[node_class]
             if issubclass(obj_class, _ComfyNodeInternal):
-                return obj_class.GET_NODE_INFO_V1()
+                return obj_class.GET_NODE_INFO_V1(exec_context=context)
+            if callable(obj_class.RETURN_TYPES):
+                return_types = obj_class.RETURN_TYPES(context)
+            else:
+                return_types = obj_class.RETURN_TYPES
+
+            node_input_types = node_helpers.get_node_input_types(context, obj_class)
             info = {}
-            info['input'] = obj_class.INPUT_TYPES()
-            info['input_order'] = {key: list(value.keys()) for (key, value) in obj_class.INPUT_TYPES().items()}
-            info['output'] = obj_class.RETURN_TYPES
-            info['output_is_list'] = obj_class.OUTPUT_IS_LIST if hasattr(obj_class, 'OUTPUT_IS_LIST') else [False] * len(obj_class.RETURN_TYPES)
+            info['input'] = node_input_types
+            info['input_order'] = {key: list(value.keys()) for (key, value) in node_input_types.items()}
+            info['output'] = return_types
+            info['output_is_list'] = obj_class.OUTPUT_IS_LIST if hasattr(obj_class, 'OUTPUT_IS_LIST') else [False] * len(return_types)
             info['output_name'] = obj_class.RETURN_NAMES if hasattr(obj_class, 'RETURN_NAMES') else info['output']
             info['name'] = node_class
             info['display_name'] = nodes.NODE_DISPLAY_NAME_MAPPINGS[node_class] if node_class in nodes.NODE_DISPLAY_NAME_MAPPINGS.keys() else node_class
@@ -686,15 +751,16 @@ class PromptServer():
 
         @routes.get("/object_info")
         async def get_object_info(request):
+            context = execution_context.ExecutionContext(request)
             try:
-                seed_assets(["models"])
+                seed_assets(context, ["models"])
             except Exception as e:
                 logging.error(f"Failed to seed assets: {e}")
             with folder_paths.cache_helper:
                 out = {}
                 for x in nodes.NODE_CLASS_MAPPINGS:
                     try:
-                        out[x] = node_info(x)
+                        out[x] = node_info(context,x)
                     except Exception:
                         logging.error(f"[ERROR] An error occurred while retrieving information for the '{x}' node.")
                         logging.error(traceback.format_exc())
@@ -703,9 +769,10 @@ class PromptServer():
         @routes.get("/object_info/{node_class}")
         async def get_object_info_node(request):
             node_class = request.match_info.get("node_class", None)
+            context = execution_context.ExecutionContext(request=request)
             out = {}
             if (node_class is not None) and (node_class in nodes.NODE_CLASS_MAPPINGS):
-                out[node_class] = node_info(node_class)
+                out[node_class] = node_info(context, node_class)
             return web.json_response(out)
 
         @routes.get("/api/jobs")
@@ -726,183 +793,276 @@ class PromptServer():
             workflow_id = query.get('workflow_id')
             sort_by = query.get('sort_by', 'created_at').lower()
             sort_order = query.get('sort_order', 'desc').lower()
-
-            status_filter = None
-            if status_param:
-                status_filter = [s.strip().lower() for s in status_param.split(',') if s.strip()]
-                invalid_statuses = [s for s in status_filter if s not in JobStatus.ALL]
-                if invalid_statuses:
-                    return web.json_response(
-                        {"error": f"Invalid status value(s): {', '.join(invalid_statuses)}. Valid values: {', '.join(JobStatus.ALL)}"},
-                        status=400
-                    )
-
-            if sort_by not in {'created_at', 'execution_duration'}:
-                return web.json_response(
-                    {"error": "sort_by must be 'created_at' or 'execution_duration'"},
-                    status=400
-                )
-
-            if sort_order not in {'asc', 'desc'}:
-                return web.json_response(
-                    {"error": "sort_order must be 'asc' or 'desc'"},
-                    status=400
-                )
-
-            limit = None
-
-            # If limit is provided, validate that it is a positive integer, else continue without a limit
-            if 'limit' in query:
-                try:
-                    limit = int(query.get('limit'))
-                    if limit <= 0:
-                        return web.json_response(
-                            {"error": "limit must be a positive integer"},
-                            status=400
-                        )
-                except (ValueError, TypeError):
-                    return web.json_response(
-                        {"error": "limit must be an integer"},
-                        status=400
-                    )
-
-            offset = 0
-            if 'offset' in query:
-                try:
-                    offset = int(query.get('offset'))
-                    if offset < 0:
-                        offset = 0
-                except (ValueError, TypeError):
-                    return web.json_response(
-                        {"error": "offset must be an integer"},
-                        status=400
-                    )
-
-            running, queued = self.prompt_queue.get_current_queue_volatile()
-            history = self.prompt_queue.get_history()
-
-            running = _remove_sensitive_from_queue(running)
-            queued = _remove_sensitive_from_queue(queued)
-
-            jobs, total = get_all_jobs(
-                running, queued, history,
-                status_filter=status_filter,
-                workflow_id=workflow_id,
-                sort_by=sort_by,
-                sort_order=sort_order,
-                limit=limit,
-                offset=offset
-            )
-
-            has_more = (offset + len(jobs)) < total
-
+            #
+            # status_filter = None
+            # if status_param:
+            #     status_filter = [s.strip().lower() for s in status_param.split(',') if s.strip()]
+            #     invalid_statuses = [s for s in status_filter if s not in JobStatus.ALL]
+            #     if invalid_statuses:
+            #         return web.json_response(
+            #             {"error": f"Invalid status value(s): {', '.join(invalid_statuses)}. Valid values: {', '.join(JobStatus.ALL)}"},
+            #             status=400
+            #         )
+            #
+            # if sort_by not in {'created_at', 'execution_duration'}:
+            #     return web.json_response(
+            #         {"error": "sort_by must be 'created_at' or 'execution_duration'"},
+            #         status=400
+            #     )
+            #
+            # if sort_order not in {'asc', 'desc'}:
+            #     return web.json_response(
+            #         {"error": "sort_order must be 'asc' or 'desc'"},
+            #         status=400
+            #     )
+            #
+            # limit = None
+            #
+            # # If limit is provided, validate that it is a positive integer, else continue without a limit
+            # if 'limit' in query:
+            #     try:
+            #         limit = int(query.get('limit'))
+            #         if limit <= 0:
+            #             return web.json_response(
+            #                 {"error": "limit must be a positive integer"},
+            #                 status=400
+            #             )
+            #     except (ValueError, TypeError):
+            #         return web.json_response(
+            #             {"error": "limit must be an integer"},
+            #             status=400
+            #         )
+            #
+            # offset = 0
+            # if 'offset' in query:
+            #     try:
+            #         offset = int(query.get('offset'))
+            #         if offset < 0:
+            #             offset = 0
+            #     except (ValueError, TypeError):
+            #         return web.json_response(
+            #             {"error": "offset must be an integer"},
+            #             status=400
+            #         )
+            #
+            # running, queued = self.prompt_queue.get_current_queue_volatile()
+            # history = self.prompt_queue.get_history()
+            #
+            # running = _remove_sensitive_from_queue(running)
+            # queued = _remove_sensitive_from_queue(queued)
+            #
+            # jobs, total = get_all_jobs(
+            #     running, queued, history,
+            #     status_filter=status_filter,
+            #     workflow_id=workflow_id,
+            #     sort_by=sort_by,
+            #     sort_order=sort_order,
+            #     limit=limit,
+            #     offset=offset
+            # )
+            #
+            # has_more = (offset + len(jobs)) < total
+            #
+            # return web.json_response({
+            #     'jobs': jobs,
+            #     'pagination': {
+            #         'offset': offset,
+            #         'limit': limit,
+            #         'total': total,
+            #         'has_more': has_more
+            #     }
+            # })
             return web.json_response({
-                'jobs': jobs,
+                'jobs': [],
                 'pagination': {
-                    'offset': offset,
-                    'limit': limit,
-                    'total': total,
-                    'has_more': has_more
+                    'offset': 0,
+                    'limit': 20,
+                    'total': 0,
+                    'has_more': False,
                 }
             })
 
         @routes.get("/api/jobs/{job_id}")
         async def get_job_by_id(request):
             """Get a single job by ID."""
-            job_id = request.match_info.get("job_id", None)
-            if not job_id:
-                return web.json_response(
-                    {"error": "job_id is required"},
-                    status=400
-                )
+            # job_id = request.match_info.get("job_id", None)
+            # if not job_id:
+            #     return web.json_response(
+            #         {"error": "job_id is required"},
+            #         status=400
+            #     )
+            #
+            # running, queued = self.prompt_queue.get_current_queue_volatile()
+            # history = self.prompt_queue.get_history(prompt_id=job_id)
+            #
+            # running = _remove_sensitive_from_queue(running)
+            # queued = _remove_sensitive_from_queue(queued)
+            #
+            # job = get_job(job_id, running, queued, history)
+            # if job is None:
+            #     return web.json_response(
+            #         {"error": "Job not found"},
+            #         status=404
+            #     )
+            #
+            # return web.json_response(job)
 
-            running, queued = self.prompt_queue.get_current_queue_volatile()
-            history = self.prompt_queue.get_history(prompt_id=job_id)
-
-            running = _remove_sensitive_from_queue(running)
-            queued = _remove_sensitive_from_queue(queued)
-
-            job = get_job(job_id, running, queued, history)
-            if job is None:
-                return web.json_response(
-                    {"error": "Job not found"},
-                    status=404
-                )
-
-            return web.json_response(job)
+            return web.json_response(
+                {"error": "Job not found"},
+                status=404
+            )
 
         @routes.get("/history")
         async def get_history(request):
-            max_items = request.rel_url.query.get("max_items", None)
-            if max_items is not None:
-                max_items = int(max_items)
-
-            offset = request.rel_url.query.get("offset", None)
-            if offset is not None:
-                offset = int(offset)
-            else:
-                offset = -1
-
-            return web.json_response(self.prompt_queue.get_history(max_items=max_items, offset=offset))
+            # max_items = request.rel_url.query.get("max_items", None)
+            # if max_items is not None:
+            #     max_items = int(max_items)
+            #
+            # offset = request.rel_url.query.get("offset", None)
+            # if offset is not None:
+            #     offset = int(offset)
+            # else:
+            #     offset = -1
+            #
+            # return web.json_response(self.prompt_queue.get_history(max_items=max_items, offset=offset))
+            import diffus.repository
+            context = execution_context.ExecutionContext(request)
+            task_records = diffus.repository.list_comfy_task_record(context.user_id)
+            return web.json_response(
+                [
+                    task_record.params for task_record in task_records
+                ]
+            )
 
         @routes.get("/history/{prompt_id}")
-        async def get_history_prompt_id(request):
+        async def get_history(request):
             prompt_id = request.match_info.get("prompt_id", None)
-            return web.json_response(self.prompt_queue.get_history(prompt_id=prompt_id))
+            # return web.json_response(self.prompt_queue.get_history(prompt_id=prompt_id))
+            import diffus.repository
+            if prompt_id:
+                task_record = diffus.repository.get_comfy_task_record(prompt_id)
+            else:
+                task_record = None
+            return web.json_response(
+                {
+                    "taskType": "History",
+                    "prompt": task_record.params["prompt"],
+                    "status": "success",
+                } if task_record else {}
+            )
+
+        @routes.delete("/inputs")
+        async def clear_input(request):
+            context = execution_context.ExecutionContext(request=request)
+            folder_paths.clear_input_directory(context.user_hash)
+            await self.send("input_cleared", { "node": None, "user_id": context.user_id }, context.user_id)
+            return web.json_response({
+                "type": "input_cleared",
+                "data": {
+                    "user_id": context.user_id
+                }
+            })
 
         @routes.get("/queue")
         async def get_queue(request):
             queue_info = {}
-            current_queue = self.prompt_queue.get_current_queue_volatile()
-            queue_info['queue_running'] = _remove_sensitive_from_queue(current_queue[0])
-            queue_info['queue_pending'] = _remove_sensitive_from_queue(current_queue[1])
+            # current_queue = self.prompt_queue.get_current_queue_volatile()
+            # queue_info['queue_running'] = _remove_sensitive_from_queue(current_queue[0])
+            # queue_info['queue_pending'] = _remove_sensitive_from_queue(current_queue[1])
+            queue_info['queue_running'] = []
+            queue_info['queue_pending'] = []
             return web.json_response(queue_info)
+
+        @routes.post("/prompt/valid")
+        async def post_prompt(request):
+            json_data = await request.json()
+            json_data = self.trigger_on_prompt(json_data)
+            context = execution_context.ExecutionContext(request)
+            if "prompt" in json_data:
+                prompt = json_data["prompt"]
+                prompt_id = str(json_data.get("prompt_id", uuid.uuid4()))
+                extra_data = {}
+                if "extra_data" in json_data:
+                    extra_data = json_data["extra_data"]
+
+                extra_data["client_id"] = context.user_id
+
+                context = execution_context.ExecutionContext(request=request, extra_data=extra_data)
+                logging.info(f"got prompt validation {prompt_id}, user {context.user_id}")
+                partial_execution_targets = None
+                if "partial_execution_targets" in json_data:
+                    partial_execution_targets = json_data["partial_execution_targets"]
+
+                valid = await execution.validate_prompt(context, prompt_id, prompt, partial_execution_targets)
+                if valid[0]:
+                    return web.json_response({}, status=200)
+                else:
+                    logging.warning("invalid prompt: {}".format(valid[1]))
+                    return web.json_response({"error": valid[1], "node_errors": valid[3]}, status=400)
+            else:
+                return web.json_response({"error": "no prompt", "node_errors": []}, status=400)
 
         @routes.post("/prompt")
         async def post_prompt(request):
-            logging.info("got prompt")
             json_data =  await request.json()
             json_data = self.trigger_on_prompt(json_data)
+            exec_context = execution_context.ExecutionContext(request)
 
             if "number" in json_data:
                 number = float(json_data['number'])
             else:
                 number = self.number
-                if "front" in json_data:
-                    if json_data['front']:
-                        number = -number
+                # if "front" in json_data:
+                #     if json_data['front']:
+                #         number = -number
 
                 self.number += 1
 
             if "prompt" in json_data:
                 prompt = json_data["prompt"]
                 prompt_id = str(json_data.get("prompt_id", uuid.uuid4()))
+                logging.info(f"[post_prompt] got prompt {prompt_id}")
 
-                partial_execution_targets = None
-                if "partial_execution_targets" in json_data:
-                    partial_execution_targets = json_data["partial_execution_targets"]
-
-                valid = await execution.validate_prompt(prompt_id, prompt, partial_execution_targets)
                 extra_data = {}
                 if "extra_data" in json_data:
                     extra_data = json_data["extra_data"]
 
-                if "client_id" in json_data:
-                    extra_data["client_id"] = json_data["client_id"]
+                # if "client_id" in json_data:
+                #     extra_data["client_id"] = json_data["client_id"]
+                if "diffus_client_id" in extra_data:
+                    client_id = extra_data["diffus_client_id"]
+                else:
+                    client_id = exec_context.user_id
+                extra_data["client_id"] = client_id
+
+                exec_context = execution_context.ExecutionContext(request=request, extra_data=extra_data)
+                partial_execution_targets = None
+                if "partial_execution_targets" in json_data:
+                    partial_execution_targets = json_data["partial_execution_targets"]
+
+                valid = await execution.validate_prompt(exec_context, prompt_id, prompt, partial_execution_targets)
+                logging.info(f"[post_prompt] validate_prompt {prompt_id}: {valid}")
                 if valid[0]:
+                    if 'x-task-id' in request.headers:
+                        prompt_id = request.headers['x-task-id']
+                    else:
+                        prompt_id = str(uuid.uuid4())
                     outputs_to_execute = valid[2]
+                    extra_data["prompt_id"] = prompt_id
                     sensitive = {}
                     for sensitive_val in execution.SENSITIVE_EXTRA_DATA_KEYS:
                         if sensitive_val in extra_data:
                             sensitive[sensitive_val] = extra_data.pop(sensitive_val)
                     extra_data["create_time"] = int(time.time() * 1000)  # timestamp in milliseconds
-                    self.prompt_queue.put((number, prompt_id, prompt, extra_data, outputs_to_execute, sensitive))
+                    self.prompt_queue.put((number, prompt_id, prompt, extra_data, outputs_to_execute, sensitive, exec_context))
+                    logging.info(f"[post_prompt] prompt {prompt_id} was put to prompt_queue")
                     response = {"prompt_id": prompt_id, "number": number, "node_errors": valid[3]}
                     return web.json_response(response)
                 else:
-                    logging.warning("invalid prompt: {}".format(valid[1]))
+                    logging.warning("[post_prompt] invalid prompt: {}".format(valid[1]))
                     return web.json_response({"error": valid[1], "node_errors": valid[3]}, status=400)
             else:
+                logging.warning(f"got empty prompt")
                 error = {
                     "type": "no_prompt",
                     "message": "No prompt provided",
@@ -913,72 +1073,80 @@ class PromptServer():
 
         @routes.post("/queue")
         async def post_queue(request):
-            json_data =  await request.json()
-            if "clear" in json_data:
-                if json_data["clear"]:
-                    self.prompt_queue.wipe_queue()
-            if "delete" in json_data:
-                to_delete = json_data['delete']
-                for id_to_delete in to_delete:
-                    delete_func = lambda a: a[1] == id_to_delete
-                    self.prompt_queue.delete_queue_item(delete_func)
+            # json_data =  await request.json()
+            # if "clear" in json_data:
+            #     if json_data["clear"]:
+            #         self.prompt_queue.wipe_queue()
+            # if "delete" in json_data:
+            #     to_delete = json_data['delete']
+            #     for id_to_delete in to_delete:
+            #         delete_func = lambda a: a[1] == id_to_delete
+            #         self.prompt_queue.delete_queue_item(delete_func)
 
-            return web.Response(status=200)
+            return web.Response(status=403)
 
         @routes.post("/interrupt")
         async def post_interrupt(request):
-            try:
-                json_data = await request.json()
-            except json.JSONDecodeError:
-                json_data = {}
+            # try:
+            #     json_data = await request.json()
+            # except json.JSONDecodeError:
+            #     json_data = {}
+            #
+            # # Check if a specific prompt_id was provided for targeted interruption
+            # prompt_id = json_data.get('prompt_id')
+            # if prompt_id:
+            #     currently_running, _ = self.prompt_queue.get_current_queue()
+            #
+            #     # Check if the prompt_id matches any currently running prompt
+            #     should_interrupt = False
+            #     for item in currently_running:
+            #         # item structure: (number, prompt_id, prompt, extra_data, outputs_to_execute)
+            #         if item[1] == prompt_id:
+            #             logging.info(f"Interrupting prompt {prompt_id}")
+            #             should_interrupt = True
+            #             break
+            #
+            #     if should_interrupt:
+            #         nodes.interrupt_processing()
+            #     else:
+            #         logging.info(f"Prompt {prompt_id} is not currently running, skipping interrupt")
+            # else:
+            #     # No prompt_id provided, do a global interrupt
+            #     logging.info("Global interrupt (no prompt_id specified)")
+            #     nodes.interrupt_processing()
 
-            # Check if a specific prompt_id was provided for targeted interruption
-            prompt_id = json_data.get('prompt_id')
-            if prompt_id:
-                currently_running, _ = self.prompt_queue.get_current_queue()
-
-                # Check if the prompt_id matches any currently running prompt
-                should_interrupt = False
-                for item in currently_running:
-                    # item structure: (number, prompt_id, prompt, extra_data, outputs_to_execute)
-                    if item[1] == prompt_id:
-                        logging.info(f"Interrupting prompt {prompt_id}")
-                        should_interrupt = True
-                        break
-
-                if should_interrupt:
-                    nodes.interrupt_processing()
-                else:
-                    logging.info(f"Prompt {prompt_id} is not currently running, skipping interrupt")
-            else:
-                # No prompt_id provided, do a global interrupt
-                logging.info("Global interrupt (no prompt_id specified)")
-                nodes.interrupt_processing()
-
-            return web.Response(status=200)
+            return web.Response(status=403)
 
         @routes.post("/free")
         async def post_free(request):
-            json_data = await request.json()
-            unload_models = json_data.get("unload_models", False)
-            free_memory = json_data.get("free_memory", False)
-            if unload_models:
-                self.prompt_queue.set_flag("unload_models", unload_models)
-            if free_memory:
-                self.prompt_queue.set_flag("free_memory", free_memory)
+            # json_data = await request.json()
+            # unload_models = json_data.get("unload_models", False)
+            # free_memory = json_data.get("free_memory", False)
+            # if unload_models:
+            #     self.prompt_queue.set_flag("unload_models", unload_models)
+            # if free_memory:
+            #     self.prompt_queue.set_flag("free_memory", free_memory)
             return web.Response(status=200)
 
         @routes.post("/history")
         async def post_history(request):
-            json_data =  await request.json()
-            if "clear" in json_data:
-                if json_data["clear"]:
-                    self.prompt_queue.wipe_history()
-            if "delete" in json_data:
-                to_delete = json_data['delete']
-                for id_to_delete in to_delete:
-                    self.prompt_queue.delete_history_item(id_to_delete)
-
+            json_data = await request.json()
+            # if "clear" in json_data:
+            #     if json_data["clear"]:
+            #         self.prompt_queue.wipe_history()
+            # if "delete" in json_data:
+            #     to_delete = json_data['delete']
+            #     for id_to_delete in to_delete:
+            #         self.prompt_queue.delete_history_item(id_to_delete)
+            context = execution_context.ExecutionContext(request)
+            try:
+                import diffus.repository
+                if "clear" in json_data:
+                    diffus.repository.clear_comfy_task_record_for_user(user_id=context.user_id)
+                elif "delete" in json_data:
+                    diffus.repository.delete_comfy_task_record(user_id=context.user_id, task_ids=json_data['delete'])
+            except Exception as e:
+                logging.exception(f"error to delete history for user {context.user_id}: {e}")
             return web.Response(status=200)
 
     async def setup(self):
@@ -1009,22 +1177,24 @@ class PromptServer():
         # Add routes from web extensions.
         for name, dir in nodes.EXTENSION_WEB_DIRS.items():
             self.app.add_routes([web.static('/extensions/' + name, dir)])
+            self.app.add_routes([web.static('/extensions_builtin/' + name, dir)])
 
         installed_templates_version = FrontendManager.get_installed_templates_version()
-        use_legacy_templates = True
-        if installed_templates_version:
-            try:
-                use_legacy_templates = (
-                    parse_version(installed_templates_version)
-                    < parse_version("0.3.0")
-                )
-            except Exception as exc:
-                logging.warning(
-                    "Unable to parse templates version '%s': %s",
-                    installed_templates_version,
-                    exc,
-                )
+        # use_legacy_templates = True
+        # if installed_templates_version:
+        #     try:
+        #         use_legacy_templates = (
+        #             parse_version(installed_templates_version)
+        #             < parse_version("0.3.0")
+        #         )
+        #     except Exception as exc:
+        #         logging.warning(
+        #             "Unable to parse templates version '%s': %s",
+        #             installed_templates_version,
+        #             exc,
+        #         )
 
+        use_legacy_templates = False  # Force using new template system for now.
         if use_legacy_templates:
             workflow_templates_path = FrontendManager.legacy_templates_path()
             if workflow_templates_path:
@@ -1075,7 +1245,22 @@ class PromptServer():
         message.extend(data)
         return message
 
-    async def send_image(self, image_data, sid=None):
+    @staticmethod
+    def encode_image_to_base64(image_type: str, image_data: bytes) -> str:
+        import base64
+        encoded = base64.b64encode(image_data).decode('utf-8')
+        return f'data:image/{image_type.lower()};base64,{encoded}'
+
+    async def send_image(self, data, sid=None):
+        if isinstance(data, dict):
+            image_data = data["preview_image"]
+            prompt_id = data["prompt_id"]
+            node_id = data["node"]
+        else:
+            image_data = data
+            prompt_id = None
+            node_id = None
+
         image_type = image_data[0]
         image = image_data[1]
         max_size = image_data[2]
@@ -1098,6 +1283,14 @@ class PromptServer():
         image.save(bytesIO, format=image_type, quality=95, compress_level=1)
         preview_bytes = bytesIO.getvalue()
         await self.send_bytes(BinaryEventTypes.PREVIEW_IMAGE, preview_bytes, sid=sid)
+
+        if prompt_id and node_id:
+            preview = {
+                "prompt_id": prompt_id,
+                "node": node_id,
+                "preview_img": self.encode_image_to_base64(image_type, preview_bytes[len(header):]),
+            }
+            await self.send_json("preview", preview, sid=sid)
 
     async def send_image_with_metadata(self, image_data, metadata=None, sid=None):
         image_type = image_data[0]
@@ -1138,6 +1331,7 @@ class PromptServer():
 
     async def send_bytes(self, event, data, sid=None):
         message = self.encode_bytes(event, data)
+        self.dffis_message_queue.send_message(sid, bytes(message))
 
         if sid is None:
             sockets = list(self.sockets.values())
@@ -1148,6 +1342,7 @@ class PromptServer():
 
     async def send_json(self, event, data, sid=None):
         message = {"type": event, "data": data}
+        self.dffis_message_queue.send_message(sid, json.dumps(message))
 
         if sid is None:
             sockets = list(self.sockets.values())

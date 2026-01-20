@@ -8,6 +8,9 @@ from comfy_api.latest import ComfyExtension, IO, UI
 
 import nodes
 
+import execution_context
+
+
 def composite(destination, source, x, y, mask = None, multiplier = 8, resize_source = False):
     source = source.to(destination.device)
     if resize_source:
@@ -400,13 +403,13 @@ class MaskPreview(IO.ComfyNode):
             inputs=[
                 IO.Mask.Input("mask"),
             ],
-            hidden=[IO.Hidden.prompt, IO.Hidden.extra_pnginfo],
+            hidden=[IO.Hidden.prompt, IO.Hidden.extra_pnginfo, IO.Hidden.exec_context],
             is_output_node=True,
         )
 
     @classmethod
-    def execute(cls, mask, filename_prefix="ComfyUI") -> IO.NodeOutput:
-        return IO.NodeOutput(ui=UI.PreviewMask(mask))
+    def execute(cls, mask, filename_prefix="ComfyUI", exec_context: execution_context.ExecutionContext=None) -> IO.NodeOutput:
+        return IO.NodeOutput(ui=UI.PreviewMask(exec_context, mask))
 
 
 class MaskExtension(ComfyExtension):

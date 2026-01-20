@@ -567,7 +567,7 @@ def _load_existing_lora(existing_lora):
     if existing_lora == "[None]":
         return {}, 0
 
-    lora_path = folder_paths.get_full_path_or_raise("loras", existing_lora)
+    lora_path = folder_paths.get_full_path_or_raise(context, "loras", existing_lora)
     # Extract steps from filename like "trained_lora_10_steps_20250225_203716"
     existing_steps = int(existing_lora.split("_steps_")[0].split("_")[-1])
     existing_weights = {}
@@ -1221,10 +1221,10 @@ class TrainingExtension(ComfyExtension):
     @override
     async def get_node_list(self) -> list[type[io.ComfyNode]]:
         return [
-            TrainLoraNode,
-            LoraModelLoader,
-            SaveLoRA,
-            LossGraphNode,
+            # TrainLoraNode,
+            # LoraModelLoader,
+            # SaveLoRA,
+            # LossGraphNode,
         ]
 
 

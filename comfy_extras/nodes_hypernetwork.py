@@ -6,6 +6,8 @@ from comfy_api.latest import IO, ComfyExtension
 from typing_extensions import override
 
 
+import execution_context
+
 def load_hypernetwork_patch(path, strength):
     sd = comfy.utils.load_torch_file(path, safe_load=True)
     activation_func = sd.get('activation_func', 'linear')
@@ -99,13 +101,13 @@ def load_hypernetwork_patch(path, strength):
 
 class HypernetworkLoader(IO.ComfyNode):
     @classmethod
-    def define_schema(cls):
+    def define_schema(cls, exec_context: execution_context.ExecutionContext):
         return IO.Schema(
             node_id="HypernetworkLoader",
             category="loaders",
             inputs=[
                 IO.Model.Input("model"),
-                IO.Combo.Input("hypernetwork_name", options=folder_paths.get_filename_list("hypernetworks")),
+                IO.Combo.Input("hypernetwork_name", options=folder_paths.get_filename_list(exec_context, "hypernetworks")),
                 IO.Float.Input("strength", default=1.0, min=-10.0, max=10.0, step=0.01),
             ],
             outputs=[
@@ -114,8 +116,8 @@ class HypernetworkLoader(IO.ComfyNode):
         )
 
     @classmethod
-    def execute(cls, model, hypernetwork_name, strength) -> IO.NodeOutput:
-        hypernetwork_path = folder_paths.get_full_path_or_raise("hypernetworks", hypernetwork_name)
+    def execute(cls, model, hypernetwork_name, strength, context: execution_context.ExecutionContext) -> IO.NodeOutput:
+        hypernetwork_path = folder_paths.get_full_path_or_raise(context, "hypernetworks", hypernetwork_name)
         model_hypernetwork = model.clone()
         patch = load_hypernetwork_patch(hypernetwork_path, strength)
         if patch is not None:

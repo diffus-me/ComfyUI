@@ -1,3 +1,4 @@
+import execution_context
 import nodes
 import node_helpers
 import torch
@@ -30,7 +31,7 @@ class CLIPTextEncodeHunyuanDiT(io.ComfyNode):
         tokens = clip.tokenize(bert)
         tokens["mt5xl"] = clip.tokenize(mt5xl)["mt5xl"]
 
-        return io.NodeOutput(clip.encode_from_tokens_scheduled(tokens))
+        return io.NodeOutput(clip.encode_from_tokens_scheduled(tokens, add_dict={"_origin_text_": bert + " " + mt5xl}))
 
     encode = execute  # TODO: remove
 
@@ -172,22 +173,23 @@ class HunyuanVideo15SuperResolution(io.ComfyNode):
 
 class LatentUpscaleModelLoader(io.ComfyNode):
     @classmethod
-    def define_schema(cls):
+    def define_schema(cls, exec_context: execution_context.ExecutionContext):
         return io.Schema(
             node_id="LatentUpscaleModelLoader",
             display_name="Load Latent Upscale Model",
             category="loaders",
             inputs=[
-                io.Combo.Input("model_name", options=folder_paths.get_filename_list("latent_upscale_models")),
+                io.Combo.Input("model_name", options=folder_paths.get_filename_list(exec_context, "latent_upscale_models")),
             ],
+            hidden=[io.Hidden.exec_context],
             outputs=[
                 io.LatentUpscaleModel.Output(),
             ],
         )
 
     @classmethod
-    def execute(cls, model_name) -> io.NodeOutput:
-        model_path = folder_paths.get_full_path_or_raise("latent_upscale_models", model_name)
+    def execute(cls, model_name, exec_context: execution_context.ExecutionContext) -> io.NodeOutput:
+        model_path = folder_paths.get_full_path_or_raise(exec_context, "latent_upscale_models", model_name)
         sd, metadata = comfy.utils.load_torch_file(model_path, safe_load=True, return_metadata=True)
 
         if "blocks.0.block.0.conv.weight" in sd:

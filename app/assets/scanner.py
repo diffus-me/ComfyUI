@@ -4,6 +4,7 @@ import logging
 import os
 import sqlalchemy
 
+import execution_context
 import folder_paths
 from app.database.db import create_session, dependencies_available
 from app.assets.helpers import (
@@ -16,10 +17,12 @@ from app.assets.database.bulk_ops import seed_from_paths_batch
 from app.assets.database.models import Asset, AssetCacheState, AssetInfo
 
 
-def seed_assets(roots: tuple[RootType, ...], enable_logging: bool = False) -> None:
+def seed_assets(exec_context: execution_context.ExecutionContext | None, roots: tuple[RootType, ...], enable_logging: bool = False) -> None:
     """
     Scan the given roots and seed the assets into the database.
     """
+    if not exec_context:
+        return
     if not dependencies_available():
         if enable_logging:
             logging.warning("Database dependencies not available, skipping assets scan")
@@ -32,18 +35,18 @@ def seed_assets(roots: tuple[RootType, ...], enable_logging: bool = False) -> No
         existing_paths: set[str] = set()
         for r in roots:
             try:
-                survivors: set[str] = _fast_db_consistency_pass(r, collect_existing_paths=True, update_missing_tags=True)
+                survivors: set[str] = _fast_db_consistency_pass(exec_context, r, collect_existing_paths=True, update_missing_tags=True)
                 if survivors:
                     existing_paths.update(survivors)
             except Exception as e:
                 logging.exception("fast DB scan failed for %s: %s", r, e)
 
         if "models" in roots:
-            paths.extend(collect_models_files())
+            paths.extend(collect_models_files(exec_context))
         if "input" in roots:
-            paths.extend(list_tree(folder_paths.get_input_directory()))
+            paths.extend(list_tree(folder_paths.get_input_directory(exec_context.user_hash)))
         if "output" in roots:
-            paths.extend(list_tree(folder_paths.get_output_directory()))
+            paths.extend(list_tree(folder_paths.get_output_directory(exec_context.user_hash)))
 
         specs: list[dict] = []
         tag_pool: set[str] = set()
@@ -59,7 +62,7 @@ def seed_assets(roots: tuple[RootType, ...], enable_logging: bool = False) -> No
             # skip empty files
             if not stat_p.st_size:
                 continue
-            name, tags = get_name_and_tags_from_asset_path(abs_p)
+            name, tags = get_name_and_tags_from_asset_path(exec_context, abs_p)
             specs.append(
                 {
                     "abs_path": abs_p,
@@ -67,7 +70,7 @@ def seed_assets(roots: tuple[RootType, ...], enable_logging: bool = False) -> No
                     "mtime_ns": getattr(stat_p, "st_mtime_ns", int(stat_p.st_mtime * 1_000_000_000)),
                     "info_name": name,
                     "tags": tags,
-                    "fname": compute_relative_filename(abs_p),
+                    "fname": compute_relative_filename(exec_context, abs_p),
                 }
             )
             for t in tags:
@@ -95,6 +98,7 @@ def seed_assets(roots: tuple[RootType, ...], enable_logging: bool = False) -> No
 
 
 def _fast_db_consistency_pass(
+    exec_context: execution_context.ExecutionContext,
     root: RootType,
     *,
     collect_existing_paths: bool = False,
@@ -107,7 +111,7 @@ def _fast_db_consistency_pass(
       - Optionally add/remove 'missing' tags based on fast-ok in this root
       - Optionally return surviving absolute paths
     """
-    prefixes = prefixes_for_root(root)
+    prefixes = prefixes_for_root(exec_context, root)
     if not prefixes:
         return set() if collect_existing_paths else None
 

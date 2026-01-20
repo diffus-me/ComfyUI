@@ -6,6 +6,8 @@ from typing_extensions import NotRequired
 from abc import ABC, abstractmethod
 from enum import Enum
 
+import execution_context
+
 
 class StrEnum(str, Enum):
     """Base class for string enums. Python's StrEnum is not available until 3.11."""
@@ -241,7 +243,7 @@ class ComfyNodeABC(ABC):
 
     @classmethod
     @abstractmethod
-    def INPUT_TYPES(s) -> InputTypeDict:
+    def INPUT_TYPES(s, context: execution_context.ExecutionContext) -> InputTypeDict:
         """Defines node inputs.
 
         * Must include the ``required`` key, which describes all inputs that must be connected for the node to execute.

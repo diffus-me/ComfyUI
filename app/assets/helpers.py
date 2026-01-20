@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal, Any
 
+import execution_context
 import folder_paths
 
 
@@ -33,16 +34,16 @@ def list_tree(base_dir: str) -> list[str]:
             out.append(os.path.abspath(os.path.join(dirpath, name)))
     return out
 
-def prefixes_for_root(root: RootType) -> list[str]:
+def prefixes_for_root(exec_context: execution_context.ExecutionContext, root: RootType) -> list[str]:
     if root == "models":
         bases: list[str] = []
         for _bucket, paths in get_comfy_models_folders():
             bases.extend(paths)
         return [os.path.abspath(p) for p in bases]
     if root == "input":
-        return [os.path.abspath(folder_paths.get_input_directory())]
+        return [os.path.abspath(folder_paths.get_input_directory(exec_context.user_hash))]
     if root == "output":
-        return [os.path.abspath(folder_paths.get_output_directory())]
+        return [os.path.abspath(folder_paths.get_output_directory(exec_context.user_hash))]
     return []
 
 def escape_like_prefix(s: str, escape: str = "!") -> tuple[str, str]:
@@ -87,7 +88,7 @@ def get_comfy_models_folders() -> list[tuple[str, list[str]]]:
             targets.append((name, paths))
     return targets
 
-def compute_relative_filename(file_path: str) -> str | None:
+def compute_relative_filename(exec_context: execution_context.ExecutionContext, file_path: str) -> str | None:
     """
     Return the model's path relative to the last well-known folder (the model category),
     using forward slashes, eg:
@@ -98,7 +99,7 @@ def compute_relative_filename(file_path: str) -> str | None:
     NOTE: this is a temporary helper, used only for initializing metadata["filename"] field.
     """
     try:
-        root_category, rel_path = get_relative_to_root_category_path_of_asset(file_path)
+        root_category, rel_path = get_relative_to_root_category_path_of_asset(exec_context, file_path)
     except ValueError:
         return None
 
@@ -114,7 +115,7 @@ def compute_relative_filename(file_path: str) -> str | None:
     return "/".join(parts)  # input/output: keep all parts
 
 
-def get_relative_to_root_category_path_of_asset(file_path: str) -> tuple[Literal["input", "output", "models"], str]:
+def get_relative_to_root_category_path_of_asset(exec_context: execution_context.ExecutionContext, file_path: str) -> tuple[Literal["input", "output", "models"], str]:
     """Given an absolute or relative file path, determine which root category the path belongs to:
       - 'input' if the file resides under `folder_paths.get_input_directory()`
       - 'output' if the file resides under `folder_paths.get_output_directory()`
@@ -140,12 +141,12 @@ def get_relative_to_root_category_path_of_asset(file_path: str) -> tuple[Literal
         return os.path.relpath(os.path.join(os.sep, os.path.relpath(child, parent)), os.sep)
 
     # 1) input
-    input_base = os.path.abspath(folder_paths.get_input_directory())
+    input_base = os.path.abspath(folder_paths.get_input_directory(exec_context.user_hash))
     if _is_within(fp_abs, input_base):
         return "input", _rel(fp_abs, input_base)
 
     # 2) output
-    output_base = os.path.abspath(folder_paths.get_output_directory())
+    output_base = os.path.abspath(folder_paths.get_output_directory(exec_context.user_hash))
     if _is_within(fp_abs, output_base):
         return "output", _rel(fp_abs, output_base)
 
@@ -167,7 +168,7 @@ def get_relative_to_root_category_path_of_asset(file_path: str) -> tuple[Literal
 
     raise ValueError(f"Path is not within input, output, or configured model bases: {file_path}")
 
-def get_name_and_tags_from_asset_path(file_path: str) -> tuple[str, list[str]]:
+def get_name_and_tags_from_asset_path(exec_context: execution_context.ExecutionContext, file_path: str) -> tuple[str, list[str]]:
     """Return a tuple (name, tags) derived from a filesystem path.
 
     Semantics:
@@ -183,7 +184,7 @@ def get_name_and_tags_from_asset_path(file_path: str) -> tuple[str, list[str]]:
     Raises:
         ValueError: if the path does not belong to input, output, or configured model bases.
     """
-    root_category, some_path = get_relative_to_root_category_path_of_asset(file_path)
+    root_category, some_path = get_relative_to_root_category_path_of_asset(exec_context, file_path)
     p = Path(some_path)
     parent_parts = [part for part in p.parent.parts if part not in (".", "..", p.anchor)]
     return p.name, list(dict.fromkeys(normalize_tags([root_category, *parent_parts])))
@@ -196,12 +197,12 @@ def normalize_tags(tags: list[str] | None) -> list[str]:
     """
     return [t.strip().lower() for t in (tags or []) if (t or "").strip()]
 
-def collect_models_files() -> list[str]:
+def collect_models_files(exec_context: execution_context.ExecutionContext) -> list[str]:
     out: list[str] = []
     for folder_name, bases in get_comfy_models_folders():
-        rel_files = folder_paths.get_filename_list(folder_name) or []
+        rel_files = folder_paths.get_filename_list(exec_context, folder_name) or []
         for rel_path in rel_files:
-            abs_path = folder_paths.get_full_path(folder_name, rel_path)
+            abs_path = folder_paths.get_full_path(exec_context, folder_name, rel_path)
             if not abs_path:
                 continue
             abs_path = os.path.abspath(abs_path)

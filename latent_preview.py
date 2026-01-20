@@ -10,6 +10,8 @@ import logging
 
 default_preview_method = args.preview_method
 
+import execution_context
+
 MAX_PREVIEW_RESOLUTION = args.preview_size
 VIDEO_TAES = ["taehv", "lighttaew2_2", "lighttaew2_1", "lighttaehy1_5"]
 
@@ -75,19 +77,19 @@ class Latent2RGBPreviewer(LatentPreviewer):
         return preview_to_image(latent_image)
 
 
-def get_previewer(device, latent_format):
+def get_previewer(context: execution_context.ExecutionContext, device, latent_format):
     previewer = None
-    method = args.preview_method
+    method = context.extra_data.get("preview_method", None) or args.preview_method
     if method != LatentPreviewMethod.NoPreviews:
         # TODO previewer methods
         taesd_decoder_path = None
         if latent_format.taesd_decoder_name is not None:
             taesd_decoder_path = next(
-                (fn for fn in folder_paths.get_filename_list("vae_approx")
+                (fn for fn in folder_paths.get_filename_list(context, "vae_approx")
                     if fn.startswith(latent_format.taesd_decoder_name)),
                 ""
             )
-            taesd_decoder_path = folder_paths.get_full_path("vae_approx", taesd_decoder_path)
+            taesd_decoder_path = folder_paths.get_full_path(context, "vae_approx", taesd_decoder_path)
 
         if method == LatentPreviewMethod.Auto:
             method = LatentPreviewMethod.Latent2RGB
@@ -109,12 +111,12 @@ def get_previewer(device, latent_format):
                 previewer = Latent2RGBPreviewer(latent_format.latent_rgb_factors, latent_format.latent_rgb_factors_bias, latent_format.latent_rgb_factors_reshape)
     return previewer
 
-def prepare_callback(model, steps, x0_output_dict=None):
+def prepare_callback(context, model, steps, x0_output_dict=None):
     preview_format = "JPEG"
     if preview_format not in ["JPEG", "PNG"]:
         preview_format = "JPEG"
 
-    previewer = get_previewer(model.load_device, model.model.latent_format)
+    previewer = get_previewer(context, model.load_device, model.model.latent_format)
 
     pbar = comfy.utils.ProgressBar(steps)
     def callback(step, x0, x, total_steps):

@@ -6,10 +6,12 @@ import torch
 from comfy.ldm.lightricks.vae.audio_vae import AudioVAE
 from comfy_api.latest import ComfyExtension, io
 
+import execution_context
+
 
 class LTXVAudioVAELoader(io.ComfyNode):
     @classmethod
-    def define_schema(cls) -> io.Schema:
+    def define_schema(cls, exec_context: execution_context.ExecutionContext) -> io.Schema:
         return io.Schema(
             node_id="LTXVAudioVAELoader",
             display_name="LTXV Audio VAE Loader",
@@ -17,16 +19,17 @@ class LTXVAudioVAELoader(io.ComfyNode):
             inputs=[
                 io.Combo.Input(
                     "ckpt_name",
-                    options=folder_paths.get_filename_list("checkpoints"),
+                    options=folder_paths.get_filename_list(exec_context, "checkpoints"),
                     tooltip="Audio VAE checkpoint to load.",
                 )
-            ],
+            ] if exec_context else [],
+            hidden=[io.Hidden.exec_context],
             outputs=[io.Vae.Output(display_name="Audio VAE")],
         )
 
     @classmethod
-    def execute(cls, ckpt_name: str) -> io.NodeOutput:
-        ckpt_path = folder_paths.get_full_path_or_raise("checkpoints", ckpt_name)
+    def execute(cls, ckpt_name: str, exec_context: execution_context.ExecutionContext) -> io.NodeOutput:
+        ckpt_path = folder_paths.get_full_path_or_raise(exec_context, "checkpoints", ckpt_name)
         sd, metadata = comfy.utils.load_torch_file(ckpt_path, return_metadata=True)
         return io.NodeOutput(AudioVAE(sd, metadata))
 
@@ -171,7 +174,9 @@ class LTXVEmptyLatentAudio(io.ComfyNode):
 
 class LTXAVTextEncoderLoader(io.ComfyNode):
     @classmethod
-    def define_schema(cls) -> io.Schema:
+    def define_schema(cls, exec_context: execution_context.ExecutionContext) -> io.Schema:
+        text_encoders = folder_paths.get_filename_list(exec_context, "text_encoders")
+        checkpoints = folder_paths.get_filename_list(exec_context, "checkpoints") if exec_context else []
         return io.Schema(
             node_id="LTXAVTextEncoderLoader",
             display_name="LTXV Audio Text Encoder Loader",
@@ -180,26 +185,27 @@ class LTXAVTextEncoderLoader(io.ComfyNode):
             inputs=[
                 io.Combo.Input(
                     "text_encoder",
-                    options=folder_paths.get_filename_list("text_encoders"),
+                    options=text_encoders,
                 ),
                 io.Combo.Input(
                     "ckpt_name",
-                    options=folder_paths.get_filename_list("checkpoints"),
+                    options=checkpoints,
                 ),
                 io.Combo.Input(
                     "device",
                     options=["default", "cpu"],
                 )
             ],
+            hidden=[io.Hidden.exec_context],
             outputs=[io.Clip.Output()],
         )
 
     @classmethod
-    def execute(cls, text_encoder, ckpt_name, device="default"):
+    def execute(cls, text_encoder, ckpt_name, device="default", exec_cotext: execution_context.ExecutionContext=None):
         clip_type = comfy.sd.CLIPType.LTXV
 
-        clip_path1 = folder_paths.get_full_path_or_raise("text_encoders", text_encoder)
-        clip_path2 = folder_paths.get_full_path_or_raise("checkpoints", ckpt_name)
+        clip_path1 = folder_paths.get_full_path_or_raise(exec_cotext, "text_encoders", text_encoder)
+        clip_path2 = folder_paths.get_full_path_or_raise(exec_cotext, "checkpoints", ckpt_name)
 
         model_options = {}
         if device == "cpu":
