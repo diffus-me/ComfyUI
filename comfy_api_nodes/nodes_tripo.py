@@ -32,6 +32,7 @@ from comfy_api_nodes.util import (
     upload_images_to_comfyapi,
 )
 from folder_paths import get_output_directory
+import execution_context
 
 
 def get_model_url_from_response(response: TripoTaskResponse) -> str:
@@ -167,6 +168,7 @@ class TripoTextToModelNode(IO.ComfyNode):
         geometry_quality: Optional[str] = None,
         face_limit: Optional[int] = None,
         quad: Optional[bool] = None,
+        exec_context: execution_context.ExecutionContext = None,
     ) -> IO.NodeOutput:
         style_enum = None if style == "None" else style
         if not prompt:
@@ -292,6 +294,7 @@ class TripoImageToModelNode(IO.ComfyNode):
         texture_alignment: Optional[str] = None,
         face_limit: Optional[int] = None,
         quad: Optional[bool] = None,
+        exec_context: execution_context.ExecutionContext = None,
     ) -> IO.NodeOutput:
         style_enum = None if style == "None" else style
         if image is None:
@@ -426,6 +429,7 @@ class TripoMultiviewToModelNode(IO.ComfyNode):
         texture_alignment: Optional[str] = None,
         face_limit: Optional[int] = None,
         quad: Optional[bool] = None,
+        exec_context: execution_context.ExecutionContext = None,
     ) -> IO.NodeOutput:
         if image is None:
             raise RuntimeError("front image for multiview is required")
@@ -517,6 +521,7 @@ class TripoTextureNode(IO.ComfyNode):
         texture_seed: Optional[int] = None,
         texture_quality: Optional[str] = None,
         texture_alignment: Optional[str] = None,
+        exec_context: execution_context.ExecutionContext = None,
     ) -> IO.NodeOutput:
         response = await sync_op(
             cls,
@@ -563,7 +568,7 @@ class TripoRefineNode(IO.ComfyNode):
         )
 
     @classmethod
-    async def execute(cls, model_task_id) -> IO.NodeOutput:
+    async def execute(cls, model_task_id, exec_context: execution_context.ExecutionContext = None,) -> IO.NodeOutput:
         response = await sync_op(
             cls,
             endpoint=ApiEndpoint(path="/proxy/tripo/v2/openapi/task", method="POST"),
@@ -599,7 +604,7 @@ class TripoRigNode(IO.ComfyNode):
         )
 
     @classmethod
-    async def execute(cls, original_model_task_id) -> IO.NodeOutput:
+    async def execute(cls, original_model_task_id, exec_context: execution_context.ExecutionContext = None,) -> IO.NodeOutput:
         response = await sync_op(
             cls,
             endpoint=ApiEndpoint(path="/proxy/tripo/v2/openapi/task", method="POST"),
@@ -658,7 +663,7 @@ class TripoRetargetNode(IO.ComfyNode):
         )
 
     @classmethod
-    async def execute(cls, original_model_task_id, animation: str) -> IO.NodeOutput:
+    async def execute(cls, original_model_task_id, animation: str, exec_context: execution_context.ExecutionContext = None,) -> IO.NodeOutput:
         response = await sync_op(
             cls,
             endpoint=ApiEndpoint(path="/proxy/tripo/v2/openapi/task", method="POST"),
@@ -805,7 +810,7 @@ class TripoConversionNode(IO.ComfyNode):
         )
 
     @classmethod
-    def validate_inputs(cls, input_types):
+    def validate_inputs(cls, input_types, exec_context: execution_context.ExecutionContext = None,):
         # The min and max of input1 and input2 are still validated because
         # we didn't take `input1` or `input2` as arguments
         if input_types["original_model_task_id"] not in ("MODEL_TASK_ID", "RIG_TASK_ID", "RETARGET_TASK_ID"):
@@ -834,6 +839,7 @@ class TripoConversionNode(IO.ComfyNode):
         export_vertex_colors: bool,
         export_orientation: str,
         animate_in_place: bool,
+        exec_context: execution_context.ExecutionContext = None,
     ) -> IO.NodeOutput:
         if not original_model_task_id:
             raise RuntimeError("original_model_task_id is required")

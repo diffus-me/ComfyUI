@@ -1,3 +1,4 @@
+import execution_context
 import nodes
 
 from typing_extensions import override
@@ -25,17 +26,17 @@ class ImageCompare(IO.ComfyNode):
         )
 
     @classmethod
-    def execute(cls, image_a=None, image_b=None, compare_view=None) -> IO.NodeOutput:
+    def execute(cls, image_a=None, image_b=None, compare_view=None, exec_context: execution_context.ExecutionContext=None) -> IO.NodeOutput:
         result = {"a_images": [], "b_images": []}
 
         preview_node = nodes.PreviewImage()
 
         if image_a is not None and len(image_a) > 0:
-            saved = preview_node.save_images(image_a, "comfy.compare.a")
+            saved = preview_node.save_images(image_a, "comfy.compare.a", context=exec_context)
             result["a_images"] = saved["ui"]["images"]
 
         if image_b is not None and len(image_b) > 0:
-            saved = preview_node.save_images(image_b, "comfy.compare.b")
+            saved = preview_node.save_images(image_b, "comfy.compare.b", context=exec_context)
             result["b_images"] = saved["ui"]["images"]
 
         return IO.NodeOutput(ui=result)

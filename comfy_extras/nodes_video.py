@@ -85,7 +85,7 @@ class SaveVideo(io.ComfyNode):
         )
 
     @classmethod
-    def execute(cls, video: Input.Video, filename_prefix, format: str, codec) -> io.NodeOutput:
+    def execute(cls, video: Input.Video, filename_prefix, format: str, codec, e, context: execution_context.ExecutionContext=None) -> io.NodeOutput:
         width, height = video.get_dimensions()
         exec_context = cls.hidden.exec_context
         full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(
