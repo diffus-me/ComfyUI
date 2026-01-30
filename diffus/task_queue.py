@@ -323,8 +323,9 @@ class TaskDispatcher:
     def _publish_current_task_prams_to_redis(self, task_item):
         context = task_item[-1]
         user_id = context.user_id
+        key = self._make_current_key_in_redis()
         self._task_state.redis_client.set(
-            self._make_current_key_in_redis(),
+            key,
             json.dumps({
                 "user_id": user_id,
                 "prompt": [
@@ -337,6 +338,7 @@ class TaskDispatcher:
             }),
             ex=3600,
         )
+        _logger.info(f'published current task to redis, key: {key}, user_id: {user_id}, prompt_id: {task_item[1]}')
 
     def _remove_current_task_prams_from_redis(self):
         self._task_state.redis_client.delete(self._make_current_key_in_redis())

@@ -231,15 +231,16 @@ def monitor_call_context(
             message = json.dumps(result, ensure_ascii=False, sort_keys=True)
             task_is_failed = not success
         except Exception as ex:
-            logger.error(f'{task_id}: Json encode result failed {ex}.')
+            logger.error(f'[monitor_call_context] {task_id}: Json encode result failed {ex}.')
 
     skip_monitor = header_dict.get("x-disable-monitor-logs", "") or header_dict.get("X-Disable-Monitor-Logs", "")
     if skip_monitor and skip_monitor.lower() == "true":
-        logger.info(f'monitor log was skipped: {task_id}')
+        logger.info(f'[monitor_call_context] monitor log was skipped: {task_id}')
         yield result_encoder
         return
 
     try:
+        logger.error(f'[monitor_call_context] before_task_started, prepare to create result_encoder, task_id: {task_id}')
         task_id = _before_task_started(
             extra_data,
             header_dict,
@@ -256,6 +257,9 @@ def monitor_call_context(
             status = 'failed'
         else:
             status = 'finished'
+        logger.error(
+            f'[monitor_call_context] after_task_finished, task_id: {task_id}, task_is_failed: {task_is_failed}, status: {status}'
+        )
     except Exception as e:
         status = 'failed'
         message = f'{type(e).__name__}: {str(e)}'
@@ -271,7 +275,7 @@ def monitor_call_context(
             decoded_params,
         )
         if not is_intermediate:
-            logger.info(f'monitor_result: {monitor_result}')
+            logger.info(f'[monitor_call_context] monitor_result: {monitor_result}')
             extra_data['subscription_consumption'] = monitor_result.get('consumptions', {})
 
 
