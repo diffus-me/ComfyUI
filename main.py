@@ -223,7 +223,7 @@ def prompt_worker(q, server_instance, task_dispatcher: diffus.task_queue.TaskDis
     while True:
         timeout = 1000.0
         if need_gc:
-            timeout = max(gc_collect_interval - (current_time - last_gc_collect), 0.0)
+            timeout = max(gc_collect_interval - (current_time - last_gc_collect), 1.0)
 
         queue_item = q.get(timeout=timeout)
         logging.info(f"[prompt_worker] popped item: {queue_item is not None}")

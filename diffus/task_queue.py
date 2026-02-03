@@ -334,6 +334,7 @@ class TaskDispatcher:
                     task_item[2],
                     {},
                     task_item[4],
+                    int(time.time())
                 ],
             }),
             ex=3600,
