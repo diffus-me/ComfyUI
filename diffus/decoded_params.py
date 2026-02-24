@@ -1508,6 +1508,30 @@ def _ani_doc_sampler_consumption(
     return {'opts': opts}
 
 
+def _seed_vr2_video_upscaler_consumption(
+        image, dit, vae,
+        seed: int, resolution: int = 1080, max_resolution: int = 0,
+        batch_size: int = 5,
+        uniform_batch_size: bool = False, temporal_overlap: int = 0,
+        prepend_frames: int = 0,
+        color_correction: str = "wavelet", input_noise_scale: float = 0.0,
+        latent_noise_scale: float = 0.0, offload_device: str = "none",
+        enable_debug: bool = False
+):
+    res = min(resolution, max_resolution)
+    return {
+        'opts': [{
+            'opt_type': 'seed_vr2_video_upscaler',
+            'width': res,
+            'height': res,
+            'steps': 30,
+            'n_iter': 1,
+            'batch_size': batch_size,
+            "ratio": 2
+        }]
+    }
+
+
 def _mat_anyone_video_matting_consumption(
         video_frames, mask, warmup_frames=10, erode_kernel=10, dilate_kernel=10,
         bg_red=120, bg_green=255, bg_blue=155):
@@ -2154,6 +2178,8 @@ _NODE_CONSUMPTION_MAPPING = {
     'SAMDetectorCombined': _sam_detector_combined_consumption,
     'Image Remove Background (Alpha)': was_remove_background_consumption,
     "AniDocSampler": _ani_doc_sampler_consumption,
+
+    "SeedVR2VideoUpscaler": _seed_vr2_video_upscaler_consumption,
 
     "MatAnyoneVideoMatting": _mat_anyone_video_matting_consumption,
     "Kytra_Images_To_RGB": _none_consumption_maker,

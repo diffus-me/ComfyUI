@@ -24,6 +24,7 @@ class _InstalledModels(BaseModel):
     embeddings: list[str]
     diffusion_models: list[str]
     unet_gguf: list[str]
+    seedvr2: list[str]
 
 
 _installed_models: _InstalledModels | None = None
@@ -168,6 +169,7 @@ def _setup_daemon_api(_server_instance, _task_state: _State, routes: aiohttp.web
                 embeddings=_get_model_name_list("embeddings"),
                 diffusion_models=_get_model_name_list("diffusion_models"),
                 unet_gguf=_get_model_name_list("unet_gguf"),
+                seedvr2=_get_model_name_list("SEEDVR2"),
             )
         return web.json_response(_installed_models.model_dump())
 
