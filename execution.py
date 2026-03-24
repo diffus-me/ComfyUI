@@ -1185,6 +1185,7 @@ class PromptQueue:
                 "outputs": {},
                 'status': status_dict,
             }
+            self.history[prompt[1]].update(history_result)
             if os.getenv('SQL_DATABASE_URL_COMFY', None):
                 try:
                     import diffus.repository
@@ -1208,7 +1209,6 @@ class PromptQueue:
                     )
                 except Exception as ex:
                     logging.exception(f"failed to insert task record to diffus repo: {ex}")
-            self.history[prompt[1]].update(history_result)
             self.server.queue_updated()
 
     # Note: slow

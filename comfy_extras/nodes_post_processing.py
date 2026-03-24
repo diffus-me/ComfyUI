@@ -236,7 +236,7 @@ class ImageScaleToTotalPixels(io.ComfyNode):
     @classmethod
     def execute(cls, image, upscale_method, megapixels, resolution_steps, enable: bool) -> io.NodeOutput:
         if not enable or image is None:
-            return io.NodeOutput(image)
+            return io.NodeOutput(None)
         samples = image.movedim(-1,1)
         total = megapixels * 1024 * 1024
 
