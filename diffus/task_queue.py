@@ -90,6 +90,11 @@ class _State:
     def redis_client(self):
         if self._redis_client is None:
             self._redis_client = diffus.redis_client.get_redis_client()
+        try:
+            self._redis_client.ping()
+        except Exception as e:
+            _logger.exception(f'Redis connection error: {e}')
+            self._redis_client = None
         return self._redis_client
 
     def reset_redis_client(self):
@@ -246,12 +251,15 @@ def _post_task(_task_state: _State, request_obj, retry=1):
 
 
 def _fetch_task(_task_state: _State, remaining_tasks: int, fetch_task_timeout=5):
+    if _task_state.redis_client is None:
+        return None
     if not _task_state.current_task and remaining_tasks == 0:
         queue_name_list = []
         for task_type in _task_state.accepted_type_types:
             queue_name_list += [f"SD-{task_type}-TASKS-{tier}" for tier in _task_state.accepted_tiers]
         _logger.debug(
-            f"begin to fetch pending requests from {queue_name_list}, current task: '{_task_state.current_task}'")
+            f"begin to fetch pending requests from {queue_name_list}, current task: '{_task_state.current_task}'"
+        )
         queued_task = _task_state.redis_client.blpop(queue_name_list, timeout=fetch_task_timeout)
         if not queued_task:
             _logger.debug(f'not get any pending requests in {fetch_task_timeout} seconds from {queue_name_list}')
@@ -326,6 +334,8 @@ class TaskDispatcher:
         context = task_item[-1]
         user_id = context.user_id
         key = self._make_current_key_in_redis()
+        if self._task_state.redis_client is None:
+            return
         self._task_state.redis_client.set(
             key,
             json.dumps({
@@ -344,6 +354,8 @@ class TaskDispatcher:
         _logger.info(f'published current task to redis, key: {key}, user_id: {user_id}, prompt_id: {task_item[1]}')
 
     def _remove_current_task_prams_from_redis(self):
+        if self._task_state.redis_client is None:
+            return
         self._task_state.redis_client.delete(self._make_current_key_in_redis())
 
     @contextmanager

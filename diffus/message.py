@@ -257,6 +257,13 @@ class MessageQueue:
     def __init__(self):
         self._redis_client = diffus.redis_client.get_redis_client()
 
+    def reset_redis_client(self):
+        try:
+            self._redis_client = diffus.redis_client.get_redis_client()
+        except Exception as e:
+            logger.exception(f"failed to reset redis client: {e}")
+            self._redis_client = None
+
     def _publish_prompt_message(self, sid, message):
         if not sid:
             sid = "anonymous"
@@ -264,12 +271,6 @@ class MessageQueue:
             f'COMFYUI_MESSAGE_{sid}',
             f'diffus:comfyui:message:{sid}'
         ]
-
-        try:
-            self._redis_client.ping()
-        except Exception as e:
-            logger.exception(f"failed to publish message to redis: {e}")
-            self._redis_client = diffus.redis_client.get_redis_client()
 
         for key in keys:
             if isinstance(message, str) and "monitor_info" in message:
@@ -311,8 +312,14 @@ class MessageQueue:
             logger.exception(f"failed to update prompt result '{message}': {e}")
 
     def send_message(self, sid: str, message: bytes | str, retry=1):
-        if not self._redis_client:
-            self._redis_client = diffus.redis_client.get_redis_client()
+        try:
+            self._redis_client.ping()
+        except Exception as e:
+            logger.exception(f"failed to publish message to redis: {e}")
+            self.reset_redis_client()
+
+        if self._redis_client is None:
+            return
         try:
             self._publish_prompt_message(sid, message)
             self._update_prompt_result(sid, message)
