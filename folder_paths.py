@@ -7,11 +7,15 @@ import mimetypes
 import logging
 from typing import Literal, List
 from collections.abc import Collection
+from contextlib import suppress
+
+from pydantic import ValidationError
 
 from comfy.cli_args import args
 
 import execution_context
 from diffus.constant import FAVORITE_MODEL_TYPES
+from diffus.repository import ModelInfo
 
 supported_pt_extensions: set[str] = {'.ckpt', '.pt', '.pt2', '.bin', '.pth', '.safetensors', '.pkl', '.sft'}
 
@@ -405,7 +409,10 @@ def filter_files_extensions(files: Collection[str], extensions: Collection[str])
 
 
 
-def get_full_path(context: execution_context.ExecutionContext, folder_name: str, filename: str) -> str | None:
+def get_full_path(context: execution_context.ExecutionContext, folder_name: str, filename: str) -> str | ModelInfo | None:
+    with suppress(ValidationError):
+        return ModelInfo.model_validate_json(filename)
+
     if folder_name in FAVORITE_MODEL_TYPES:
         _check_execution_context(context)
         model_info = context.get_model(folder_name, filename)
