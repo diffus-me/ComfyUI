@@ -148,7 +148,9 @@ def insert_comfy_task_record(
         task_id: str,
         user_id: str,
         params: dict,
-) -> models.ComfyTaskRecord:
+) -> models.ComfyTaskRecord | None:
+    if not comfy.SQLALCHEMY_DATABASE_URL:
+        return None
     # simplify params:
     try:
         number, prompt_id, prompt_dict, extra_data, outputs_to_execute = params["prompt"]
@@ -173,6 +175,8 @@ def insert_comfy_task_record(
 
 
 def get_comfy_task_record(task_id: str) -> TaskInfo | None:
+    if not comfy.SQLALCHEMY_DATABASE_URL:
+        return None
     with comfy.Database() as session:
         query = session.query(
             models.ComfyTaskRecord
@@ -183,6 +187,9 @@ def get_comfy_task_record(task_id: str) -> TaskInfo | None:
 
 
 def list_comfy_task_record(user_id: str) -> list[TaskInfo]:
+    if not comfy.SQLALCHEMY_DATABASE_URL:
+        return []
+
     with comfy.Database() as session:
         query = session.query(
             models.ComfyTaskRecord
@@ -202,6 +209,9 @@ def delete_comfy_task_record(
         user_id: str,
         task_ids: list[str]
 ) -> None:
+    if not comfy.SQLALCHEMY_DATABASE_URL:
+        return
+
     if not (task_ids and user_id):
         return
     with comfy.Database() as session:
@@ -217,6 +227,9 @@ def delete_comfy_task_record(
 def clear_comfy_task_record_for_user(
         user_id: str,
 ) -> None:
+    if not comfy.SQLALCHEMY_DATABASE_URL:
+        return
+
     if not user_id:
         return
     with comfy.Database() as session:
