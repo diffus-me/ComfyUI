@@ -2,6 +2,7 @@ import av
 import torchaudio
 import torch
 import comfy.model_management
+import execution_context
 import folder_paths
 import os
 import hashlib
@@ -165,17 +166,17 @@ class SaveAudio(IO.ComfyNode):
                 IO.Audio.Input("audio"),
                 IO.String.Input("filename_prefix", default="audio/ComfyUI"),
             ],
-            hidden=[IO.Hidden.prompt, IO.Hidden.extra_pnginfo],
+            hidden=[IO.Hidden.prompt, IO.Hidden.extra_pnginfo, IO.Hidden.exec_context],
             is_output_node=True,
             is_deprecated=True,
         )
 
     @classmethod
-    def execute(cls, audio, filename_prefix="ComfyUI", format="flac") -> IO.NodeOutput:
+    def execute(cls, audio, filename_prefix="ComfyUI", format="flac", exec_context: execution_context.ExecutionContext=None) -> IO.NodeOutput:
         if audio is None:
             raise ValueError("SaveAudio: input audio is None (source video may have no audio track).")
         return IO.NodeOutput(
-            ui=UI.AudioSaveHelper.get_save_audio_ui(audio, filename_prefix=filename_prefix, cls=cls, format=format)
+            ui=UI.AudioSaveHelper.get_save_audio_ui(exec_context, audio, filename_prefix=filename_prefix, cls=cls, format=format)
         )
 
     save_flac = execute  # TODO: remove
@@ -195,17 +196,17 @@ class SaveAudioMP3(IO.ComfyNode):
                 IO.String.Input("filename_prefix", default="audio/ComfyUI"),
                 IO.Combo.Input("quality", options=["V0", "128k", "320k"], default="V0"),
             ],
-            hidden=[IO.Hidden.prompt, IO.Hidden.extra_pnginfo],
+            hidden=[IO.Hidden.prompt, IO.Hidden.extra_pnginfo, IO.Hidden.exec_context],
             is_output_node=True,
             is_deprecated=True,
         )
 
     @classmethod
-    def execute(cls, audio, filename_prefix="ComfyUI", format="mp3", quality="128k") -> IO.NodeOutput:
+    def execute(cls, audio, filename_prefix="ComfyUI", format="mp3", quality="128k", exec_context: execution_context.ExecutionContext=None) -> IO.NodeOutput:
         if audio is None:
             raise ValueError("SaveAudioMP3: input audio is None (source video may have no audio track).")
         return IO.NodeOutput(
-            ui=UI.AudioSaveHelper.get_save_audio_ui(
+            ui=UI.AudioSaveHelper.get_save_audio_ui(exec_context,
                 audio, filename_prefix=filename_prefix, cls=cls, format=format, quality=quality
             )
         )
@@ -226,17 +227,17 @@ class SaveAudioOpus(IO.ComfyNode):
                 IO.String.Input("filename_prefix", default="audio/ComfyUI"),
                 IO.Combo.Input("quality", options=["64k", "96k", "128k", "192k", "320k"], default="128k"),
             ],
-            hidden=[IO.Hidden.prompt, IO.Hidden.extra_pnginfo],
+            hidden=[IO.Hidden.prompt, IO.Hidden.extra_pnginfo, IO.Hidden.exec_context],
             is_output_node=True,
             is_deprecated=True,
         )
 
     @classmethod
-    def execute(cls, audio, filename_prefix="ComfyUI", format="opus", quality="V3") -> IO.NodeOutput:
+    def execute(cls, audio, filename_prefix="ComfyUI", format="opus", quality="V3", exec_context: execution_context.ExecutionContext=None) -> IO.NodeOutput:
         if audio is None:
             raise ValueError("SaveAudioOpus: input audio is None (source video may have no audio track).")
         return IO.NodeOutput(
-            ui=UI.AudioSaveHelper.get_save_audio_ui(
+            ui=UI.AudioSaveHelper.get_save_audio_ui(exec_context,
                 audio, filename_prefix=filename_prefix, cls=cls, format=format, quality=quality
             )
         )
@@ -303,15 +304,15 @@ class PreviewAudio(IO.ComfyNode):
             inputs=[
                 IO.Audio.Input("audio"),
             ],
-            hidden=[IO.Hidden.prompt, IO.Hidden.extra_pnginfo],
+            hidden=[IO.Hidden.prompt, IO.Hidden.extra_pnginfo, IO.Hidden.exec_context],
             is_output_node=True,
         )
 
     @classmethod
-    def execute(cls, audio) -> IO.NodeOutput:
+    def execute(cls, audio, exec_context: execution_context.ExecutionContext) -> IO.NodeOutput:
         if audio is None:
             raise ValueError("PreviewAudio: input audio is None (source video may have no audio track).")
-        return IO.NodeOutput(ui=UI.PreviewAudio(audio, cls=cls))
+        return IO.NodeOutput(ui=UI.PreviewAudio(audio, cls=cls, exec_context=exec_context))
 
     save_flac = execute  # TODO: remove
 
@@ -354,10 +355,13 @@ def load(filepath: str) -> tuple[torch.Tensor, int]:
 
 class LoadAudio(IO.ComfyNode):
     @classmethod
-    def define_schema(cls):
-        input_dir = folder_paths.get_input_directory()
-        os.makedirs(input_dir, exist_ok=True)
-        files = folder_paths.filter_files_content_types(os.listdir(input_dir), ["audio", "video"])
+    def define_schema(cls, exec_context: execution_context.ExecutionContext) -> IO.Schema:
+        if exec_context:
+            input_dir = folder_paths.get_input_directory(user_hash=exec_context.user_hash)
+            os.makedirs(input_dir, exist_ok=True)
+            files = folder_paths.filter_files_content_types(os.listdir(input_dir), ["audio", "video"])
+        else:
+            files = []
         return IO.Schema(
             node_id="LoadAudio",
             search_aliases=["import audio", "open audio", "audio file"],
@@ -367,27 +371,28 @@ class LoadAudio(IO.ComfyNode):
             inputs=[
                 IO.Combo.Input("audio", upload=IO.UploadType.audio, options=sorted(files)),
             ],
+            hidden=[IO.Hidden.exec_context],
             outputs=[IO.Audio.Output()],
         )
 
     @classmethod
-    def execute(cls, audio) -> IO.NodeOutput:
-        audio_path = folder_paths.get_annotated_filepath(audio)
+    def execute(cls, audio, exec_context: execution_context.ExecutionContext) -> IO.NodeOutput:
+        audio_path = folder_paths.get_annotated_filepath(audio, user_hash=exec_context.user_hash)
         waveform, sample_rate = load(audio_path)
         audio = {"waveform": waveform.unsqueeze(0), "sample_rate": sample_rate}
         return IO.NodeOutput(audio)
 
     @classmethod
-    def fingerprint_inputs(cls, audio):
-        image_path = folder_paths.get_annotated_filepath(audio)
+    def fingerprint_inputs(cls, audio, exec_context: execution_context.ExecutionContext):
+        image_path = folder_paths.get_annotated_filepath(audio, user_hash=exec_context.user_hash)
         m = hashlib.sha256()
         with open(image_path, 'rb') as f:
             m.update(f.read())
         return m.digest().hex()
 
     @classmethod
-    def validate_inputs(cls, audio):
-        if not folder_paths.exists_annotated_filepath(audio):
+    def validate_inputs(cls, audio, exec_context: execution_context.ExecutionContext):
+        if not folder_paths.exists_annotated_filepath(audio, user_hash=exec_context.user_hash):
             return "Invalid audio file: {}".format(audio)
         return True
 
@@ -405,12 +410,13 @@ class RecordAudio(IO.ComfyNode):
             inputs=[
                 IO.Custom("AUDIO_RECORD").Input("audio"),
             ],
+            hidden=[IO.Hidden.exec_context],
             outputs=[IO.Audio.Output()],
         )
 
     @classmethod
-    def execute(cls, audio) -> IO.NodeOutput:
-        audio_path = folder_paths.get_annotated_filepath(audio)
+    def execute(cls, audio, exec_context: execution_context.ExecutionContext) -> IO.NodeOutput:
+        audio_path = folder_paths.get_annotated_filepath(audio, user_hash=exec_context.user_hash)
 
         waveform, sample_rate = load(audio_path)
         audio = {"waveform": waveform.unsqueeze(0), "sample_rate": sample_rate}

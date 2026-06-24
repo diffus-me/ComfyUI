@@ -17,6 +17,7 @@ import torch
 
 import comfy.model_management as mm
 import comfy.sd
+import execution_context
 import folder_paths
 from comfy.ldm.colormap import turbo as _turbo
 from comfy.ldm.depth_anything_3 import preprocess as da3_preprocess
@@ -131,7 +132,7 @@ def _da3_build_mask(geometry: dict, b: int, H: int, W: int, confidence_threshold
 
 class LoadDA3Model(io.ComfyNode):
     @classmethod
-    def define_schema(cls):
+    def define_schema(cls, exec_context: execution_context.ExecutionContext):
         return io.Schema(
             node_id="LoadDA3Model",
             display_name="Load Depth Anything 3",
@@ -139,7 +140,7 @@ class LoadDA3Model(io.ComfyNode):
             inputs=[
                 io.Combo.Input(
                     "model_name",
-                    options=folder_paths.get_filename_list("geometry_estimation"),
+                    options=folder_paths.get_filename_list(exec_context, "geometry_estimation"),
                 ),
                 io.Combo.Input(
                     "weight_dtype",
@@ -148,10 +149,13 @@ class LoadDA3Model(io.ComfyNode):
                 ),
             ],
             outputs=[DA3ModelType.Output()],
+            hidden=[
+                io.Hidden.exec_context,
+            ]
         )
 
     @classmethod
-    def execute(cls, model_name, weight_dtype) -> io.NodeOutput:
+    def execute(cls, model_name, weight_dtype, exec_context: execution_context.ExecutionContext) -> io.NodeOutput:
         model_options = {}
         if weight_dtype == "fp16":
             model_options["dtype"] = torch.float16
@@ -160,7 +164,7 @@ class LoadDA3Model(io.ComfyNode):
         elif weight_dtype == "fp32":
             model_options["dtype"] = torch.float32
 
-        path = folder_paths.get_full_path_or_raise("geometry_estimation", model_name)
+        path = folder_paths.get_full_path_or_raise(exec_context, "geometry_estimation", model_name)
         model = comfy.sd.load_diffusion_model(path, model_options=model_options)
         return io.NodeOutput(model)
 

@@ -3,6 +3,8 @@ import base64
 import json
 import time
 import logging
+
+import execution_context
 import folder_paths
 import glob
 import comfy.utils
@@ -44,7 +46,8 @@ class ModelFileManager:
             folder = request.match_info.get("folder", None)
             if folder not in folder_paths.folder_names_and_paths:
                 return web.Response(status=404)
-            files = self.get_model_file_list(folder)
+            exec_context = execution_context.ExecutionContext(request)
+            files = self.get_model_file_list(exec_context, folder)
             return web.json_response(files)
 
         @routes.get("/experiment/models/preview/{folder}/{path_index}/{filename:.*}")
@@ -74,19 +77,14 @@ class ModelFileManager:
             except:
                 return web.Response(status=404)
 
-    def get_model_file_list(self, folder_name: str):
+    def get_model_file_list(self, exec_context: execution_context.ExecutionContext, folder_name: str):
         folder_name = map_legacy(folder_name)
-        folders = folder_paths.folder_names_and_paths[folder_name]
         output_list: list[dict] = []
-
-        for index, folder in enumerate(folders[0]):
-            if not os.path.isdir(folder):
-                continue
-            out = self.cache_model_file_list_(folder)
-            if out is None:
-                out = self.recursive_search_models_(folder, index)
-                self.set_cache(folder, out)
-            output_list.extend(out[0])
+        for filename in folder_paths.get_filename_list(exec_context, folder_name):
+            output_list.append({
+                "name": filename,
+                "pathIndex": filename.count("/")
+            })
 
         return output_list
 

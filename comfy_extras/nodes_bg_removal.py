@@ -1,3 +1,4 @@
+import execution_context
 import folder_paths
 from typing_extensions import override
 from comfy_api.latest import ComfyExtension, IO
@@ -6,8 +7,8 @@ from comfy.bg_removal_model import load
 
 class LoadBackgroundRemovalModel(IO.ComfyNode):
     @classmethod
-    def define_schema(cls):
-        files = folder_paths.get_filename_list("background_removal")
+    def define_schema(cls, exec_context: execution_context.ExecutionContext):
+        files = folder_paths.get_filename_list(exec_context, "background_removal")
         return IO.Schema(
             node_id="LoadBackgroundRemovalModel",
             display_name="Load Background Removal Model",
@@ -20,8 +21,8 @@ class LoadBackgroundRemovalModel(IO.ComfyNode):
             ]
         )
     @classmethod
-    def execute(cls, bg_removal_name):
-        path = folder_paths.get_full_path_or_raise("background_removal", bg_removal_name)
+    def execute(cls, bg_removal_name, exec_context: execution_context.ExecutionContext):
+        path = folder_paths.get_full_path_or_raise(exec_context, "background_removal", bg_removal_name)
         bg = load(path)
         if bg is None:
             raise RuntimeError("ERROR: background model file is invalid and does not contain a valid background removal model.")

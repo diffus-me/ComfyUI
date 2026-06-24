@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 from typing import Callable, Literal, TypedDict
 
+import execution_context
 import folder_paths
 from app.assets.database.queries import (
     add_missing_tag_for_asset_id,
@@ -60,23 +61,23 @@ class _AssetAccumulator(TypedDict):
 RootType = Literal["models", "input", "output"]
 
 
-def get_prefixes_for_root(root: RootType) -> list[str]:
+def get_prefixes_for_root(root: RootType, exec_context: execution_context.ExecutionContext) -> list[str]:
     if root == "models":
         bases: list[str] = []
         for _bucket, paths in get_comfy_models_folders():
             bases.extend(paths)
         return [os.path.abspath(p) for p in bases]
     if root == "input":
-        return [os.path.abspath(folder_paths.get_input_directory())]
+        return [os.path.abspath(folder_paths.get_input_directory(user_hash=exec_context.user_hash))]
     if root == "output":
-        return [os.path.abspath(folder_paths.get_output_directory())]
+        return [os.path.abspath(folder_paths.get_output_directory(user_hash=exec_context.user_hash))]
     return []
 
 
-def get_all_known_prefixes() -> list[str]:
+def get_all_known_prefixes(exec_context: execution_context.ExecutionContext) -> list[str]:
     """Get all known asset prefixes across all root types."""
     all_roots: tuple[RootType, ...] = ("models", "input", "output")
-    return [p for root in all_roots for p in get_prefixes_for_root(root)]
+    return [p for root in all_roots for p in get_prefixes_for_root(root, exec_context=exec_context)]
 
 
 def collect_models_files() -> list[str]:

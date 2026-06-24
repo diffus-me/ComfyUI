@@ -35,3 +35,8 @@ pydantic~=2.0
 pydantic-settings~=2.0
 PyOpenGL
 glfw
+
+PyMySQL
+redis
+
+sageattention~=1.0.6

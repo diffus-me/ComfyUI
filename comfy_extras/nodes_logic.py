@@ -3,6 +3,8 @@ from typing_extensions import override
 from comfy_api.latest import ComfyExtension, io
 from comfy_api.latest import _io
 
+import execution_context
+
 # sentinel for missing inputs
 MISSING = object()
 
@@ -228,7 +230,7 @@ class DCTestNode(io.ComfyNode):
         )
 
     @classmethod
-    def execute(cls, combo: DCValues) -> io.NodeOutput:
+    def execute(cls, combo: DCValues, exec_context: execution_context.ExecutionContext = None,) -> io.NodeOutput:
         combo_val = combo["combo"]
         if combo_val == "option1":
             return io.NodeOutput(combo["string"])

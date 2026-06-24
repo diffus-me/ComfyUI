@@ -23,7 +23,7 @@ class CLIPTextEncodeSDXLRefiner(io.ComfyNode):
     @classmethod
     def execute(cls, clip, ascore, width, height, text) -> io.NodeOutput:
         tokens = clip.tokenize(text)
-        return io.NodeOutput(clip.encode_from_tokens_scheduled(tokens, add_dict={"aesthetic_score": ascore, "width": width, "height": height}))
+        return io.NodeOutput(clip.encode_from_tokens_scheduled(tokens, add_dict={"aesthetic_score": ascore, "width": width, "height": height, "_origin_text_":  text}))
 
 class CLIPTextEncodeSDXL(io.ComfyNode):
     @classmethod
@@ -55,8 +55,7 @@ class CLIPTextEncodeSDXL(io.ComfyNode):
                 tokens["l"] += empty["l"]
             while len(tokens["l"]) > len(tokens["g"]):
                 tokens["g"] += empty["g"]
-        return io.NodeOutput(clip.encode_from_tokens_scheduled(tokens, add_dict={"width": width, "height": height, "crop_w": crop_w, "crop_h": crop_h, "target_width": target_width, "target_height": target_height}))
-
+        return io.NodeOutput(clip.encode_from_tokens_scheduled(tokens, add_dict={"width": width, "height": height, "crop_w": crop_w, "crop_h": crop_h, "target_width": target_width, "target_height": target_height, "_origin_text_": text_g + " " + text_l}))
 
 class ClipSdxlExtension(ComfyExtension):
     @override

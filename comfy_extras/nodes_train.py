@@ -15,6 +15,7 @@ import comfy.sampler_helpers
 import comfy.sd
 import comfy.utils
 import comfy.model_management
+import execution_context
 from comfy.conds import CONDRegular, CONDList
 from comfy.cli_args import args, PerformanceFeature
 import comfy_extras.nodes_custom_sampler
@@ -684,7 +685,7 @@ def _load_existing_lora(existing_lora):
     if existing_lora == "[None]":
         return {}, 0
 
-    lora_path = folder_paths.get_full_path_or_raise("loras", existing_lora)
+    lora_path = folder_paths.get_full_path_or_raise(context, "loras", existing_lora)
     # Extract steps from filename like "trained_lora_10_steps_20250225_203716"
     existing_steps = int(existing_lora.split("_steps_")[0].split("_")[-1])
     existing_weights = {}
@@ -953,7 +954,7 @@ def _run_training_loop(
 
 class TrainLoraNode(io.ComfyNode):
     @classmethod
-    def define_schema(cls):
+    def define_schema(cls, exec_context: execution_context.ExecutionContext):
         return io.Schema(
             node_id="TrainLoraNode",
             display_name="Train LoRA",
@@ -1066,7 +1067,7 @@ class TrainLoraNode(io.ComfyNode):
                 ),
                 io.Combo.Input(
                     "existing_lora",
-                    options=folder_paths.get_filename_list("loras") + ["[None]"],
+                    options=folder_paths.get_filename_list(exec_context, "loras") + ["[None]"],
                     default="[None]",
                     tooltip="The existing LoRA to append to. Set to None for new LoRA.",
                 ),
@@ -1090,6 +1091,9 @@ class TrainLoraNode(io.ComfyNode):
                 ),
                 io.Int.Output(display_name="steps", tooltip="Total training steps"),
             ],
+            hidden=[
+                io.Hidden.exec_context
+            ]
         )
 
     @classmethod
@@ -1116,6 +1120,7 @@ class TrainLoraNode(io.ComfyNode):
         existing_lora,
         bucket_mode,
         bypass_mode,
+        exec_context: execution_context.ExecutionContext,
     ):
         # Extract scalars from lists (due to is_input_list=True)
         model = model[0]
@@ -1387,11 +1392,14 @@ class SaveLoRA(io.ComfyNode):
                 ),
             ],
             outputs=[],
+            hidden=[
+                io.Hidden.exec_context
+            ]
         )
 
     @classmethod
-    def execute(cls, lora, prefix, steps=None):
-        output_dir = folder_paths.get_output_directory()
+    def execute(cls, lora, prefix, steps=None, exec_context: execution_context.ExecutionContext=None):
+        output_dir = folder_paths.get_output_directory(user_hash=exec_context.user_hash)
         full_output_folder, filename, counter, subfolder, filename_prefix = (
             folder_paths.get_save_image_path(prefix, output_dir)
         )
@@ -1487,10 +1495,10 @@ class TrainingExtension(ComfyExtension):
     @override
     async def get_node_list(self) -> list[type[io.ComfyNode]]:
         return [
-            TrainLoraNode,
-            LoraModelLoader,
-            SaveLoRA,
-            LossGraphNode,
+            # TrainLoraNode,
+            # LoraModelLoader,
+            # SaveLoRA,
+            # LossGraphNode,
         ]
 
 
