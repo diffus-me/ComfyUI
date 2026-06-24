@@ -4,6 +4,7 @@
 import torch
 
 import comfy.utils
+import execution_context
 import folder_paths
 from comfy_api.latest import ComfyExtension, Types, io
 from typing_extensions import override
@@ -62,20 +63,23 @@ def _normalize_disparity(depth: torch.Tensor) -> torch.Tensor:
 
 class LoadMoGeModel(io.ComfyNode):
     @classmethod
-    def define_schema(cls):
+    def define_schema(cls, exec_context: execution_context.ExecutionContext):
         return io.Schema(
             node_id="LoadMoGeModel",
             display_name="Load MoGe Model",
             category="model/loaders",
             inputs=[
-                io.Combo.Input("model_name", options=folder_paths.get_filename_list("geometry_estimation")),
+                io.Combo.Input("model_name", options=folder_paths.get_filename_list(exec_context, "geometry_estimation")),
             ],
             outputs=[MoGeModelType.Output()],
+            hidden=[
+                io.Hidden.exec_context
+            ]
         )
 
     @classmethod
-    def execute(cls, model_name) -> io.NodeOutput:
-        path = folder_paths.get_full_path_or_raise("geometry_estimation", model_name)
+    def execute(cls, model_name, exec_context: execution_context.ExecutionContext) -> io.NodeOutput:
+        path = folder_paths.get_full_path_or_raise(exec_context, "geometry_estimation", model_name)
         sd = comfy.utils.load_torch_file(path, safe_load=True)
         return io.NodeOutput(MoGeModel(sd))
 

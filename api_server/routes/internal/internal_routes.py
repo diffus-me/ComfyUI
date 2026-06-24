@@ -1,9 +1,13 @@
-from aiohttp import web
-from typing import Optional
-from folder_paths import folder_names_and_paths, get_directory_by_type
-from api_server.services.terminal_service import TerminalService
-import app.logger
 import os
+from typing import Optional
+
+from aiohttp import web
+
+import execution_context
+from api_server.services.terminal_service import TerminalService
+from folder_paths import folder_names_and_paths
+from folder_paths import get_directory_by_type
+
 
 class InternalRoutes:
     '''
@@ -21,28 +25,32 @@ class InternalRoutes:
     def setup_routes(self):
         @self.routes.get('/logs')
         async def get_logs(request):
-            return web.json_response("".join([(l["t"] + " - " + l["m"]) for l in app.logger.get_logs()]))
+            # return web.json_response(app.logger.get_logs())
+            return web.json_response([])
 
         @self.routes.get('/logs/raw')
         async def get_raw_logs(request):
             self.terminal_service.update_size()
+            # return web.json_response({
+            #     "entries": list(app.logger.get_logs()),
+            #     "size": {"cols": self.terminal_service.cols, "rows": self.terminal_service.rows}
+            # })
             return web.json_response({
-                "entries": list(app.logger.get_logs()),
-                "size": {"cols": self.terminal_service.cols, "rows": self.terminal_service.rows}
+                "entries": [],
+                "size": {"cols": 0, "rows": 0}
             })
 
         @self.routes.patch('/logs/subscribe')
         async def subscribe_logs(request):
-            json_data = await request.json()
-            client_id = json_data["clientId"]
-            enabled = json_data["enabled"]
-            if enabled:
-                self.terminal_service.subscribe(client_id)
-            else:
-                self.terminal_service.unsubscribe(client_id)
+            # json_data = await request.json()
+            # client_id = json_data["clientId"]
+            # enabled = json_data["enabled"]
+            # if enabled:
+            #     self.terminal_service.subscribe(client_id)
+            # else:
+            #     self.terminal_service.unsubscribe(client_id)
 
             return web.Response(status=200)
-
 
         @self.routes.get('/folder_paths')
         async def get_folder_paths(request):
@@ -57,12 +65,12 @@ class InternalRoutes:
             if directory_type not in ("output", "input", "temp"):
                 return web.json_response({"error": "Invalid directory type"}, status=400)
 
-            directory = get_directory_by_type(directory_type)
+            context = execution_context.ExecutionContext(request)
+            directory = get_directory_by_type(directory_type, context.user_hash)
 
             def is_visible_file(entry: os.DirEntry) -> bool:
                 """Filter out hidden files (e.g., .DS_Store on macOS)."""
                 return entry.is_file() and not entry.name.startswith('.')
-
             sorted_files = sorted(
                 (entry for entry in os.scandir(directory) if is_visible_file(entry)),
                 key=lambda entry: -entry.stat().st_mtime

@@ -12,6 +12,8 @@ import folder_paths
 import node_helpers
 from comfy_api.latest import ComfyExtension, io, Input, InputImpl, Types
 
+import execution_context
+
 
 def load_and_process_images(image_files, input_dir):
     """Utility function to load and process a list of images.
@@ -169,7 +171,7 @@ def _decode_selected_frames(video: Input.Video, indices: list[int]) -> Input.Vid
 
 class LoadImageDataSetFromFolderNode(io.ComfyNode):
     @classmethod
-    def define_schema(cls):
+    def define_schema(cls, exec_context: execution_context.ExecutionContext):
         return io.Schema(
             node_id="LoadImageDataSetFromFolder",
             search_aliases=["load folder", "load from folder", "load dataset", "load images", "import dataset"],
@@ -180,10 +182,11 @@ class LoadImageDataSetFromFolderNode(io.ComfyNode):
             inputs=[
                 io.Combo.Input(
                     "folder",
-                    options=folder_paths.get_input_subfolders(),
+                    options=folder_paths.get_input_subfolders(context=exec_context),
                     tooltip="The folder to load images from.",
                 )
-            ],
+            ] if exec_context else [],
+            hidden=[io.Hidden.exec_context],
             outputs=[
                 io.Image.Output(
                     display_name="images",
@@ -194,8 +197,8 @@ class LoadImageDataSetFromFolderNode(io.ComfyNode):
         )
 
     @classmethod
-    def execute(cls, folder):
-        sub_input_dir = secure_subfolder_path(folder_paths.get_input_directory(), folder)
+    def execute(cls, folder, exec_context: execution_context.ExecutionContext):
+        sub_input_dir = secure_subfolder_path(folder_paths.get_input_directory(user_hash=exec_context.user_hash), folder)
         valid_extensions = [".png", ".jpg", ".jpeg", ".webp"]
         image_files = [
             f
@@ -208,7 +211,7 @@ class LoadImageDataSetFromFolderNode(io.ComfyNode):
 
 class LoadImageTextDataSetFromFolderNode(io.ComfyNode):
     @classmethod
-    def define_schema(cls):
+    def define_schema(cls, exec_context: execution_context.ExecutionContext):
         return io.Schema(
             node_id="LoadImageTextDataSetFromFolder",
             search_aliases=["load folder", "load from folder", "load dataset", "load images", "import dataset"],
@@ -219,10 +222,11 @@ class LoadImageTextDataSetFromFolderNode(io.ComfyNode):
             inputs=[
                 io.Combo.Input(
                     "folder",
-                    options=folder_paths.get_input_subfolders(),
+                    options=folder_paths.get_input_subfolders(context=exec_context),
                     tooltip="The folder to load images and text captions from.",
                 )
-            ],
+            ] if exec_context else [],
+            hidden=[io.Hidden.exec_context],
             outputs=[
                 io.Image.Output(
                     display_name="images",
@@ -238,10 +242,10 @@ class LoadImageTextDataSetFromFolderNode(io.ComfyNode):
         )
 
     @classmethod
-    def execute(cls, folder):
+    def execute(cls, folder, exec_context: execution_context.ExecutionContext):
         logging.info(f"Loading images from folder: {folder}")
 
-        sub_input_dir = secure_subfolder_path(folder_paths.get_input_directory(), folder)
+        sub_input_dir = secure_subfolder_path(folder_paths.get_input_directory(user_hash=exec_context.user_hash), folder)
         valid_extensions = [".png", ".jpg", ".jpeg", ".webp"]
 
         image_files = []
@@ -476,18 +480,19 @@ class SaveImageDataSetToFolderNode(io.ComfyNode):
                     tooltip="Whether to overwrite existing files or increment filenames to avoid overwriting."
                 ),
             ],
+            hidden=[io.Hidden.exec_context],
             outputs=[],
             is_deprecated=True,  # This node is redundant and superseded by existing Save Image nodes where the target folder can be specified in the filename_prefix
         )
 
     @classmethod
-    def execute(cls, images, folder_name, filename_prefix, mode):
+    def execute(cls, images, folder_name, filename_prefix, mode, exec_context: execution_context.ExecutionContext):
         # Extract scalar values
         folder_name = folder_name[0]
         filename_prefix = filename_prefix[0]
         mode = mode[0]
 
-        output_dir = secure_subfolder_path(folder_paths.get_output_directory(), folder_name)
+        output_dir = secure_subfolder_path(folder_paths.get_output_directory(user_hash=exec_context.user_hash), folder_name)
         saved_files = save_images_to_folder(images, output_dir, filename_prefix, mode=='overwrite')
 
         logging.info(f"Saved {len(saved_files)} images to {output_dir}.")
@@ -531,17 +536,18 @@ class SaveImageTextDataSetToFolderNode(io.ComfyNode):
                     tooltip="Whether to overwrite existing files or increment filenames to avoid overwriting."
                 ),
             ],
+            hidden=[io.Hidden.exec_context],
             outputs=[],
         )
 
     @classmethod
-    def execute(cls, images, folder_name, filename_prefix, mode, texts=None):
+    def execute(cls, images, folder_name, filename_prefix, mode, texts=None, exec_context: execution_context.ExecutionContext=None):
         # Extract scalar values
         folder_name = folder_name[0]
         filename_prefix = filename_prefix[0]
         mode = mode[0]
 
-        output_dir = secure_subfolder_path(folder_paths.get_output_directory(), folder_name)
+        output_dir = secure_subfolder_path(folder_paths.get_output_directory(user_hash=exec_context), folder_name)
         saved_files = save_images_to_folder(images, output_dir, filename_prefix, mode=='overwrite')
 
         # Save captions
@@ -1964,11 +1970,12 @@ class SaveTrainingDataset(io.ComfyNode):
                     advanced=True,
                 ),
             ],
+            hidden=[io.Hidden.exec_context],
             outputs=[],
         )
 
     @classmethod
-    def execute(cls, latents, conditioning, folder_name, shard_size):
+    def execute(cls, latents, conditioning, folder_name, shard_size, exec_context: execution_context.ExecutionContext):
         # Extract scalars
         folder_name = folder_name[0]
         shard_size = shard_size[0]
@@ -1984,7 +1991,7 @@ class SaveTrainingDataset(io.ComfyNode):
             )
 
         # Create output directory (inside the datasets root, traversal-safe)
-        output_dir = get_dataset_save_dir(folder_name)
+        output_dir = get_dataset_save_dir(exec_context.user_hash, folder_name)
         os.makedirs(output_dir, exist_ok=True)
 
         # Prepare data pairs
@@ -2049,6 +2056,7 @@ class LoadTrainingDataset(io.ComfyNode):
                     tooltip="Saved dataset to load, from the datasets directory.",
                 ),
             ],
+            hidden=[io.Hidden.exec_context],
             outputs=[
                 io.Latent.Output(
                     display_name="latents",
@@ -2064,9 +2072,9 @@ class LoadTrainingDataset(io.ComfyNode):
         )
 
     @classmethod
-    def execute(cls, folder_name):
+    def execute(cls, folder_name, exec_context: execution_context.ExecutionContext):
         # Get dataset directory (searched across all dataset roots, traversal-safe)
-        dataset_dir = get_dataset_dir(folder_name)
+        dataset_dir = get_dataset_dir(exec_context, folder_name)
 
         # Find all shard files
         shard_files = sorted(

@@ -3,6 +3,7 @@ import comfy.samplers
 import comfy.sampler_helpers
 import comfy.patcher_extension
 import comfy.sample
+import execution_context
 from comfy.k_diffusion import sampling as k_diffusion_sampling
 from comfy.k_diffusion import sa_solver
 import latent_preview
@@ -747,6 +748,9 @@ class SamplerCustom(io.ComfyNode):
                 io.Sigmas.Input("sigmas"),
                 io.Latent.Input("latent_image"),
             ],
+            hidden=[
+                io.Hidden.exec_context
+            ],
             outputs=[
                 io.Latent.Output(display_name="output"),
                 io.Latent.Output(display_name="denoised_output"),
@@ -754,7 +758,7 @@ class SamplerCustom(io.ComfyNode):
         )
 
     @classmethod
-    def execute(cls, model, add_noise, noise_seed, cfg, positive, negative, sampler, sigmas, latent_image) -> io.NodeOutput:
+    def execute(cls, model, add_noise, noise_seed, cfg, positive, negative, sampler, sigmas, latent_image, exec_context: execution_context.ExecutionContext) -> io.NodeOutput:
         latent = latent_image
         latent_image = latent["samples"]
         latent = latent.copy()
@@ -771,7 +775,7 @@ class SamplerCustom(io.ComfyNode):
             noise_mask = latent["noise_mask"]
 
         x0_output = {}
-        callback = latent_preview.prepare_callback(model, sigmas.shape[-1] - 1, x0_output)
+        callback = latent_preview.prepare_callback(exec_context, model, sigmas.shape[-1] - 1, x0_output)
 
         disable_pbar = not comfy.utils.PROGRESS_BAR_ENABLED
         samples = comfy.sample.sample_custom(model, noise, cfg, sampler, sigmas, positive, negative, latent_image, noise_mask=noise_mask, callback=callback, disable_pbar=disable_pbar, seed=noise_seed)
@@ -1033,11 +1037,14 @@ class SamplerCustomAdvanced(io.ComfyNode):
             outputs=[
                 io.Latent.Output(display_name="output"),
                 io.Latent.Output(display_name="denoised_output"),
+            ],
+            hidden=[
+                io.Hidden.exec_context,
             ]
         )
 
     @classmethod
-    def execute(cls, noise, guider, sampler, sigmas, latent_image) -> io.NodeOutput:
+    def execute(cls, noise, guider, sampler, sigmas, latent_image, exec_context: execution_context.ExecutionContext) -> io.NodeOutput:
         latent = latent_image
         latent_image = latent["samples"]
         latent = latent.copy()
@@ -1049,7 +1056,7 @@ class SamplerCustomAdvanced(io.ComfyNode):
             noise_mask = latent["noise_mask"]
 
         x0_output = {}
-        callback = latent_preview.prepare_callback(guider.model_patcher, sigmas.shape[-1] - 1, x0_output)
+        callback = latent_preview.prepare_callback(exec_context, guider.model_patcher, sigmas.shape[-1] - 1, x0_output)
 
         disable_pbar = not comfy.utils.PROGRESS_BAR_ENABLED
         samples = guider.sample(noise.generate_noise(latent), latent_image, sampler, sigmas, denoise_mask=noise_mask, callback=callback, disable_pbar=disable_pbar, seed=noise.seed)

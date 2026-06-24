@@ -2029,7 +2029,10 @@ def load_gligen(ckpt_path):
     return comfy.model_patcher.CoreModelPatcher(model, load_device=model_management.get_torch_device(), offload_device=model_management.unet_offload_device())
 
 def model_detection_error_hint(path, state_dict):
-    filename = os.path.basename(path)
+    if hasattr(path, 'stem'):
+        filename = path.stem
+    else:
+        filename = os.path.basename(path)
     if 'lora' in filename.lower():
         return "\nHINT: This seems to be a Lora file and Lora files should be put in the lora folder and loaded with a lora loader node.."
     return ""
