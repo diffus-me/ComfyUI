@@ -4,6 +4,7 @@ from typing_extensions import override
 
 import comfy.model_patcher
 import comfy.utils
+import execution_context
 import folder_paths
 from comfy import model_management
 from comfy_extras.frame_interpolation_models.ifnet import IFNet, detect_rife_config
@@ -15,13 +16,13 @@ FrameInterpolationModel = io.Custom("INTERP_MODEL")
 
 class FrameInterpolationModelLoader(io.ComfyNode):
     @classmethod
-    def define_schema(cls):
+    def define_schema(cls, exec_context: execution_context.ExecutionContext):
         return io.Schema(
             node_id="FrameInterpolationModelLoader",
             display_name="Load Frame Interpolation Model",
             category="model/loaders",
             inputs=[
-                io.Combo.Input("model_name", options=folder_paths.get_filename_list("frame_interpolation"),
+                io.Combo.Input("model_name", options=folder_paths.get_filename_list(exec_context, "frame_interpolation"),
                                tooltip="Select a frame interpolation model to load. Models must be placed in the 'frame_interpolation' folder."),
             ],
             outputs=[
@@ -30,8 +31,8 @@ class FrameInterpolationModelLoader(io.ComfyNode):
         )
 
     @classmethod
-    def execute(cls, model_name) -> io.NodeOutput:
-        model_path = folder_paths.get_full_path_or_raise("frame_interpolation", model_name)
+    def execute(cls, model_name, exec_context: execution_context.ExecutionContext) -> io.NodeOutput:
+        model_path = folder_paths.get_full_path_or_raise(exec_context, "frame_interpolation", model_name)
         sd = comfy.utils.load_torch_file(model_path, safe_load=True)
 
         model = cls._detect_and_load(sd)

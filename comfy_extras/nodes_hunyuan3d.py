@@ -7,6 +7,10 @@ from comfy_api.latest import ComfyExtension, IO, Types
 from comfy_api.latest._util import MESH, VOXEL  # only for backward compatibility if someone import it from this file (will be removed later) # noqa
 
 
+import execution_context
+import comfy.utils
+
+
 class EmptyLatentHunyuan3Dv2(IO.ComfyNode):
     @classmethod
     def define_schema(cls):
@@ -21,7 +25,6 @@ class EmptyLatentHunyuan3Dv2(IO.ComfyNode):
                 IO.Latent.Output(),
             ]
         )
-
     @classmethod
     def execute(cls, resolution, batch_size) -> IO.NodeOutput:
         latent = torch.zeros([batch_size, 64, resolution], device=comfy.model_management.intermediate_device())

@@ -1,4 +1,5 @@
 # Internal infrastructure for ComfyAPI
+import execution_context
 from .api_registry import (
     ComfyAPIBase as ComfyAPIBase,
     ComfyAPIWithVersion as ComfyAPIWithVersion,
@@ -40,7 +41,7 @@ class _ComfyNodeInternal:
 
     This is intended to only be referenced within execution.py, as it has to handle all V3 APIs going forward."""
     @classmethod
-    def GET_NODE_INFO_V1(cls):
+    def GET_NODE_INFO_V1(cls, exec_context: execution_context.ExecutionContext):
         ...
 
 

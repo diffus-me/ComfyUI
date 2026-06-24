@@ -20,6 +20,7 @@ from typing_extensions import override
 import comfy.model_management
 import comfy.model_patcher
 import comfy.utils
+import execution_context
 import folder_paths
 from comfy_api.latest import ComfyExtension, io
 
@@ -200,22 +201,25 @@ class LoadMediaPipeFaceLandmarker(io.ComfyNode):
     (short / full), shared mesh, blendshapes, and canonical geometry."""
 
     @classmethod
-    def define_schema(cls):
+    def define_schema(cls, exec_context: execution_context.ExecutionContext):
         return io.Schema(
             node_id="LoadMediaPipeFaceLandmarker",
             search_aliases=["face", "facial", "mediapipe", "face landmark", "face mesh", "blazeface", "face detection"],
             display_name="Load Face Detection Model (MediaPipe)",
             category="model/loaders",
             inputs=[
-                io.Combo.Input("model_name", options=folder_paths.get_filename_list("detection"),
+                io.Combo.Input("model_name", options=folder_paths.get_filename_list(exec_context, "detection"),
                                tooltip="Face detection model from models/detection/."),
             ],
             outputs=[FaceDetectionType.Output()],
+            hidden=[
+                io.Hidden.exec_context,
+            ]
         )
 
     @classmethod
-    def execute(cls, model_name) -> io.NodeOutput:
-        sd = comfy.utils.load_torch_file(folder_paths.get_full_path_or_raise("detection", model_name), safe_load=True)
+    def execute(cls, model_name, exec_context: execution_context.ExecutionContext) -> io.NodeOutput:
+        sd = comfy.utils.load_torch_file(folder_paths.get_full_path_or_raise(exec_context, "detection", model_name), safe_load=True)
         wrapper = FaceLandmarkerModel(sd)
         return io.NodeOutput(wrapper)
 

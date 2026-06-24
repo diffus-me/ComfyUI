@@ -10,6 +10,7 @@ import aiohttp
 import torch
 from aiohttp.client_exceptions import ClientError, ContentTypeError
 
+import execution_context
 from comfy_api.latest import IO as COMFY_IO
 from comfy_api.latest import InputImpl, Types
 from folder_paths import get_output_directory
@@ -270,12 +271,15 @@ async def download_url_to_file_3d(
     timeout: float | None = None,
     max_retries: int = 5,
     cls: type[COMFY_IO.ComfyNode] = None,
+    exec_context: execution_context.ExecutionContext | None = None,
 ) -> Types.File3D:
     """Downloads a 3D model file from a URL into memory as BytesIO.
 
     If task_id is provided, also writes the file to disk in the output directory
     for backward compatibility with the old save-to-disk behavior.
     """
+    if not exec_context:
+        raise RuntimeError("exec_context must be provided")
     file_format = file_format.lstrip(".").lower()
     data = BytesIO()
     await download_url_to_bytesio(
@@ -289,7 +293,7 @@ async def download_url_to_file_3d(
     if task_id is not None:
         # This is only for backward compatability with current behavior when every 3D node is output node
         # All new API nodes should not use "task_id" and instead users should use "SaveGLB" node to save results
-        output_dir = Path(get_output_directory())
+        output_dir = Path(get_output_directory(user_hash=exec_context))
         output_path = output_dir / f"{task_id}.{file_format}"
         output_path.write_bytes(data.getvalue())
         data.seek(0)

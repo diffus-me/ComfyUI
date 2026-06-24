@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+import execution_context
 from comfy_api.latest import ComfyExtension, io
 import comfy.context_windows
 import nodes
@@ -5,7 +8,7 @@ import nodes
 
 class ContextWindowsManualNode(io.ComfyNode):
     @classmethod
-    def define_schema(cls) -> io.Schema:
+    def define_schema(cls, exec_context: execution_context.ExecutionContext) -> io.Schema:
         return io.Schema(
             node_id="ContextWindowsManual",
             display_name="Context Windows (Manual)",
@@ -63,8 +66,8 @@ class ContextWindowsManualNode(io.ComfyNode):
 
 class WanContextWindowsManualNode(ContextWindowsManualNode):
     @classmethod
-    def define_schema(cls) -> io.Schema:
-        schema = super().define_schema()
+    def define_schema(cls, exec_context: execution_context.ExecutionContext) -> io.Schema:
+        schema = super().define_schema(exec_context)
         schema.node_id = "WanContextWindowsManual"
         schema.display_name = "WAN Context Windows (Manual)"
         schema.display_name = "Wan Context Windows"
