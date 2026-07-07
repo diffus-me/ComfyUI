@@ -134,7 +134,7 @@ def _before_task_started(
     logger.info(json.dumps(request_data, ensure_ascii=False, sort_keys=True))
 
     # check response, raise exception if status code is not 2xx
-    if 199 < resp.status_code < 300:
+    if resp.ok or not deduct_flag:
         return job_id
 
     content = resp.json()
@@ -202,7 +202,7 @@ def _after_task_finished(
     )
 
     # log the response if request failed
-    if resp.status_code < 200 or resp.status_code > 299:
+    if not resp.ok:
         logger.error((f'update monitor log failed, status: monitor_log_id: {job_id}, {resp.status_code}, '
                       f'message: {resp.text[:1000]}'))
     return resp.json()

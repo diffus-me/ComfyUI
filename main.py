@@ -386,7 +386,6 @@ def prompt_worker(q, server_instance, task_dispatcher: diffus.task_queue.TaskDis
 
             with task_dispatcher.dispatch(item) as handle_dispatcher_result:
                 monitor_error = None
-                begin = time.time()
                 try:
                     logging.info(f"[prompt_worker] prepare monitor_call_context to execute prompt {prompt_id}")
                     with diffus.system_monitor.monitor_call_context(

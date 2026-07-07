@@ -399,6 +399,8 @@ class ModelPatcher:
         if not hasattr(self.model, 'model_offload_buffer_memory'):
             self.model.model_offload_buffer_memory = 0
 
+        self.model_name = ""
+
     def is_dynamic(self):
         return False
 
@@ -501,6 +503,8 @@ class ModelPatcher:
 
         for callback in self.get_all_callbacks(CallbacksMP.ON_CLONE):
             callback(self, n)
+
+        n.model_name = self.model_name
         return n
 
     def deepclone_multigpu(self, new_load_device=None, models_cache: dict[uuid.UUID,ModelPatcher]=None):

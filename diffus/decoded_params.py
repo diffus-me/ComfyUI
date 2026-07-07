@@ -1,5 +1,5 @@
 import math
-
+from .utils import calc_model_consumption_ratio, get_model_name
 import execution_context
 
 
@@ -7,18 +7,14 @@ def _sample_consumption_ratio(
         context: execution_context.ExecutionContext,
         model,
 ):
-    import comfy.model_base
-    import comfy.model_patcher
-    if model:
-        if isinstance(model, comfy.model_patcher.ModelPatcher):
-            model = model.model
-        if isinstance(model, comfy.model_base.SD3) or isinstance(model, comfy.model_base.Flux):
-            return 3
+    return calc_model_consumption_ratio(model)
 
-    for model_info in context.loaded_checkpoints:
-        if model_info.base and model_info.base.lower() in ("sd3", "flux"):
-            return 3
-    return 1
+
+def _get_model_name(
+        context: execution_context.ExecutionContext,
+        model,
+):
+    return get_model_name(model)
 
 
 def __update_context_checkpoints_model_base(context: execution_context.ExecutionContext, model):
@@ -35,27 +31,32 @@ def __update_context_checkpoints_model_base(context: execution_context.Execution
 
 
 def __get_image_size(model, latent_image):
-    import comfy.model_base
-    import comfy.model_patcher
     latent = latent_image["samples"]
-    latent_size = latent.size()
+    latent_size = list(latent.size())
 
     batch_size = latent_size[0]
-    if isinstance(model, comfy.model_patcher.ModelPatcher) and isinstance(model.model, comfy.model_base.GenmoMochi):
-        image_height = latent_size[3] * 8
-        image_width = latent_size[4] * 8
-        n_iter = max(1, (latent_size[2] - 1) * 6 + 1)
-    elif isinstance(model, comfy.model_patcher.ModelPatcher) and isinstance(model.model, comfy.model_base.WAN21):
-        image_height = latent_size[3] * 8
-        image_width = latent_size[4] * 8
-        n_iter = max(1, (latent_size[2] - 1) * 4 + 1)
+    model_base = model.model if hasattr(model, "model") else model
+    latent_format = getattr(model_base, "latent_format", None)
+    if latent_format is None and hasattr(model, "get_model_object"):
+        try:
+            latent_format = model.get_model_object("latent_format")
+        except Exception:
+            latent_format = None
+    spatial_ratio = latent_image.get("downscale_ratio_spacial")
+    if spatial_ratio is None:
+        spatial_ratio = getattr(latent_format, "spacial_downscale_ratio", 8)
+    temporal_ratio = latent_image.get("downscale_ratio_temporal")
+    if temporal_ratio is None:
+        temporal_ratio = getattr(latent_format, "temporal_downscale_ratio", 6)
+
+    image_height = latent_size[-2] * spatial_ratio
+    image_width = latent_size[-1] * spatial_ratio
+    if len(latent_size) >= 5 and getattr(latent_format, "latent_dimensions", 2) == 3:
+        n_iter = max(1, (latent_size[-3] - 1) * temporal_ratio + 1)
+    elif len(latent_size) == 4:
+        n_iter = 1
     else:
-        image_height = latent_size[-2] * 8
-        image_width = latent_size[-1] * 8
-        if len(list(latent_size)) == 4:
-            n_iter = 1
-        else:
-            n_iter = max(1, (latent_size[-3] - 1) * 6 + 1)
+        n_iter = max(1, (latent_size[-3] - 1) * temporal_ratio + 1)
 
     return image_height, image_width, n_iter, batch_size
 
@@ -70,7 +71,8 @@ def __sample_opt_from_latent(context: execution_context.ExecutionContext, model,
         'steps': steps,
         'n_iter': n_iter,
         'batch_size': batch_size,
-        "ratio": _sample_consumption_ratio(context, model)
+        "ratio": _sample_consumption_ratio(context, model),
+        "model_name": _get_model_name(context, model, ),
     }
 
 
@@ -266,7 +268,8 @@ def _tiled_ksampler_provider_consumption(
         'steps': steps,
         'n_iter': 1,
         'batch_size': 1,
-        "ratio": _sample_consumption_ratio(context, model)
+        "ratio": _sample_consumption_ratio(context, model),
+        "model_name": _get_model_name(context, model, ),
     }]}
 
 
@@ -440,7 +443,8 @@ def _hy_video_sampler_consumption(model, hyvid_embeds, flow_shift, steps, embedd
         'steps': steps,
         'n_iter': num_frames,
         'batch_size': 1,
-        "ratio": _sample_consumption_ratio(context, model)
+        "ratio": _sample_consumption_ratio(context, model),
+        "model_name": _get_model_name(context, model, ),
     }]}
 
 
@@ -464,7 +468,8 @@ def _mochi_sampler_consumption(model, positive, negative, steps, cfg, seed, heig
                 'steps': steps,
                 'n_iter': num_frames,
                 'batch_size': 1,
-                "ratio": _sample_consumption_ratio(context, model)
+                "ratio": _sample_consumption_ratio(context, model),
+                "model_name": _get_model_name(context, model, ),
             }
         ]
     }
@@ -504,7 +509,8 @@ def _cog_video_sampler_consumption(model, positive, negative, steps, cfg, seed, 
                 'steps': steps,
                 'n_iter': num_frames,
                 'batch_size': B,
-                "ratio": _sample_consumption_ratio(context, model)
+                "ratio": _sample_consumption_ratio(context, model),
+                "model_name": _get_model_name(context, model, ),
             }
         ]
     }
@@ -713,7 +719,8 @@ def _was_k_sampler_cycle_consumption(model, seed, steps, cfg, sampler_name, sche
             'steps': steps,
             'n_iter': n_iter,
             'batch_size': batch_size,
-            "ratio": _sample_consumption_ratio(context, model)
+            "ratio": _sample_consumption_ratio(context, model),
+            "model_name": _get_model_name(context, model, ),
         })
         if i < division_factor - 1 and latent_upscale == 'disable':
             if processor_model:
@@ -811,7 +818,8 @@ def _searge_sdxl_image2image_sampler2_consumption(base_model, base_positive, bas
         'steps': steps,
         'n_iter': n_iter,
         'batch_size': batch_size,
-        'ratio': _sample_consumption_ratio(context, base_model)
+        'ratio': _sample_consumption_ratio(context, base_model),
+        "model_name": _get_model_name(context, base_model, ),
     })
     return {'opts': result}
 
@@ -853,7 +861,8 @@ def _ultimate_sd_upscale_consumption(image, model, positive, negative, vae, upsc
         'steps': steps,
         'n_iter': 1,
         'batch_size': batch_size,
-        'ratio': _sample_consumption_ratio(context, model)
+        'ratio': _sample_consumption_ratio(context, model),
+        "model_name": _get_model_name(context, model, ),
     }]
     if enable_hr:
         result.append({
@@ -1421,7 +1430,8 @@ def _ultimate_sd_upscale_no_upscale_consumption(upscaled_image, model, positive,
             'steps': steps,
             'n_iter': 1,
             'batch_size': upscaled_image.shape[0],
-            'ratio': _sample_consumption_ratio(context, model)
+            'ratio': _sample_consumption_ratio(context, model),
+            "model_name": _get_model_name(context, model, ),
         }]
     }
 

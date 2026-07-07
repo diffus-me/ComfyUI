@@ -11,7 +11,7 @@ class Model(gallery.Base):
     base = Column(String)
 
     stem = Column(String)
-    extension = Column(String, index=True)
+    extension = Column(String)
 
     sha256 = Column(String, index=True)
     config_sha256 = Column(String)

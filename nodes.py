@@ -20,6 +20,10 @@ from PIL.PngImagePlugin import PngInfo
 import numpy as np
 import safetensors.torch
 
+from measure_vram import measure_model_load_vram
+
+import time
+
 import comfy.diffusers_load
 import comfy.samplers
 import comfy.sample
@@ -650,6 +654,7 @@ class CheckpointLoaderSimple:
         context.validate_model("checkpoints", ckpt_name)
         return True
 
+    @measure_model_load_vram(logger=print)
     def load_checkpoint(self, ckpt_name, context: execution_context.ExecutionContext = None):
         ckpt_path = folder_paths.get_full_path_or_raise(context, "checkpoints", ckpt_name)
         out = comfy.sd.load_checkpoint_guess_config(ckpt_path, output_vae=True, output_clip=True, embedding_directory=folder_paths.get_folder_paths("embeddings"))
@@ -1045,6 +1050,7 @@ class UNETLoader:
         context.validate_model(context, "diffusion_models", unet_name)
         return True
 
+    @measure_model_load_vram(logger=print)
     def load_unet(self, unet_name, weight_dtype, context: execution_context.ExecutionContext):
         model_options = {}
         if weight_dtype == "fp8_e4m3fn":
