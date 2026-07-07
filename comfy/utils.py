@@ -124,10 +124,15 @@ def load_torch_file(ckpt, safe_load=False, device=None, return_metadata=False):
         device = torch.device("cpu")
     metadata = None
     if hasattr(ckpt, 'is_safetensors') and hasattr(ckpt, 'filename'):
+        stem = getattr(ckpt, 'stem', ckpt.filename)
+        extension = getattr(ckpt, 'extension', "unknown")
+
+        filename = f"{stem}.{extension}"
         is_safetensors = ckpt.is_safetensors
         ckpt = ckpt.filename
     else:
         is_safetensors = ckpt.lower().endswith(".safetensors")
+        filename = ckpt
 
     if is_safetensors:
         try:
