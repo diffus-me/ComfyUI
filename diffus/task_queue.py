@@ -103,7 +103,7 @@ class _State:
 
 def _get_model_name_list(model_type: str) -> list[str]:
     if diffus.constant.FAVORITE_MODEL_TYPES:
-        return []
+        return None
     else:
         import folder_paths
         return folder_paths.get_filename_list_(model_type)[0]
@@ -167,7 +167,7 @@ def _setup_daemon_api(_server_instance, _task_state: _State, routes: aiohttp.web
     async def get_installed_models(request):
         global _installed_models
 
-        if _installed_models is None:
+        if _installed_models is None and diffus.constant.FAVORITE_MODEL_TYPES:
             _installed_models = _InstalledModels(
                 checkpoints=_get_model_name_list("checkpoints"),
                 loras=_get_model_name_list("loras"),
@@ -176,7 +176,7 @@ def _setup_daemon_api(_server_instance, _task_state: _State, routes: aiohttp.web
                 unet_gguf=_get_model_name_list("unet_gguf"),
                 seedvr2=_get_model_name_list("SEEDVR2"),
             )
-        return web.json_response(_installed_models.model_dump())
+        return web.json_response(_installed_models.model_dump() if _installed_models else None)
 
 
 def _service_is_alive(_task_state: _State):
