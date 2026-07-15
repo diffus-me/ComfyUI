@@ -268,7 +268,6 @@ class MessageQueue:
         if not sid:
             sid = "anonymous"
         keys = [
-            f'COMFYUI_MESSAGE_{sid}',
             f'diffus:comfyui:message:{sid}'
         ]
 
