@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import pathlib
 import threading
 import time
 import uuid
@@ -19,12 +20,12 @@ _logger = logging.getLogger(__name__)
 
 
 class _InstalledModels(BaseModel):
-    checkpoints: list[str]
-    loras: list[str]
-    embeddings: list[str]
-    diffusion_models: list[str]
-    unet_gguf: list[str]
-    seedvr2: list[str]
+    checkpoints: list[str] | None = None
+    loras: list[str] | None = None
+    embeddings: list[str] | None = None
+    diffusion_models: list[str] | None = None
+    unet_gguf: list[str] | None = None
+    seedvr2: list[str] | None = None
 
 
 _installed_models: _InstalledModels | None = None
@@ -109,6 +110,27 @@ def _get_model_name_list(model_type: str) -> list[str]:
         return folder_paths.get_filename_list_(model_type)[0]
 
 
+def _load_installed_models_info():
+    model_config_file = os.getenv("MODEL_CONFIG_FILE", None)
+    if model_config_file and pathlib.Path(model_config_file).exists():
+        with open(model_config_file) as f:
+            model_config = json.load(f)
+    else:
+        model_types = (
+            "checkpoints",
+            "loras",
+            "embeddings",
+            "diffusion_models",
+            "unet_gguf",
+            "seedvr2",
+        )
+        model_config = {}
+        for model_type in model_types:
+            model_config[model_type] = _get_model_name_list(model_type)
+
+    return _InstalledModels.model_validate(model_config)
+
+
 def _setup_daemon_api(_server_instance, _task_state: _State, routes: aiohttp.web_routedef.RouteTableDef):
     service_started_at = time.time()
 
@@ -167,15 +189,8 @@ def _setup_daemon_api(_server_instance, _task_state: _State, routes: aiohttp.web
     async def get_installed_models(request):
         global _installed_models
 
-        if _installed_models is None and diffus.constant.FAVORITE_MODEL_TYPES:
-            _installed_models = _InstalledModels(
-                checkpoints=_get_model_name_list("checkpoints"),
-                loras=_get_model_name_list("loras"),
-                embeddings=_get_model_name_list("embeddings"),
-                diffusion_models=_get_model_name_list("diffusion_models"),
-                unet_gguf=_get_model_name_list("unet_gguf"),
-                seedvr2=_get_model_name_list("SEEDVR2"),
-            )
+        if _installed_models is None and not diffus.constant.FAVORITE_MODEL_TYPES:
+            _installed_models = _load_installed_models_info()
         return web.json_response(_installed_models.model_dump() if _installed_models else None)
 
 
