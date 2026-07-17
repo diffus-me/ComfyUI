@@ -187,7 +187,7 @@ def _after_task_finished(
         request_body['task_id'] = job_id
 
     try:
-        result = diffus.message.fetch_prompt_result(request_body['task_id'])
+        result = diffus.message.fetch_prompt_status(request_body['task_id'])
         if result:
             request_body['result'] = result.to_json_str()
     except Exception as e:
