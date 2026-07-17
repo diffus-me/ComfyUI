@@ -2161,6 +2161,14 @@ def load_diffusion_model_state_dict(sd, model_options={}, metadata=None, disable
     left_over = sd.keys()
     if len(left_over) > 0:
         logging.info("left over keys in diffusion model: {}".format(left_over))
+
+    stem = getattr(model_name, 'stem', None)
+    if stem is not None:
+        extension = getattr(model_name, 'extension', "unknown")
+        model_name = f"{stem}.{extension}"
+    else:
+        model_name = model_name
+
     model_patcher.model_name = pathlib.Path(model_name).name
     return model_patcher
 
