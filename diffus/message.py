@@ -242,7 +242,8 @@ def _process_prompt_message(
         result.result = ProgressResult(message=msg.data.message, used_time=msg.data.used_time)
     elif msg.type == "finished":
         result.state = PromptState.finished
-        result.result = msg.data
+        if result.success or not result.result:
+            result.result = msg.data
     elif msg.type == "preview":
         result.preview_img = msg.data.preview_img
     elif msg.type == "progress_state":
