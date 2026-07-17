@@ -175,7 +175,7 @@ def _update_prompt_result(
             logger.error(f'*** monitor error: {resp.text}')
 
 
-def _fetch_prompt_result(
+def _fetch_prompt_status(
         redis_client,
         prompt_id: str,
 ):
@@ -193,31 +193,31 @@ def _fetch_prompt_result(
 def _process_prompt_message(
         client_id: str,
         prompt_id: str,
-        prompt_result: PromptStatus,
+        status: PromptStatus,
         msg: PromptMessages
 ) -> PromptStatus:
     # fetch existing prompt from redis, or create a new if not exists
-    if not prompt_result:
-        result = PromptStatus(
+    if not status:
+        prompt_status = PromptStatus(
             prompt_id=prompt_id,
             client_id=client_id,
             outputs=[],
         )
     else:
-        result = prompt_result
+        prompt_status = status
 
     # update status
     if msg.type == "status":
         pass
     elif msg.type == "execution_start":
-        result.state = PromptState.started
+        prompt_status.state = PromptState.started
     elif msg.type == "execution_cached":
         pass
     elif msg.type == "execution_success":
-        result.success = True
+        prompt_status.success = True
     elif msg.type == "execution_error":
-        result.success = False
-        result.result = ProgressResult(
+        prompt_status.success = False
+        prompt_status.result = ProgressResult(
             message={
                 "reason": msg.data.exception_type,
                 "detail": msg.data.exception_message
@@ -225,33 +225,33 @@ def _process_prompt_message(
             used_time=msg.data.used_time
         )
     elif msg.type == "execution_interrupted":
-        result.success = False
-        result.state = PromptState.execution_interrupted
+        prompt_status.success = False
+        prompt_status.state = PromptState.execution_interrupted
     elif msg.type == "executing":
-        result.state = PromptState.executing
+        prompt_status.state = PromptState.executing
     elif msg.type == "progress":
-        result.progress = msg.data
+        prompt_status.progress = msg.data
     elif msg.type == "executed":
-        if result.outputs is None:
-            result.outputs = []
+        if prompt_status.outputs is None:
+            prompt_status.outputs = []
         if msg.data.output:
-            result.outputs.append(msg.data.output)
+            prompt_status.outputs.append(msg.data.output)
     elif msg.type == "monitor_error":
-        result.success = False
-        result.state = PromptState.monitor_error
-        result.result = ProgressResult(message=msg.data.message, used_time=msg.data.used_time)
+        prompt_status.success = False
+        prompt_status.state = PromptState.monitor_error
+        prompt_status.result = ProgressResult(message=msg.data.message, used_time=msg.data.used_time)
     elif msg.type == "finished":
-        result.state = PromptState.finished
-        if result.success or not result.result:
-            result.result = msg.data
+        prompt_status.state = PromptState.finished
+        if prompt_status.success or not prompt_status.result:
+            prompt_status.result = msg.data
     elif msg.type == "preview":
-        result.preview_img = msg.data.preview_img
+        prompt_status.preview_img = msg.data.preview_img
     elif msg.type == "progress_state":
-        result.progress_state = msg.data.progress_state
+        prompt_status.progress_state = msg.data.progress_state
     else:
         logger.warning(f"unknown comfyui prompt message type: {msg.type}")
-    result.last_msg = msg
-    return result
+    prompt_status.last_msg = msg
+    return prompt_status
 
 
 class MessageQueue:
@@ -299,7 +299,7 @@ class MessageQueue:
             prompt_result = _process_prompt_message(
                 client_id=sid,
                 prompt_id=prompt_id,
-                prompt_result=_fetch_prompt_result(self._redis_client, prompt_id),
+                status=_fetch_prompt_status(self._redis_client, prompt_id),
                 msg=msg
             )
             _update_prompt_result(
@@ -330,9 +330,9 @@ class MessageQueue:
                 self.send_message(sid, message, retry=retry - 1)
 
 
-def fetch_prompt_result(prompt_id: str) -> PromptStatus:
+def fetch_prompt_status(prompt_id: str) -> PromptStatus:
     redis_client = diffus.redis_client.get_redis_client()
-    return _fetch_prompt_result(
+    return _fetch_prompt_status(
         redis_client=redis_client,
         prompt_id=prompt_id
     )
