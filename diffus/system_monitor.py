@@ -99,6 +99,10 @@ def _before_task_started(
         logger.error(f'x-task-id ({task_id}) and job_id ({job_id}) are not equal')
     deduct_flag = header_dict.get('x-deduct-credits', "")
     deduct_flag = not (deduct_flag == 'false')
+    skip_charge = not deduct_flag
+    if not is_intermediate and skip_charge:
+        return job_id
+
     if only_available_for:
         user_tier = header_dict.get('user-tire', '') or header_dict.get('user-tier', '')
         if not user_tier or user_tier.lower() not in [item.lower() for item in only_available_for]:
@@ -114,7 +118,7 @@ def _before_task_started(
         'user': user_id,
         'started_at': time.time(),
         'session_hash': session_hash,
-        'skip_charge': not deduct_flag,
+        'skip_charge': skip_charge,
         'refund_if_task_failed': refund_if_task_failed,
         'node': os.getenv('HOST_IP', default=''),
     }
@@ -170,6 +174,11 @@ def _after_task_finished(
     task_id = header_dict.get('x-task-id', "")
     if not task_id:
         logger.error(f'{job_id}: x-task-id does not presented in headers')
+        return {}
+    deduct_flag = header_dict.get('x-deduct-credits', "")
+    deduct_flag = not (deduct_flag == 'false')
+    skip_charge = not deduct_flag
+    if not is_intermediate and skip_charge:
         return {}
 
     request_url = f'{monitor_addr}/{job_id}'
@@ -276,7 +285,7 @@ def monitor_call_context(
         )
         if not is_intermediate:
             logger.info(f'[monitor_call_context] monitor_result: {monitor_result}')
-            extra_data['subscription_consumption'] = monitor_result.get('consumptions', {})
+            extra_data['subscription_consumption'] = monitor_result.get('consumptions', {}) if monitor_result else None
 
 
 def node_execution_monitor(get_output_data):
