@@ -11,10 +11,12 @@ from contextlib import contextmanager
 import aiohttp.web_routedef
 from aiohttp import web
 import requests
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, RootModel, ValidationError, field_validator
 import version
 import diffus.redis_client
 import diffus.constant
+from diffus.repository import get_binary_path
+from folder_paths import folder_names_and_paths, supported_pt_extensions
 
 _logger = logging.getLogger(__name__)
 
@@ -57,6 +59,52 @@ class ServiceStatusRequest(BaseModel):
     node_type: str = Field(title="NodeType", default='FOCUS')
     accepted_tiers: list[str] = Field(default=[])
     accepted_type_types: list[str] = Field(default=[])
+
+
+class ModelsExistenceRequest(RootModel[dict[str, list[str]]]):
+    @field_validator("root")
+    @classmethod
+    def validate_model_requests(cls, model_requests: dict[str, list[str]]) -> dict[str, list[str]]:
+        if sum(len(models) for models in model_requests.values()) > 1000:
+            raise ValueError("At most 1000 models can be checked per request")
+
+        for sha256 in model_requests.get("sha256", []):
+            if len(sha256) != 64 or any(char not in "0123456789abcdefABCDEF" for char in sha256):
+                raise ValueError("Each model hash must be a 64-character hexadecimal SHA-256")
+
+        return model_requests
+
+
+class ModelsExistenceResponse(BaseModel):
+    all_exist: bool
+
+
+def _model_exists_in_paths(model_paths: list[str], model_name: str) -> bool:
+    if not model_name or pathlib.Path(model_name).suffix.lower() not in supported_pt_extensions:
+        return False
+
+    for model_path in model_paths:
+        root = pathlib.Path(model_path).resolve()
+        candidate = (root / model_name).resolve()
+
+        if candidate != root and candidate.is_relative_to(root) and candidate.is_file():
+            return True
+
+    return False
+
+
+def _all_models_exist(model_requests: dict[str, list[str]]) -> bool:
+    for model_type, model_names in model_requests.items():
+        if model_type == "sha256":
+            if not all(get_binary_path(sha256).exists() for sha256 in model_names):
+                return False
+            continue
+
+        model_paths, _ = folder_names_and_paths[model_type]
+        if not all(_model_exists_in_paths(model_paths, model_name) for model_name in model_names):
+            return False
+
+    return True
 
 
 class _State:
@@ -192,6 +240,30 @@ def _setup_daemon_api(_server_instance, _task_state: _State, routes: aiohttp.web
         if _installed_models is None and not diffus.constant.FAVORITE_MODEL_TYPES:
             _installed_models = _load_installed_models_info()
         return web.json_response(_installed_models.model_dump() if _installed_models else None)
+
+    @routes.post("/internal/v1/models-existence")
+    async def check_models_existence(request: web.Request) -> web.Response:
+        try:
+            body = await request.json()
+            model_request = ModelsExistenceRequest.model_validate(body)
+        except (ValidationError, ValueError) as error:
+            raise web.HTTPBadRequest(text=str(error)) from error
+
+        supported_model_types = {
+            model_type
+            for model_type, (_, extensions) in folder_names_and_paths.items()
+            if set(extensions) & supported_pt_extensions
+        }
+        unsupported_model_types = set(model_request.root) - {"sha256", *supported_model_types}
+        if unsupported_model_types:
+            raise web.HTTPBadRequest(
+                text=f"Unsupported model types: {', '.join(sorted(unsupported_model_types))}"
+            )
+
+        all_exist = await asyncio.to_thread(_all_models_exist, model_request.root)
+        response = ModelsExistenceResponse(all_exist=all_exist)
+
+        return web.json_response(response.model_dump())
 
 
 def _service_is_alive(_task_state: _State):
