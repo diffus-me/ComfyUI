@@ -6,8 +6,18 @@ import execution_context
 def _sample_consumption_ratio(
         context: execution_context.ExecutionContext,
         model,
+        steps=20,
+        n_iter=1,
 ):
-    return calc_model_consumption_ratio(model)
+    ratio = calc_model_consumption_ratio(model)
+    model_name = _get_model_name(context, model)
+    if model_name and model_name.startswith("ltx-2.3-22b"):
+        count = steps * n_iter
+        if count > 100:
+            ratio *= 0.2
+        elif count > 50:
+            ratio *= 0.5
+    return ratio
 
 
 def _get_model_name(
@@ -71,7 +81,7 @@ def __sample_opt_from_latent(context: execution_context.ExecutionContext, model,
         'steps': steps,
         'n_iter': n_iter,
         'batch_size': batch_size,
-        "ratio": _sample_consumption_ratio(context, model),
+        "ratio": _sample_consumption_ratio(context, model, steps),
         "model_name": _get_model_name(context, model, ),
     }
 
@@ -268,7 +278,7 @@ def _tiled_ksampler_provider_consumption(
         'steps': steps,
         'n_iter': 1,
         'batch_size': 1,
-        "ratio": _sample_consumption_ratio(context, model),
+        "ratio": _sample_consumption_ratio(context, model, steps),
         "model_name": _get_model_name(context, model, ),
     }]}
 
@@ -443,7 +453,7 @@ def _hy_video_sampler_consumption(model, hyvid_embeds, flow_shift, steps, embedd
         'steps': steps,
         'n_iter': num_frames,
         'batch_size': 1,
-        "ratio": _sample_consumption_ratio(context, model),
+        "ratio": _sample_consumption_ratio(context, model, steps),
         "model_name": _get_model_name(context, model, ),
     }]}
 
@@ -468,7 +478,7 @@ def _mochi_sampler_consumption(model, positive, negative, steps, cfg, seed, heig
                 'steps': steps,
                 'n_iter': num_frames,
                 'batch_size': 1,
-                "ratio": _sample_consumption_ratio(context, model),
+                "ratio": _sample_consumption_ratio(context, model, steps),
                 "model_name": _get_model_name(context, model, ),
             }
         ]
@@ -509,7 +519,7 @@ def _cog_video_sampler_consumption(model, positive, negative, steps, cfg, seed, 
                 'steps': steps,
                 'n_iter': num_frames,
                 'batch_size': B,
-                "ratio": _sample_consumption_ratio(context, model),
+                "ratio": _sample_consumption_ratio(context, model, steps),
                 "model_name": _get_model_name(context, model, ),
             }
         ]
@@ -719,7 +729,7 @@ def _was_k_sampler_cycle_consumption(model, seed, steps, cfg, sampler_name, sche
             'steps': steps,
             'n_iter': n_iter,
             'batch_size': batch_size,
-            "ratio": _sample_consumption_ratio(context, model),
+            "ratio": _sample_consumption_ratio(context, model, steps),
             "model_name": _get_model_name(context, model, ),
         })
         if i < division_factor - 1 and latent_upscale == 'disable':
@@ -818,7 +828,7 @@ def _searge_sdxl_image2image_sampler2_consumption(base_model, base_positive, bas
         'steps': steps,
         'n_iter': n_iter,
         'batch_size': batch_size,
-        'ratio': _sample_consumption_ratio(context, base_model),
+        'ratio': _sample_consumption_ratio(context, base_model, steps),
         "model_name": _get_model_name(context, base_model, ),
     })
     return {'opts': result}
@@ -861,7 +871,7 @@ def _ultimate_sd_upscale_consumption(image, model, positive, negative, vae, upsc
         'steps': steps,
         'n_iter': 1,
         'batch_size': batch_size,
-        'ratio': _sample_consumption_ratio(context, model),
+        'ratio': _sample_consumption_ratio(context, model, steps),
         "model_name": _get_model_name(context, model, ),
     }]
     if enable_hr:
@@ -1430,7 +1440,7 @@ def _ultimate_sd_upscale_no_upscale_consumption(upscaled_image, model, positive,
             'steps': steps,
             'n_iter': 1,
             'batch_size': upscaled_image.shape[0],
-            'ratio': _sample_consumption_ratio(context, model),
+            'ratio': _sample_consumption_ratio(context, model, steps),
             "model_name": _get_model_name(context, model, ),
         }]
     }
