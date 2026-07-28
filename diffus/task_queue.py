@@ -189,6 +189,9 @@ def _load_installed_models_info():
 
 
 def _load_supported_models() -> dict[str, list[str]] | None:
+    if diffus.constant.FAVORITE_MODEL_TYPES:
+        return None
+
     model_config_file = os.getenv("MODEL_CONFIG_FILE", None)
     if not model_config_file or not pathlib.Path(model_config_file).exists():
         return None
