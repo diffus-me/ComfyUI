@@ -243,27 +243,36 @@ def _setup_daemon_api(_server_instance, _task_state: _State, routes: aiohttp.web
 
     @routes.post("/internal/v1/models-existence")
     async def check_models_existence(request: web.Request) -> web.Response:
-        try:
-            body = await request.json()
-            model_request = ModelsExistenceRequest.model_validate(body)
-        except (ValidationError, ValueError) as error:
-            raise web.HTTPBadRequest(text=str(error)) from error
-
-        supported_model_types = {
-            model_type
-            for model_type, (_, extensions) in folder_names_and_paths.items()
-            if set(extensions) & supported_pt_extensions
-        }
-        unsupported_model_types = set(model_request.root) - {"sha256", *supported_model_types}
-        if unsupported_model_types:
-            raise web.HTTPBadRequest(
-                text=f"Unsupported model types: {', '.join(sorted(unsupported_model_types))}"
-            )
-
-        all_exist = await asyncio.to_thread(_all_models_exist, model_request.root)
+        if diffus.constant.FAVORITE_MODEL_TYPES:
+            all_exist = True
+        else:
+            all_exist = await _check_models_existence(request)
         response = ModelsExistenceResponse(all_exist=all_exist)
 
         return web.json_response(response.model_dump())
+
+
+async def _check_models_existence(request: web.Request) -> web.Response:
+    try:
+        body = await request.text()
+        if not body:
+            return False
+        model_request = ModelsExistenceRequest.model_validate_json(body)
+    except (ValidationError, ValueError) as error:
+        raise web.HTTPBadRequest(text=str(error)) from error
+
+    supported_model_types = {
+        model_type
+        for model_type, (_, extensions) in folder_names_and_paths.items()
+        if set(extensions) & supported_pt_extensions
+    }
+    unsupported_model_types = set(model_request.root) - {"sha256", *supported_model_types}
+    if unsupported_model_types:
+        raise web.HTTPBadRequest(
+            text=f"Unsupported model types: {', '.join(sorted(unsupported_model_types))}"
+        )
+
+    return await asyncio.to_thread(_all_models_exist, model_request.root)
 
 
 def _service_is_alive(_task_state: _State):
