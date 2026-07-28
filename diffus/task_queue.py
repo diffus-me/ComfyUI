@@ -16,7 +16,7 @@ import version
 import diffus.redis_client
 import diffus.constant
 from diffus.repository import get_binary_path
-from folder_paths import folder_names_and_paths, supported_pt_extensions
+from folder_paths import folder_names_and_paths
 
 _logger = logging.getLogger(__name__)
 
@@ -80,7 +80,7 @@ class ModelsExistenceResponse(BaseModel):
 
 
 def _model_exists_in_paths(model_paths: list[str], model_name: str) -> bool:
-    if not model_name or pathlib.Path(model_name).suffix.lower() not in supported_pt_extensions:
+    if not model_name:
         return False
 
     for model_path in model_paths:
@@ -252,7 +252,7 @@ def _setup_daemon_api(_server_instance, _task_state: _State, routes: aiohttp.web
         return web.json_response(response.model_dump())
 
 
-async def _check_models_existence(request: web.Request) -> web.Response:
+async def _check_models_existence(request: web.Request) -> bool:
     try:
         body = await request.text()
         if not body:
@@ -261,12 +261,7 @@ async def _check_models_existence(request: web.Request) -> web.Response:
     except (ValidationError, ValueError) as error:
         raise web.HTTPBadRequest(text=str(error)) from error
 
-    supported_model_types = {
-        model_type
-        for model_type, (_, extensions) in folder_names_and_paths.items()
-        if set(extensions) & supported_pt_extensions
-    }
-    unsupported_model_types = set(model_request.root) - {"sha256", *supported_model_types}
+    unsupported_model_types = set(model_request.root) - {"sha256", *folder_names_and_paths}
     if unsupported_model_types:
         raise web.HTTPBadRequest(
             text=f"Unsupported model types: {', '.join(sorted(unsupported_model_types))}"
