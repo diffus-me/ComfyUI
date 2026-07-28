@@ -31,6 +31,7 @@ class _InstalledModels(BaseModel):
 
 
 _installed_models: _InstalledModels | None = None
+_supported_models: dict[str, list[str]] | None = None
 
 
 class ServiceStatusResponse(BaseModel):
@@ -95,6 +96,14 @@ def _model_exists_in_paths(model_paths: list[str], model_name: str) -> bool:
 
 def _all_models_exist(model_requests: dict[str, list[str]]) -> bool:
     for model_type, model_names in model_requests.items():
+        if _supported_models is not None:
+            supported_models = set(_supported_models.get(model_type) or [])
+            if not supported_models:
+                return False
+
+            if "*" not in supported_models and not set(model_names).issubset(supported_models):
+                return False
+
         if model_type == "sha256":
             if not all(get_binary_path(sha256).exists() for sha256 in model_names):
                 return False
@@ -179,7 +188,35 @@ def _load_installed_models_info():
     return _InstalledModels.model_validate(model_config)
 
 
+def _load_supported_models() -> dict[str, list[str]] | None:
+    model_config_file = os.getenv("MODEL_CONFIG_FILE", None)
+    if not model_config_file or not pathlib.Path(model_config_file).exists():
+        return None
+
+    with open(model_config_file) as fp:
+        model_config = json.load(fp)
+
+    if not isinstance(model_config, dict):
+        raise ValueError("MODEL_CONFIG_FILE must contain a JSON object")
+
+    supported_models: dict[str, list[str]] = {}
+    for model_type, names in model_config.items():
+        if names is None:
+            continue
+
+        if isinstance(names, list) and all(isinstance(name, str) for name in names):
+            supported_models[model_type] = names
+            continue
+
+        raise ValueError(f"Model list for '{model_type}' must be null or a list of strings")
+
+    return supported_models
+
+
 def _setup_daemon_api(_server_instance, _task_state: _State, routes: aiohttp.web_routedef.RouteTableDef):
+    global _supported_models
+    _supported_models = _load_supported_models()
+
     service_started_at = time.time()
 
     @routes.get("/daemon/v1/status")
