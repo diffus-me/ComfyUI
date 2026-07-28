@@ -88,14 +88,16 @@ def _model_exists_in_paths(model_paths: list[str], model_name: str) -> bool:
         root = pathlib.Path(model_path).resolve()
         candidate = (root / model_name).resolve()
 
-        if candidate != root and candidate.is_relative_to(root) and candidate.is_file():
+        if candidate != root and candidate.is_file():
             return True
 
     return False
 
 
-def _all_models_exist(model_requests: dict[str, list[str]]) -> bool:
+def _all_models_exist(model_requests: dict[str, list[str] | None]) -> bool:
     for model_type, model_names in model_requests.items():
+        if not model_names:
+            continue
         if _supported_models is not None:
             supported_models = set(_supported_models.get(model_type) or [])
             if not supported_models:
