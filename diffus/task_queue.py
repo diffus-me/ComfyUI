@@ -62,14 +62,16 @@ class ServiceStatusRequest(BaseModel):
     accepted_type_types: list[str] = Field(default=[])
 
 
-class ModelsExistenceRequest(RootModel[dict[str, list[str]]]):
+class ModelsExistenceRequest(RootModel[dict[str, list[str] | None]]):
     @field_validator("root")
     @classmethod
-    def validate_model_requests(cls, model_requests: dict[str, list[str]]) -> dict[str, list[str]]:
-        if sum(len(models) for models in model_requests.values()) > 1000:
+    def validate_model_requests(
+        cls, model_requests: dict[str, list[str] | None]
+    ) -> dict[str, list[str] | None]:
+        if sum(len(models) for models in model_requests.values() if models is not None) > 1000:
             raise ValueError("At most 1000 models can be checked per request")
 
-        for sha256 in model_requests.get("sha256", []):
+        for sha256 in model_requests.get("sha256") or []:
             if len(sha256) != 64 or any(char not in "0123456789abcdefABCDEF" for char in sha256):
                 raise ValueError("Each model hash must be a 64-character hexadecimal SHA-256")
 
