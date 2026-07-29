@@ -196,7 +196,7 @@ class LoadImageTextDataSetFromFolderNode(io.ComfyNode):
 
 class LoadVideoDataSetFromFolderNode(io.ComfyNode):
     @classmethod
-    def define_schema(cls):
+    def define_schema(cls, exec_context: execution_context.ExecutionContext):
         return io.Schema(
             node_id="LoadVideoDataSetFromFolder",
             search_aliases=["load folder", "load from folder", "load dataset", "load videos", "import dataset"],
@@ -207,7 +207,7 @@ class LoadVideoDataSetFromFolderNode(io.ComfyNode):
             inputs=[
                 io.Combo.Input(
                     "folder",
-                    options=folder_paths.get_input_subfolders(),
+                    options=folder_paths.get_input_subfolders(exec_context),
                     tooltip="The folder containing video files.",
                 ),
             ],
@@ -238,7 +238,7 @@ class LoadVideoDataSetFromFolderNode(io.ComfyNode):
 
 class LoadVideoTextDataSetFromFolderNode(io.ComfyNode):
     @classmethod
-    def define_schema(cls):
+    def define_schema(cls, exec_context: execution_context.ExecutionContext):
         return io.Schema(
             node_id="LoadVideoTextDataSetFromFolder",
             search_aliases=["load folder", "load from folder", "load dataset", "load videos", "import dataset"],
@@ -249,7 +249,7 @@ class LoadVideoTextDataSetFromFolderNode(io.ComfyNode):
             inputs=[
                 io.Combo.Input(
                     "folder",
-                    options=folder_paths.get_input_subfolders(),
+                    options=folder_paths.get_input_subfolders(exec_context),
                     tooltip="The folder containing video files and .txt captions.",
                 ),
             ],
@@ -265,11 +265,14 @@ class LoadVideoTextDataSetFromFolderNode(io.ComfyNode):
                     tooltip="List of text captions.",
                 ),
             ],
+            hidden=[
+                io.Hidden.exec_context
+            ]
         )
 
     @classmethod
-    def execute(cls, folder):
-        sub_input_dir = os.path.join(folder_paths.get_input_directory(), folder)
+    def execute(cls, folder, exec_context: execution_context.ExecutionContext):
+        sub_input_dir = os.path.join(folder_paths.get_input_directory(user_hash=exec_context.user_hash), folder)
 
         video_files = []
         for item in sorted(os.listdir(sub_input_dir)):
@@ -2029,14 +2032,14 @@ class DatasetExtension(ComfyExtension):
     @override
     async def get_node_list(self) -> list[type[io.ComfyNode]]:
         return [
-            # Data loading/saving nodes
-            LoadImageDataSetFromFolderNode,
-            LoadImageTextDataSetFromFolderNode,
-            SaveImageDataSetToFolderNode,
-            SaveImageTextDataSetToFolderNode,
-            # Video data loading nodes
-            LoadVideoDataSetFromFolderNode,
-            LoadVideoTextDataSetFromFolderNode,
+            # # Data loading/saving nodes
+            # LoadImageDataSetFromFolderNode,
+            # LoadImageTextDataSetFromFolderNode,
+            # SaveImageDataSetToFolderNode,
+            # SaveImageTextDataSetToFolderNode,
+            # # Video data loading nodes
+            # LoadVideoDataSetFromFolderNode,
+            # LoadVideoTextDataSetFromFolderNode,
             # Image transform nodes (auto-handle video via per-frame processing)
             ResizeImagesByShorterEdgeNode,
             ResizeImagesByLongerEdgeNode,
