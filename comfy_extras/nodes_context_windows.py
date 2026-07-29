@@ -103,8 +103,8 @@ class WanContextWindowsManualNode(ContextWindowsManualNode):
 
 class LTXVContextWindowsNode(ContextWindowsManualNode):
     @classmethod
-    def define_schema(cls) -> io.Schema:
-        schema = super().define_schema()
+    def define_schema(cls, exec_context: execution_context.ExecutionContext) -> io.Schema:
+        schema = super().define_schema(exec_context)
         schema.node_id = "LTXVContextWindows"
         schema.display_name = "LTXV Context Windows"
         schema.description = "Set context windows for LTXV-like models."
