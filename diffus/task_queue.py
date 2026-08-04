@@ -28,6 +28,9 @@ class _InstalledModels(BaseModel):
     diffusion_models: list[str] | None = None
     unet_gguf: list[str] | None = None
     seedvr2: list[str] | None = None
+    text_encoders: list[str] | None = None
+    vae: list[str] | None = None
+    sha256: list[str] | None = None
 
 
 _installed_models: _InstalledModels | None = None
