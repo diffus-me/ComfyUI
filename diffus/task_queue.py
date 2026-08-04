@@ -317,7 +317,13 @@ async def _check_models_existence(request: web.Request) -> bool:
 def _service_is_alive(_task_state: _State):
     try:
         request_url = f'http://localhost:{_task_state.service_port}/daemon/v1/status'
-        resp = requests.get(request_url, json={})
+        resp = requests.get(
+            request_url,
+            headers={
+                "X-Api-Secret": os.getenv("API_SECRET"),
+            },
+            json={}
+        )
         if resp.status_code == 200:
             return True
         else:

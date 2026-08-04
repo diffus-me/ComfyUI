@@ -57,7 +57,7 @@ def secure_subfolder_path(base_dir, folder_name):
     return target
 
 
-def list_dataset_folders():
+def list_dataset_folders(exec_context: execution_context.ExecutionContext):
     """Relative paths of dataset folders found under all dataset roots.
 
     Any subfolder containing a metadata.json or *.safetensors shard counts as
@@ -67,7 +67,7 @@ def list_dataset_folders():
     """
     found = set()
 
-    for root in folder_paths.get_folder_paths("datasets"):
+    for root in folder_paths.get_datasets_dir(exec_context):
         if not os.path.isdir(root):
             continue
 
@@ -113,21 +113,21 @@ def list_dataset_folders():
     return sorted(found)
 
 
-def get_dataset_save_dir(folder_name):
+def get_dataset_save_dir(exec_context: execution_context.ExecutionContext, folder_name):
     """Resolve the folder to save a new dataset into, inside the default root.
 
     The folder is not created here; callers makedirs after validation.
     """
-    root = folder_paths.get_folder_paths("datasets")[0]
+    root = folder_paths.get_datasets_dir(exec_context)
     target = secure_subfolder_path(root, folder_name)
     if os.path.realpath(target) == os.path.realpath(root):
         raise ValueError("folder_name must name a subfolder of the datasets directory, e.g. 'my_dataset'.")
     return target
 
 
-def get_dataset_dir(folder_name):
+def get_dataset_dir(exec_context: execution_context.ExecutionContext, folder_name):
     """Find an existing dataset folder by relative name across all dataset roots."""
-    roots = folder_paths.get_folder_paths("datasets")
+    roots = folder_paths.get_datasets_dir(exec_context)
     for root in roots:
         target = secure_subfolder_path(root, folder_name)
         if os.path.realpath(target) == os.path.realpath(root):
@@ -1994,7 +1994,7 @@ class SaveTrainingDataset(io.ComfyNode):
             )
 
         # Create output directory (inside the datasets root, traversal-safe)
-        output_dir = get_dataset_save_dir(exec_context.user_hash, folder_name)
+        output_dir = get_dataset_save_dir(exec_context, folder_name)
         os.makedirs(output_dir, exist_ok=True)
 
         # Prepare data pairs
@@ -2044,7 +2044,7 @@ class SaveTrainingDataset(io.ComfyNode):
 class LoadTrainingDataset(io.ComfyNode):
     """Load encoded training dataset from disk."""
     @classmethod
-    def define_schema(cls):
+    def define_schema(cls, exec_context: execution_context.ExecutionContext):
         return io.Schema(
             node_id="LoadTrainingDataset",
             search_aliases=["import dataset", "training data"],
@@ -2055,7 +2055,7 @@ class LoadTrainingDataset(io.ComfyNode):
             inputs=[
                 io.Combo.Input(
                     "folder_name",
-                    options=list_dataset_folders(),
+                    options=list_dataset_folders(exec_context),
                     tooltip="Saved dataset to load, from the datasets directory.",
                 ),
             ],
@@ -2137,14 +2137,14 @@ class DatasetExtension(ComfyExtension):
             NormalizeImagesNode,
             AdjustBrightnessNode,
             AdjustContrastNode,
-            ShuffleDatasetNode,
-            ShuffleImageTextDatasetNode,
+            # ShuffleDatasetNode,
+            # ShuffleImageTextDatasetNode,
             # Video processing nodes (lazy VideoInput in/out)
             VideoFrameSampleNode,
             VideoTemporalCropNode,
             VideoRandomTemporalCropNode,
-            ShuffleVideoDatasetNode,
-            ShuffleVideoTextDatasetNode,
+            # ShuffleVideoDatasetNode,
+            # ShuffleVideoTextDatasetNode,
             # Text transform nodes
             TextToLowercaseNode,
             TextToUppercaseNode,

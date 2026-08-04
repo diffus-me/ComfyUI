@@ -55,7 +55,7 @@ folder_names_and_paths["latent_upscale_models"] = ([os.path.join(models_dir, "la
 
 folder_names_and_paths["custom_nodes"] = ([os.path.join(base_path, "custom_nodes"), os.path.join(base_path, "custom_nodes_builtin")], set())
 
-folder_names_and_paths["datasets"] = ([os.path.join(base_path, "datasets")], set())
+# folder_names_and_paths["datasets"] = ([os.path.join(base_path, "datasets")], set())
 
 folder_names_and_paths["hypernetworks"] = ([os.path.join(models_dir, "hypernetworks")], supported_pt_extensions)
 
@@ -173,6 +173,9 @@ def get_output_directory(user_hash):
 def get_relative_output_directory(user_hash):
     _check_user_hash(user_hash)
     return os.path.join(user_hash, "outputs", "comfyui")
+
+def get_datasets_dir(exec_context: execution_context.ExecutionContext):
+    return os.path.join(_check_user_hash(exec_context.user_hash), "comfyui", "datasets")
 
 
 def _get_comfyui_user_data_base(user_hash):

@@ -533,10 +533,10 @@ class RAMPressureCache(LRUCache):
         self.active_evictions = False
         self.full_evictions = False
 
-    async def set_prompt(self, dynprompt, node_ids, is_changed_cache):
+    async def set_prompt(self, context, dynprompt, node_ids, is_changed_cache):
         self.active_evictions = False
         self.full_evictions = False
-        await super().set_prompt(dynprompt, node_ids, is_changed_cache)
+        await super().set_prompt(context, dynprompt, node_ids, is_changed_cache)
 
     def clean_unused(self):
         self._clean_subcaches()

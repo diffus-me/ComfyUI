@@ -74,6 +74,7 @@ def _remove_sensitive_from_queue(queue: list) -> list:
 
 import diffus.message
 import execution_context
+import diffus.auth
 
 async def send_socket_catch_exception(function, message):
     try:
@@ -268,6 +269,7 @@ class PromptServer():
         self.number = 0
 
         middlewares = [cache_control, deprecation_warning]
+
         if args.enable_compress_response_body:
             middlewares.append(compress_body)
         if args.enable_cors_header:
@@ -280,6 +282,10 @@ class PromptServer():
 
         if args.enable_manager:
             middlewares.append(comfyui_manager.create_middleware())
+
+        authenticate_middleware = diffus.auth.create_authenticate_middleware()
+        if authenticate_middleware:
+            middlewares.append(authenticate_middleware)
 
         max_upload_size = round(args.max_upload_size * 1024 * 1024)
         self.app = web.Application(client_max_size=max_upload_size, middlewares=middlewares)
