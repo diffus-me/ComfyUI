@@ -621,7 +621,8 @@ class CheckpointLoader:
     @classmethod
     def VALIDATE_INPUTS(cls, config_name, ckpt_name, context: execution_context.ExecutionContext=None):
         context.validate_model("checkpoints", ckpt_name)
-        return True
+        ckpt_path = folder_paths.get_full_path_or_raise(context, "checkpoints", ckpt_name)
+        return ckpt_path is not None
 
     def load_checkpoint(self, config_name, ckpt_name, context=None):
         config_path = folder_paths.get_full_path(context, "configs", config_name)
@@ -652,7 +653,8 @@ class CheckpointLoaderSimple:
     @classmethod
     def VALIDATE_INPUTS(cls, ckpt_name, context: execution_context.ExecutionContext = None):
         context.validate_model("checkpoints", ckpt_name)
-        return True
+        ckpt_path = folder_paths.get_full_path_or_raise(context, "checkpoints", ckpt_name)
+        return ckpt_path is not None
 
     @measure_model_load_vram(logger=print)
     def load_checkpoint(self, ckpt_name, context: execution_context.ExecutionContext = None):
@@ -713,7 +715,8 @@ class unCLIPCheckpointLoader:
     @classmethod
     def VALIDATE_INPUTS(cls, ckpt_name, output_vae=True, output_clip=True, context: execution_context.ExecutionContext=None):
         context.validate_model("checkpoints", ckpt_name)
-        return True
+        ckpt_path = folder_paths.get_full_path_or_raise(context, "checkpoints", ckpt_name)
+        return ckpt_path is not None
 
     def load_checkpoint(self, ckpt_name, output_vae=True, output_clip=True, context: execution_context.ExecutionContext=None):
         ckpt_path = folder_paths.get_full_path_or_raise(context, "checkpoints", ckpt_name)
@@ -770,9 +773,11 @@ class LoraLoader:
 
     @classmethod
     def VALIDATE_INPUTS(cls, model, clip, lora_name, strength_model, strength_clip, context: execution_context.ExecutionContext):
-        if lora_name and lora_name != "None":
-            context.validate_model("loras", lora_name)
-        return True
+        if (not lora_name or lora_name == "None") or (strength_model == 0 and strength_clip == 0):
+            return True
+        context.validate_model("loras", lora_name)
+        lora_path = folder_paths.get_full_path_or_raise(context, "loras", lora_name)
+        return lora_path is not None
 
     def load_lora(self, model, clip, lora_name, strength_model, strength_clip, context: execution_context.ExecutionContext):
         if (not lora_name or lora_name == "None") or (strength_model == 0 and strength_clip == 0):
@@ -880,6 +885,26 @@ class VAELoader:
 
     CATEGORY = "model/loaders"
 
+    @classmethod
+    def VALIDATE_INPUTS(cls, vae_name, context: execution_context.ExecutionContext):
+        if vae_name == "pixel_space":
+            return True
+        elif vae_name in cls.image_taes:
+            approx_vaes = folder_paths.get_filename_list(context, "vae_approx")
+
+            encoder = next(filter(lambda a: a.startswith("{}_encoder.".format(vae_name)), approx_vaes))
+            decoder = next(filter(lambda a: a.startswith("{}_decoder.".format(vae_name)), approx_vaes))
+
+            enc = folder_paths.get_full_path_or_raise(context, "vae_approx", encoder)
+            dec = folder_paths.get_full_path_or_raise(context, "vae_approx", decoder)
+            return enc is not None and dec is not None
+        else:
+            if os.path.splitext(vae_name)[0] in cls.video_taes:
+                vae_path = folder_paths.get_full_path_or_raise(context, "vae_approx", vae_name)
+            else:
+                vae_path = folder_paths.get_full_path_or_raise(context, "vae", vae_name)
+            return vae_path is not None
+
     #TODO: scale factor?
     def load_vae(self, vae_name, context: execution_context.ExecutionContext):
         metadata = None
@@ -924,6 +949,13 @@ class ControlNetLoader:
     CATEGORY = "model/loaders"
     SEARCH_ALIASES = ["controlnet", "control net", "cn", "load controlnet", "controlnet loader"]
 
+    @classmethod
+    def VALIDATE_INPUTS(cls, control_net_name, context: execution_context.ExecutionContext):
+        if not control_net_name or control_net_name == "None":
+            return True
+        controlnet_path = folder_paths.get_full_path_or_raise(context, "controlnet", control_net_name)
+        return controlnet_path is not None
+
     def load_controlnet(self, control_net_name, context: execution_context.ExecutionContext):
         if not control_net_name or control_net_name == "None":
             return (None,)
@@ -944,6 +976,11 @@ class DiffControlNetLoader:
     FUNCTION = "load_controlnet"
 
     CATEGORY = "model/loaders"
+
+    @classmethod
+    def VALIDATE_INPUTS(cls, control_net_name, context: execution_context.ExecutionContext):
+        controlnet_path = folder_paths.get_full_path_or_raise(context, "controlnet", control_net_name)
+        return controlnet_path is not None
 
     def load_controlnet(self, model, control_net_name, context: execution_context.ExecutionContext):
         controlnet_path = folder_paths.get_full_path_or_raise(context, "controlnet", control_net_name)
@@ -1048,7 +1085,8 @@ class UNETLoader:
     @classmethod
     def VALIDATE_INPUTS(cls, unet_name, weight_dtype, context: execution_context.ExecutionContext):
         context.validate_model(context, "diffusion_models", unet_name)
-        return True
+        unet_path = folder_paths.get_full_path_or_raise(context, "diffusion_models", unet_name)
+        return unet_path is not None
 
     @measure_model_load_vram(logger=print)
     def load_unet(self, unet_name, weight_dtype, context: execution_context.ExecutionContext):
@@ -1082,6 +1120,12 @@ class CLIPLoader:
 
     DESCRIPTION = "Recipes:\nsd: clip-l\nstable cascade: clip-g\nsd3: t5 xxl / clip-g / clip-l\nstable audio: t5 base\nmochi: t5 xxl\ncogvideox: t5 xxl (226-token padding)\ncosmos: old t5 xxl\nlumina2: gemma 2 2B\nwan: umt5 xxl\nhidream: llama-3.1 (Recommend) or t5\nomnigen2: qwen vl 2.5 3B\njoyimage: qwen3-vl 8B\nlens: gpt-oss-20b\npixeldit: gemma 2 2B elm\nminimax: MiniMax H3 Qwen3-VL or Music3 Qwen/RVQ"
 
+    @classmethod
+    def VALIDATE_INPUTS(cls, clip_name, type="stable_diffusion", device="default", context=None):
+        clip_path = folder_paths.get_full_path_or_raise(context, "text_encoders", clip_name)
+        return clip_path is not None
+
+
     def load_clip(self, clip_name, type="stable_diffusion", device="default", context=None):
         clip_type = getattr(comfy.sd.CLIPType, type.upper(), comfy.sd.CLIPType.STABLE_DIFFUSION)
 
@@ -1111,6 +1155,13 @@ class DualCLIPLoader:
 
     DESCRIPTION = "Recipes:\nsdxl: clip-l, clip-g\nsd3: clip-l, clip-g / clip-l, t5 / clip-g, t5\nflux: clip-l, t5\nhidream: at least one of t5 or llama, recommended t5 and llama\nhunyuan_image: qwen2.5vl 7b and byt5 small\nnewbie: gemma-3-4b-it, jina clip v2"
 
+    @classmethod
+    def VALIDATE_INPUTS(cls, clip_name1, clip_name2, type, device="default", context: execution_context.ExecutionContext=None):
+        clip_path1 = folder_paths.get_full_path_or_raise(context, "text_encoders", clip_name1)
+        clip_path2 = folder_paths.get_full_path_or_raise(context, "text_encoders", clip_name2)
+        return clip_path1 is not None and clip_path2 is not None
+
+
     def load_clip(self, clip_name1, clip_name2, type, device="default", context: execution_context.ExecutionContext=None):
         clip_type = getattr(comfy.sd.CLIPType, type.upper(), comfy.sd.CLIPType.STABLE_DIFFUSION)
 
@@ -1134,6 +1185,11 @@ class CLIPVisionLoader:
     FUNCTION = "load_clip"
 
     CATEGORY = "model/loaders"
+
+    @classmethod
+    def VALIDATE_INPUTS(cls, clip_name, context: execution_context.ExecutionContext):
+        clip_path = folder_paths.get_full_path_or_raise(context, "clip_vision", clip_name)
+        return clip_path is not None
 
     def load_clip(self, clip_name, context: execution_context.ExecutionContext):
         clip_path = folder_paths.get_full_path_or_raise(context, "clip_vision", clip_name)
@@ -1171,6 +1227,11 @@ class StyleModelLoader:
     FUNCTION = "load_style_model"
 
     CATEGORY = "model/loaders"
+
+    @classmethod
+    def VALIDATE_INPUTS(cls, style_model_name, context: execution_context.ExecutionContext):
+        style_model_path = folder_paths.get_full_path_or_raise(context, "style_models", style_model_name)
+        return style_model_path is not None
 
     def load_style_model(self, style_model_name, context: execution_context.ExecutionContext):
         style_model_path = folder_paths.get_full_path_or_raise(context, "style_models", style_model_name)
@@ -1271,6 +1332,11 @@ class GLIGENLoader:
     FUNCTION = "load_gligen"
 
     CATEGORY = "model/loaders"
+
+    @classmethod
+    def VALIDATE_INPUTS(cls, gligen_name, context):
+        gligen_path = folder_paths.get_full_path_or_raise(context, "gligen", gligen_name)
+        return gligen_path is not None
 
     def load_gligen(self, gligen_name, context):
         gligen_path = folder_paths.get_full_path_or_raise(context, "gligen", gligen_name)
