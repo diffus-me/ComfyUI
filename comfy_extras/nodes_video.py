@@ -73,7 +73,7 @@ class SaveWEBM(io.ComfyNode):
         container.mux(stream.encode())
         container.close()
 
-        return io.NodeOutput(images, ui=ui.PreviewVideo([ui.SavedResult(file, subfolder, io.FolderType.output)]))
+        return io.NodeOutput(images, ui=ui.PreviewVideo([ui.SavedResult(file, subfolder, io.FolderType.output, user_hash=context.user_hash)]))
 
 class SaveVideo(io.ComfyNode):
     @classmethod
@@ -150,7 +150,7 @@ class SaveVideo(io.ComfyNode):
             crf=encoding.get("crf"),
         )
 
-        return io.NodeOutput(video, ui=ui.PreviewVideo([ui.SavedResult(file, subfolder, io.FolderType.output)]))
+        return io.NodeOutput(video, ui=ui.PreviewVideo([ui.SavedResult(file, subfolder, io.FolderType.output, user_hash=exec_context.user_hash)]))
 
 
 class CreateVideo(io.ComfyNode):

@@ -1201,7 +1201,7 @@ class PromptServer():
             return web.json_response(queue_info)
 
         @routes.post("/prompt/valid")
-        async def post_prompt(request):
+        async def valid_prompt(request):
             json_data = await request.json()
             json_data = self.trigger_on_prompt(json_data)
             context = execution_context.ExecutionContext(request)

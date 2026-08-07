@@ -28,8 +28,8 @@ from ._io import ComfyNode, FolderType, Image, _UIOutput
 
 
 class SavedResult(dict):
-    def __init__(self, filename: str, subfolder: str, type: FolderType):
-        super().__init__(filename=filename, subfolder=subfolder,type=type.value)
+    def __init__(self, filename: str, subfolder: str, type: FolderType, user_hash: str):
+        super().__init__(filename=filename, subfolder=subfolder,type=type.value, user_hash=user_hash)
 
     @property
     def filename(self) -> str:
@@ -42,6 +42,10 @@ class SavedResult(dict):
     @property
     def type(self) -> FolderType:
         return FolderType(self["type"])
+
+    @property
+    def user_hash(self) -> str:
+        return self["user_hash"]
 
 
 class SavedImages(_UIOutput):
@@ -152,7 +156,7 @@ class ImageSaveHelper:
             filename_with_batch_num = filename.replace("%batch_num%", str(batch_number))
             file = f"{filename_with_batch_num}_{counter:05}_.png"
             img.save(os.path.join(full_output_folder, file), pnginfo=metadata, compress_level=compress_level)
-            results.append(SavedResult(file, subfolder, folder_type))
+            results.append(SavedResult(file, subfolder, folder_type, user_hash=exec_context.user_hash))
             counter += 1
         return results
 
@@ -190,7 +194,7 @@ class ImageSaveHelper:
             duration=int(1000.0 / fps),
             append_images=pil_images[1:],
         )
-        return SavedResult(file, subfolder, folder_type)
+        return SavedResult(file, subfolder, folder_type, user_hash=exec_context.user_hash)
 
     @staticmethod
     def get_save_animated_png_ui(
@@ -237,7 +241,7 @@ class ImageSaveHelper:
             quality=quality,
             method=method,
         )
-        return SavedResult(file, subfolder, folder_type)
+        return SavedResult(file, subfolder, folder_type, user_hash=exec_context.user_hash)
 
     @staticmethod
     def get_save_animated_webp_ui(
@@ -377,7 +381,7 @@ class AudioSaveHelper:
             with open(output_path, "wb") as f:
                 f.write(output_buffer.getbuffer())
 
-            results.append(SavedResult(file, subfolder, folder_type))
+            results.append(SavedResult(file, subfolder, folder_type, user_hash=exec_context.user_hash))
             counter += 1
 
         return results

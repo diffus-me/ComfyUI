@@ -566,7 +566,7 @@ class SaveSVGNode(IO.ComfyNode):
             with open(os.path.join(full_output_folder, file), 'wb') as svg_file:
                 svg_file.write(svg_content.encode('utf-8'))
 
-            results.append(UI.SavedResult(filename=file, subfolder=subfolder, type=IO.FolderType.output))
+            results.append(UI.SavedResult(filename=file, subfolder=subfolder, type=IO.FolderType.output, user_hash=exec_context.user_hash))
             counter += 1
         return IO.NodeOutput(svg, ui={"images": results})
 
