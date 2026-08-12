@@ -175,7 +175,8 @@ def get_relative_output_directory(user_hash):
     return os.path.join(user_hash, "outputs", "comfyui")
 
 def get_datasets_dir(exec_context: execution_context.ExecutionContext):
-    return os.path.join(_check_user_hash(exec_context.user_hash), "comfyui", "datasets")
+    _check_user_hash(exec_context.user_hash)
+    return os.path.join(exec_context.user_hash, "comfyui", "datasets")
 
 
 def _get_comfyui_user_data_base(user_hash):
@@ -542,7 +543,6 @@ def get_full_path_or_raise(context: execution_context.ExecutionContext, folder_n
     """
     Get the full path of a file in a folder, has to be a file
     """
-    _check_execution_context(context)
     full_path = get_full_path(context, folder_name, filename)
     if full_path is None:
         raise FileNotFoundError(f"Model in folder '{folder_name}' with filename '{filename}' not found.")
@@ -598,9 +598,11 @@ def cached_filename_list_(folder_name: str) -> tuple[list[str], dict[str, float]
 def get_filename_list(context: execution_context.ExecutionContext, folder_name: str, **kwargs) -> list[str]:
     from_repo = None
     if folder_name in FAVORITE_MODEL_TYPES:
-        _check_execution_context(context)
-        import diffus.repository
-        from_repo = diffus.repository.list_favorite_model_by_model_type(context.user_id, folder_name, **kwargs)
+        if context and context.user_hash:
+            import diffus.repository
+            from_repo = diffus.repository.list_favorite_model_by_model_type(context.user_id, folder_name, **kwargs)
+        else:
+            from_repo = []
 
     folder_name = map_legacy(folder_name)
     out = cached_filename_list_(folder_name)
