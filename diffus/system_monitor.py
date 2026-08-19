@@ -100,8 +100,6 @@ def _before_task_started(
     deduct_flag = header_dict.get('x-deduct-credits', "")
     deduct_flag = not (deduct_flag == 'false')
     skip_charge = not deduct_flag
-    if not is_intermediate and skip_charge:
-        return job_id
 
     if only_available_for:
         user_tier = header_dict.get('user-tire', '') or header_dict.get('user-tier', '')
@@ -111,12 +109,14 @@ def _before_task_started(
                 user_tier,
                 only_available_for)
 
-    user_id = header_dict.get('user-id', None) or header_dict.get('user-id', None)
+    user_id = header_dict.get('user-id', None)
+    added_at = header_dict.get('x-added-at', None)
     request_data = {
         'api': api_name,
         'initiator': function_name,
         'user': user_id,
         'started_at': time.time(),
+        'added_at': int(added_at) if added_at else None,
         'session_hash': session_hash,
         'skip_charge': skip_charge,
         'refund_if_task_failed': refund_if_task_failed,
