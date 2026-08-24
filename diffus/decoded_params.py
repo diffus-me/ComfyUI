@@ -12,7 +12,9 @@ def _sample_consumption_ratio(
     ratio = calc_model_consumption_ratio(model)
     model_name = _get_model_name(context, model)
     count = batch_size * n_iter
-    if model_name and model_name.startswith("ltx-2.3-22b"):
+    if model_name and (
+            model_name.startswith("ltx-2.3-22b") or model_name.startswith("ltx-2.5-22b")
+    ):
         if count > 100:
             ratio *= 0.2
         elif count > 50:
@@ -22,6 +24,8 @@ def _sample_consumption_ratio(
             ratio *= 0.4
         elif count > 50:
             ratio *= 0.6
+    elif model_name.startswith("svdq-"):
+        ratio *= 2
     return ratio
 
 
@@ -2259,6 +2263,11 @@ _NODE_CONSUMPTION_MAPPING = {
     "LTXVImgToVideoInplace": _none_consumption_maker,
     "LTXVLatentUpsampler": _none_consumption_maker,
     "LTXVConditioning": _none_consumption_maker,
+    "LTXVDualCFGGuider": _none_consumption_maker,
+    "EmptyLTXVLatentVideo": _none_consumption_maker,
+    "LTXVEmptyLatentAudio": _none_consumption_maker,
+    "ComfySwitchNode": _none_consumption_maker,
+    "PrimitiveBoolean": _none_consumption_maker,
     "LatentUpscaleModelLoader": _none_consumption_maker,
     "LTXAVTextEncoderLoader": _none_consumption_maker,
     "LTXVPreprocess": _none_consumption_maker,
