@@ -1833,8 +1833,8 @@ class SaveImage:
             output_dir = folder_paths.get_output_directory(user_hash)
         full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, output_dir, images[0].shape[1], images[0].shape[0])
         results = list()
-        ts = time.time()
         for (batch_number, image) in enumerate(images):
+            ts = time.time()
             i = 255. * image.cpu().numpy()
             img = Image.fromarray(np.clip(i, 0, 255).astype(np.uint8))
             metadata = None
@@ -1847,6 +1847,12 @@ class SaveImage:
                         metadata.add_text(x, json.dumps(extra_pnginfo[x]))
 
             filename_with_batch_num = filename.replace("%batch_num%", str(batch_number))
+            if context:
+                task_id = context.task_id
+            else:
+                task_id = uuid.uuid4().hex
+            filename_with_batch_num = f"{filename_with_batch_num}_{task_id}"
+
             file = f"{filename_with_batch_num}_{counter:05}_{ts}.png"
             img.save(os.path.join(full_output_folder, file), pnginfo=metadata, compress_level=self.compress_level)
             if not user_hash and context:
