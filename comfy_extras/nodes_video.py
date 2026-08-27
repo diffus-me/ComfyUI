@@ -185,6 +185,11 @@ class CreateVideo(io.ComfyNode):
         )
 
     @classmethod
+    def fingerprint_inputs(cls, **kwargs):
+        """Optionally, define this function to fingerprint inputs; equivalent to V1's IS_CHANGED."""
+        return float("NaN")
+
+    @classmethod
     def execute(
         cls, images: Input.Image, fps: float, audio: Optional[Input.Audio] = None, bit_depth: int = 8,
     ) -> io.NodeOutput:
