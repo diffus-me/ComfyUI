@@ -1823,6 +1823,10 @@ class SaveImage:
     DESCRIPTION = "Saves the input images to your ComfyUI output directory."
     SEARCH_ALIASES = ["save", "save image", "export image", "output image", "write image", "download"]
 
+    @classmethod
+    def IS_CHANGED(cls, **kwargs):
+        return float("NaN")
+
     def save_images(self, images, filename_prefix="ComfyUI", prompt=None, extra_pnginfo=None, context: execution_context.ExecutionContext = None, user_hash: str = ''):
         filename_prefix += self.prefix_append
         if not user_hash:
