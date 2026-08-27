@@ -1794,7 +1794,7 @@ class KSamplerAdvanced:
 class SaveImage:
     def __init__(self):
         self.type = "output"
-        self.prefix_append = ""
+        self.prefix_append = "_%batch_num%"
         self.compress_level = 4
 
     @classmethod
