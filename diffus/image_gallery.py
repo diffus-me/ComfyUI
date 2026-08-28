@@ -227,6 +227,14 @@ class _DummyRequest:
     def __init__(self):
         self.headers: dict = {}
 
+    @property
+    def path(self):
+        return ""
+
+    @property
+    def method(self):
+        return "GET"
+
 
 def _find_execution_context_from_input_data(input_data) -> execution_context.ExecutionContext | None:
     import execution_context

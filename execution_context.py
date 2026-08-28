@@ -38,6 +38,9 @@ class ExecutionContext:
 
         self._geninfo = Geninfo(self._task_id)
 
+        self._request_path = request.path
+        self._request_method = request.method
+
     def validate_model(self, model_type, model_name, model_info=None):
         if model_type not in FAVORITE_MODEL_TYPES:
             return
@@ -46,7 +49,12 @@ class ExecutionContext:
         if model_name not in self._used_models[model_type]:
             if not model_info:
                 import diffus.repository
-                model_info = diffus.repository.get_favorite_model_full_path(self.user_id, model_type, model_name)
+                model_info = diffus.repository.get_favorite_model_full_path(
+                    self.user_id,
+                    model_type,
+                    model_name,
+                    favorite_if_not=self.is_prompt
+                )
             self._used_models[model_type][model_name] = model_info
 
     def get_model(self, model_type, model_name):
@@ -54,7 +62,7 @@ class ExecutionContext:
 
     @property
     def disable_pnginfo(self):
-        disable =  self._headers.get("X-Diffus-Disable-Pnginfo", "false")
+        disable = self._headers.get("X-Diffus-Disable-Pnginfo", "false")
         return disable.lower() in ("true", "1")
 
     @property
@@ -123,6 +131,10 @@ class ExecutionContext:
     @property
     def extra_data(self):
         return self._extra_data or {}
+
+    @property
+    def is_prompt(self):
+        return "/prompt" in self._request_path and "POST" == self._request_method
 
     @staticmethod
     def _get_origin_text_from_tokens(tokens):

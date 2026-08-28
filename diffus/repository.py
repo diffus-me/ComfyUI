@@ -92,7 +92,19 @@ def list_favorite_model_by_model_type(user_id: str, folder_name: str, **kwargs):
         return [create_model_info(ckpt).name for ckpt in session.scalars(query)]
 
 
-def get_favorite_model_full_path(user_id: str, folder_name: str, filename: str) -> ModelInfo | None:
+def _get_model_full_path(session, folder_name: str, filename: str) -> ModelInfo | None:
+    if folder_name not in constant.FAVORITE_MODEL_TYPES:
+        return None
+    model_type = constant.FAVORITE_MODEL_TYPES[folder_name]
+    query = session.query(models.Model)
+    query = _filter_model_by_model_type(query, model_type, None)
+    query = _filter_model_by_name(query, filename)
+    record = session.scalar(query)
+    if record:
+        return create_model_info(record)
+
+
+def get_favorite_model_full_path(user_id: str, folder_name: str, filename: str, favorite_if_not: bool) -> ModelInfo | None:
     if folder_name not in constant.FAVORITE_MODEL_TYPES:
         return None
     model_type = constant.FAVORITE_MODEL_TYPES[folder_name]
@@ -105,19 +117,15 @@ def get_favorite_model_full_path(user_id: str, folder_name: str, filename: str) 
         if record:
             return create_model_info(record)
 
-        query = session.query(models.Model)
-        query = _filter_model_by_model_type(query, model_type, None)
-        query = _filter_model_by_name(query, filename)
-        record = session.scalar(query)
-        if not record:
-            return None
+        model_info = _get_model_full_path(session, folder_name, filename)
         # Favorite this model for user
-        session.add(models.FavoriteModel(
-            favorited_by=user_id,
-            favorited_at=datetime.datetime.now(datetime.UTC),
-            model_id=record.id,
-        ))
-        return create_model_info(record)
+        if model_info and favorite_if_not:
+            session.add(models.FavoriteModel(
+                favorited_by=user_id,
+                favorited_at=datetime.datetime.now(datetime.UTC),
+                model_id=model_info.id,
+            ))
+        return model_info
 
 
 def _make_favorite_model_query(session: Session) -> Query:

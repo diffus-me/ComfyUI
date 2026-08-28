@@ -1396,6 +1396,21 @@ class PromptServer():
                 logging.exception(f"error to delete history for user {context.user_id}: {e}")
             return web.Response(status=200)
 
+        @routes.post("/v1/candidate-models")
+        async def _get_candidate_models(request):
+            exec_context = execution_context.ExecutionContext(request)
+            json_data = await request.json()
+            response = []
+            for model_type, model_filenames in json_data.items():
+                for filename in model_filenames:
+                    fullpath = folder_paths.get_full_path(exec_context, model_type, filename)
+                    if fullpath:
+                        response.append({
+                            "model_type": model_type,
+                            "filename": filename,
+                        })
+            return web.json_response(response)
+
     async def setup(self):
         timeout = aiohttp.ClientTimeout(total=None) # no timeout
         self.client_session = aiohttp.ClientSession(timeout=timeout)

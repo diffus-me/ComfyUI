@@ -516,7 +516,12 @@ def get_full_path(context: execution_context.ExecutionContext, folder_name: str,
         model_info = context.get_model(folder_name, filename)
         if not model_info:
             import diffus.repository
-            model_info = diffus.repository.get_favorite_model_full_path(context.user_id, folder_name, filename)
+            model_info = diffus.repository.get_favorite_model_full_path(
+                context.user_id,
+                folder_name,
+                filename,
+                favorite_if_not = context.is_prompt
+            )
             context.validate_model(folder_name, filename, model_info)
         if model_info:
             return model_info
