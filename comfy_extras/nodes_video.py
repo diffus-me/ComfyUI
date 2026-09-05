@@ -222,9 +222,11 @@ class GetVideoComponents(io.ComfyNode):
 
     @classmethod
     def execute(cls, video: Input.Video) -> io.NodeOutput:
-        components = video.get_components()
-        return io.NodeOutput(components.images, components.audio, float(components.frame_rate), video.get_bit_depth())
-
+        if video:
+            components = video.get_components()
+            return io.NodeOutput(components.images, components.audio, float(components.frame_rate), video.get_bit_depth())
+        else:
+            return io.NodeOutput(None, None, 0, 0)
 
 class LoadVideo(io.ComfyNode):
     @classmethod
