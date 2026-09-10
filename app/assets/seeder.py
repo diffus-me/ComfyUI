@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Callable
 
+import execution_context
 from app.assets.scanner import (
     ENRICHMENT_METADATA,
     ENRICHMENT_STUB,
@@ -113,6 +114,7 @@ class _AssetSeeder:
         progress_callback: ProgressCallback | None = None,
         prune_first: bool = False,
         compute_hashes: bool = False,
+        exec_context: execution_context.ExecutionContext = None,
     ) -> bool:
         """Start a background scan for the given roots.
 
@@ -122,7 +124,7 @@ class _AssetSeeder:
             progress_callback: Optional callback called with progress updates
             prune_first: If True, prune orphaned assets before scanning
             compute_hashes: If True, compute blake3 hashes (slow)
-
+            exec_context: exec_context
         Returns:
             True if scan was started, False if already running
         """
@@ -148,6 +150,7 @@ class _AssetSeeder:
                 target=self._run_scan,
                 name="_AssetSeeder",
                 daemon=True,
+                args=(exec_context,)
             )
             self._thread.start()
             return True
@@ -157,6 +160,7 @@ class _AssetSeeder:
         roots: tuple[RootType, ...] = ("models", "input", "output"),
         progress_callback: ProgressCallback | None = None,
         prune_first: bool = False,
+        exec_context: execution_context.ExecutionContext | None = None,
     ) -> bool:
         """Start a fast scan (phase 1 only) - creates stub records.
 
@@ -164,6 +168,7 @@ class _AssetSeeder:
             roots: Tuple of root types to scan
             progress_callback: Optional callback for progress updates
             prune_first: If True, prune orphaned assets before scanning
+            exec_context: exec_context
 
         Returns:
             True if scan was started, False if already running
@@ -174,6 +179,7 @@ class _AssetSeeder:
             progress_callback=progress_callback,
             prune_first=prune_first,
             compute_hashes=False,
+            exec_context=exec_context,
         )
 
     def start_enrich(
@@ -181,6 +187,7 @@ class _AssetSeeder:
         roots: tuple[RootType, ...] = ("models", "input", "output"),
         progress_callback: ProgressCallback | None = None,
         compute_hashes: bool = False,
+        exec_context: execution_context.ExecutionContext | None = None,
     ) -> bool:
         """Start an enrichment scan (phase 2 only) - extracts metadata and hashes.
 
@@ -188,6 +195,7 @@ class _AssetSeeder:
             roots: Tuple of root types to scan
             progress_callback: Optional callback for progress updates
             compute_hashes: If True, compute blake3 hashes
+            exec_context: exec_context
 
         Returns:
             True if scan was started, False if already running
@@ -198,6 +206,7 @@ class _AssetSeeder:
             progress_callback=progress_callback,
             prune_first=False,
             compute_hashes=compute_hashes,
+            exec_context=exec_context,
         )
 
     def enqueue_enrich(
@@ -300,6 +309,7 @@ class _AssetSeeder:
         prune_first: bool | None = None,
         compute_hashes: bool | None = None,
         timeout: float = 5.0,
+        exec_context: execution_context.ExecutionContext | None = None,
     ) -> bool:
         """Cancel any running scan and start a new one.
 
@@ -310,7 +320,7 @@ class _AssetSeeder:
             prune_first: Prune before scan (defaults to previous)
             compute_hashes: Compute hashes (defaults to previous)
             timeout: Max seconds to wait for current scan to stop
-
+            exec_context: exec_context
         Returns:
             True if new scan was started, False if failed to stop previous
         """
@@ -335,6 +345,7 @@ class _AssetSeeder:
             compute_hashes=(
                 compute_hashes if compute_hashes is not None else prev_hashes
             ),
+            exec_context=exec_context,
         )
 
     def wait(self, timeout: float | None = None) -> bool:
@@ -381,7 +392,7 @@ class _AssetSeeder:
         with self._lock:
             self._thread = None
 
-    def mark_missing_outside_prefixes(self) -> int:
+    def mark_missing_outside_prefixes(self, exec_context: execution_context.ExecutionContext) -> int:
         """Mark references as missing when outside all known root prefixes.
 
         This is a non-destructive soft-delete operation. Assets and their
@@ -414,7 +425,7 @@ class _AssetSeeder:
                 )
                 return 0
 
-            all_prefixes = get_owned_prefixes()
+            all_prefixes = get_owned_prefixes(exec_context=exec_context)
             marked = mark_missing_outside_prefixes_safely(all_prefixes)
             if marked > 0:
                 logging.info("Marked %d references as missing", marked)
@@ -528,7 +539,7 @@ class _AssetSeeder:
                 if prefixes:
                     logging.info("Asset scan [%s] directories: %s", root, prefixes)
 
-    def _run_scan(self) -> None:
+    def _run_scan(self, exec_context: execution_context.ExecutionContext) -> None:
         """Main scan loop running in background thread."""
         t_start = time.perf_counter()
         roots = self._roots
@@ -549,7 +560,7 @@ class _AssetSeeder:
                 return
 
             if self._prune_first:
-                all_prefixes = get_owned_prefixes()
+                all_prefixes = get_owned_prefixes(exec_context=exec_context)
                 marked = mark_missing_outside_prefixes_safely(all_prefixes)
                 if marked > 0:
                     logging.info("Marked %d refs as missing before scan", marked)

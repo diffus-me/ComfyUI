@@ -7,6 +7,7 @@ import comfy.model_management
 import comfy.model_patcher
 import comfy.samplers
 import comfy.utils
+import execution_context
 import folder_paths
 import node_helpers
 import nodes
@@ -54,7 +55,7 @@ class OpticalFlowLoader(io.ComfyNode):
     """
 
     @classmethod
-    def define_schema(cls):
+    def define_schema(cls, exec_context: execution_context.ExecutionContext):
         return io.Schema(
             node_id="OpticalFlowLoader",
             display_name="Load Optical Flow Model",
@@ -62,7 +63,7 @@ class OpticalFlowLoader(io.ComfyNode):
             inputs=[
                 io.Combo.Input(
                     "model_name",
-                    options=folder_paths.get_filename_list("optical_flow"),
+                    options=folder_paths.get_filename_list(exec_context, "optical_flow"),
                     tooltip=(
                         "Optical flow model to load.  Files must be placed in the "
                         "'optical_flow' folder.  Today only torchvision's "
@@ -73,12 +74,15 @@ class OpticalFlowLoader(io.ComfyNode):
             outputs=[
                 OpticalFlow.Output(),
             ],
+            hidden=[
+                io.Hidden.exec_context,
+            ],
         )
 
     @classmethod
-    def execute(cls, model_name) -> io.NodeOutput:
+    def execute(cls, model_name, exec_context: execution_context.ExecutionContext) -> io.NodeOutput:
 
-        model_path = folder_paths.get_full_path_or_raise("optical_flow", model_name)
+        model_path = folder_paths.get_full_path_or_raise(exec_context, "optical_flow", model_name)
         sd = comfy.utils.load_torch_file(model_path, safe_load=True)
 
         has_raft_keys = (

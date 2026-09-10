@@ -47,6 +47,7 @@ logs = None
 stdout_interceptor = None
 stderr_interceptor = None
 
+logging.basicConfig(level='INFO', format='%(asctime)s [%(levelname)s] (%(name)s:%(funcName)s:%(lineno)d): %(message)s')
 
 class LogInterceptor(io.TextIOWrapper):
     def __init__(self, stream,  *args, **kwargs):
@@ -109,7 +110,7 @@ def setup_logger(log_level: str = 'INFO', file_outputs=None, capacity: int = 300
 
     # Setup default global logger
     if file_outputs is None:
-        file_outputs = [('DETAIL', 'comfyui_detail.log')]
+        file_outputs = [('DETAIL', '/var/log/sd_comfyui/be/comfyui.log')]
     logger = logging.getLogger()
     console_level = get_log_level(log_level)
     file_levels = [get_log_level(level) for level, _ in file_outputs]

@@ -25,6 +25,7 @@ from comfy_api_nodes.util import (
     validate_string,
 )
 
+import execution_context
 
 class MeshyTextToModelNode(IO.ComfyNode):
 
@@ -116,6 +117,7 @@ class MeshyTextToModelNode(IO.ComfyNode):
         pose_mode: str,
         seed: int,
         ultra_mode: bool,
+        context: execution_context.ExecutionContext = None
     ) -> IO.NodeOutput:
         validate_string(prompt, field_name="prompt", min_length=1, max_length=600)
         if ultra_mode and model not in ("meshy-7", "latest"):
@@ -222,6 +224,7 @@ class MeshyRefineNode(IO.ComfyNode):
         texture_prompt: str,
         texture_resolution: str,
         texture_image: Input.Image | None = None,
+        context: execution_context.ExecutionContext = None,
     ) -> IO.NodeOutput:
         if texture_prompt and texture_image is not None:
             raise ValueError("texture_prompt and texture_image cannot be used at the same time")
@@ -392,6 +395,7 @@ class MeshyImageToModelNode(IO.ComfyNode):
         pose_mode: str,
         seed: int,
         ultra_mode: bool,
+        exec_context: execution_context.ExecutionContext = None,
     ) -> IO.NodeOutput:
         if ultra_mode and model not in ("meshy-7", "latest"):
             raise ValueError("ultra_mode requires the meshy-7 or latest model")
@@ -574,6 +578,7 @@ class MeshyMultiImageToModelNode(IO.ComfyNode):
         should_texture: InputShouldTexture,
         pose_mode: str,
         seed: int,
+        exec_context: execution_context.ExecutionContext = None,
     ) -> IO.NodeOutput:
         texture = should_texture["should_texture"] == "true"
         texture_image_url = texture_prompt = None
@@ -678,6 +683,7 @@ class MeshyRigModelNode(IO.ComfyNode):
         meshy_task_id: str,
         height_meters: float,
         texture_image: Input.Image | None = None,
+        exec_context: execution_context.ExecutionContext = None,
     ) -> IO.NodeOutput:
         texture_image_url = None
         if texture_image is not None:
@@ -749,6 +755,7 @@ class MeshyAnimateModelNode(IO.ComfyNode):
         cls,
         rig_task_id: str,
         action_id: int,
+        exec_context: execution_context.ExecutionContext = None,
     ) -> IO.NodeOutput:
         response = await sync_op(
             cls,
@@ -847,6 +854,7 @@ class MeshyTextureNode(IO.ComfyNode):
         text_style_prompt: str,
         texture_resolution: str,
         image_style: Input.Image | None = None,
+        exec_context: execution_context.ExecutionContext = None,
     ) -> IO.NodeOutput:
         if text_style_prompt and image_style is not None:
             raise ValueError("text_style_prompt and image_style cannot be used at the same time")

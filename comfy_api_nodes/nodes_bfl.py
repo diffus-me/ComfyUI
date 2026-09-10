@@ -1,7 +1,6 @@
 import math
 
 import torch
-from pydantic import BaseModel
 from typing_extensions import override
 
 from comfy_api.latest import IO, ComfyExtension, Input

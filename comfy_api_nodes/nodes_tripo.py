@@ -51,6 +51,7 @@ from comfy_api_nodes.util import (
     upload_3d_model_to_comfyapi,
     upload_images_to_comfyapi,
 )
+import execution_context
 
 MULTIVIEW_KEYS = ("front_view_url", "left_view_url", "back_view_url", "right_view_url")
 SEED_MAX = 2**31 - 1
@@ -265,6 +266,7 @@ class TripoTextToModelNode(IO.ComfyNode):
                 IO.Hidden.auth_token_comfy_org,
                 IO.Hidden.api_key_comfy_org,
                 IO.Hidden.unique_id,
+                IO.Hidden.exec_context,
             ],
             is_api_node=True,
             is_output_node=True,
@@ -314,6 +316,7 @@ class TripoTextToModelNode(IO.ComfyNode):
         quad: bool | None = None,
         smart_low_poly: bool | None = None,
         auto_size: bool = True,
+        exec_context: execution_context.ExecutionContext = None,
     ) -> IO.NodeOutput:
         if not prompt.strip():
             raise RuntimeError("Prompt is required")
@@ -448,6 +451,7 @@ class TripoImageToModelNode(IO.ComfyNode):
                 IO.Hidden.auth_token_comfy_org,
                 IO.Hidden.api_key_comfy_org,
                 IO.Hidden.unique_id,
+                IO.Hidden.exec_context,
             ],
             is_api_node=True,
             is_output_node=True,
@@ -497,6 +501,7 @@ class TripoImageToModelNode(IO.ComfyNode):
         quad: bool | None = None,
         smart_low_poly: bool | None = None,
         auto_size: bool = True,
+        exec_context: execution_context.ExecutionContext = None,
     ) -> IO.NodeOutput:
         if image is None:
             raise RuntimeError("Image is required")
@@ -633,6 +638,7 @@ class TripoMultiviewToModelNode(IO.ComfyNode):
                 IO.Hidden.auth_token_comfy_org,
                 IO.Hidden.api_key_comfy_org,
                 IO.Hidden.unique_id,
+                IO.Hidden.exec_context,
             ],
             is_api_node=True,
             is_output_node=True,
@@ -684,6 +690,7 @@ class TripoMultiviewToModelNode(IO.ComfyNode):
         quad: bool | None = None,
         smart_low_poly: bool | None = None,
         auto_size: bool = False,
+        exec_context: execution_context.ExecutionContext = None,
     ) -> IO.NodeOutput:
         if image is None:
             raise RuntimeError("front image for multiview is required")
@@ -934,6 +941,7 @@ class TripoTextureNode(IO.ComfyNode):
                 IO.Hidden.auth_token_comfy_org,
                 IO.Hidden.api_key_comfy_org,
                 IO.Hidden.unique_id,
+                IO.Hidden.exec_context,
             ],
             is_api_node=True,
             is_output_node=True,
@@ -962,6 +970,7 @@ class TripoTextureNode(IO.ComfyNode):
         style_image: Input.Image | None = None,
         reference: dict | None = None,
         part_names: str = "",
+        exec_context: execution_context.ExecutionContext = None,
     ) -> IO.NodeOutput:
         text = texture_prompt.strip()
         mode = reference["reference"] if reference else "none"
@@ -1254,7 +1263,7 @@ class TripoSegmentNode(IO.ComfyNode):
         )
 
     @classmethod
-    async def execute(cls, model_task_id) -> IO.NodeOutput:
+    async def execute(cls, model_task_id, exec_context: execution_context.ExecutionContext = None,) -> IO.NodeOutput:
         response = await sync_op(
             cls,
             endpoint=ApiEndpoint(path="/proxy/tripo/v2/openapi/task", method="POST"),
@@ -1301,7 +1310,7 @@ class TripoMeshCompleteNode(IO.ComfyNode):
         )
 
     @classmethod
-    async def execute(cls, segment_task_id, part_names: str = "") -> IO.NodeOutput:
+    async def execute(cls, segment_task_id, part_names: str = "", exec_context: execution_context.ExecutionContext = None,) -> IO.NodeOutput:
         response = await sync_op(
             cls,
             endpoint=ApiEndpoint(path="/proxy/tripo/v2/openapi/task", method="POST"),
@@ -1379,6 +1388,7 @@ class TripoRetopologyNode(IO.ComfyNode):
         quad: bool = False,
         bake: bool = True,
         part_names: str = "",
+            exec_context: execution_context.ExecutionContext = None,
     ) -> IO.NodeOutput:
         if face_limit != -1 and not 500 <= face_limit <= (10000 if quad else 20000):
             raise ValueError("face_limit must be between 500 and 20,000 for triangles or 500 and 10,000 for quads.")
@@ -1554,6 +1564,7 @@ class TripoConversionNode(IO.ComfyNode):
         export_vertex_colors: bool,
         export_orientation: str,
         animate_in_place: bool,
+        exec_context: execution_context.ExecutionContext = None,
     ) -> IO.NodeOutput:
         if not original_model_task_id:
             raise RuntimeError("original_model_task_id is required")

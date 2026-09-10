@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 from typing import Callable, Literal, TypedDict
 
+import execution_context
 import folder_paths
 from app.assets.database.queries import (
     add_missing_tag_for_asset_id,
@@ -61,28 +62,28 @@ class _AssetAccumulator(TypedDict):
 RootType = Literal["models", "input", "output"]
 
 
-def get_scan_prefixes_for_root(root: RootType) -> list[str]:
+def get_scan_prefixes_for_root(root: RootType, exec_context: execution_context.ExecutionContext) -> list[str]:
     if root == "models":
         bases: list[str] = []
         for _bucket, paths, _exts in get_comfy_models_folders():
             bases.extend(paths)
         return [os.path.abspath(p) for p in bases]
     if root == "input":
-        return [os.path.abspath(folder_paths.get_input_directory())]
+        return [os.path.abspath(folder_paths.get_input_directory(user_hash=exec_context.user_hash))]
     if root == "output":
-        return [os.path.abspath(folder_paths.get_output_directory())]
+        return [os.path.abspath(folder_paths.get_output_directory(user_hash=exec_context.user_hash))]
     return []
 
 
-def get_owned_prefixes() -> list[str]:
+def get_owned_prefixes(exec_context: execution_context.ExecutionContext) -> list[str]:
     """Every directory an asset may live in; references outside these are marked missing."""
     scan_roots: tuple[RootType, ...] = ("models", "input", "output")
-    prefixes = [p for root in scan_roots for p in get_scan_prefixes_for_root(root)]
+    prefixes = [p for root in scan_roots for p in get_scan_prefixes_for_root(root, exec_context=exec_context)]
     return prefixes + get_temp_prefixes()
 
 
-def get_temp_prefixes() -> list[str]:
-    return [os.path.abspath(folder_paths.get_temp_directory())]
+def get_temp_prefixes(exec_context: execution_context.ExecutionContext) -> list[str]:
+    return [os.path.abspath(folder_paths.get_temp_directory(user_hash=exec_context.user_hash))]
 
 
 def collect_models_files() -> list[str]:

@@ -13,6 +13,7 @@ import comfy.model_management
 import comfy.model_patcher
 import comfy.ops
 import comfy.utils
+import execution_context
 from comfy_api.latest import io, ComfyExtension, Types
 from typing_extensions import override
 import folder_paths
@@ -46,7 +47,7 @@ SAM3DBodyModel = io.Custom("SAM3D_BODY_MODEL")
 
 class SAM3DBody_Loader(io.ComfyNode):
     @classmethod
-    def define_schema(cls):
+    def define_schema(cls, exec_context: execution_context.ExecutionContext):
         return io.Schema(
             node_id="SAM3DBody_Loader",
             display_name="Load SAM3D Body Model",
@@ -54,7 +55,7 @@ class SAM3DBody_Loader(io.ComfyNode):
             inputs=[
                 io.Combo.Input(
                     "model_file",
-                    options=folder_paths.get_filename_list("detection"),
+                    options=folder_paths.get_filename_list(exec_context, "detection"),
 
                 ),
             ],

@@ -159,7 +159,18 @@ def load_torch_file(ckpt, safe_load=False, device=None, return_metadata=False):
     if device is None:
         device = torch.device("cpu")
     metadata = None
-    if ckpt.lower().endswith(".safetensors") or ckpt.lower().endswith(".sft"):
+    if hasattr(ckpt, 'is_safetensors') and hasattr(ckpt, 'filename'):
+        stem = getattr(ckpt, 'stem', ckpt.filename)
+        extension = getattr(ckpt, 'extension', "unknown")
+
+        filename = f"{stem}.{extension}"
+        is_safetensors = ckpt.is_safetensors
+        ckpt = ckpt.filename
+    else:
+        is_safetensors = ckpt.lower().endswith(".safetensors")
+        filename = ckpt
+
+    if is_safetensors:
         try:
             if comfy.memory_management.aimdo_enabled:
                 sd, metadata = load_safetensors(ckpt)

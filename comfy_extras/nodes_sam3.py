@@ -10,6 +10,7 @@ import torch
 import torch.nn.functional as F
 import comfy.model_management
 import comfy.utils
+import execution_context
 import folder_paths
 from comfy_api.latest import ComfyExtension, io, ui
 import av
@@ -327,6 +328,9 @@ class SAM3_TrackPreview(io.ComfyNode):
                 io.Float.Input("opacity", display_name="opacity", default=0.5, min=0.0, max=1.0, step=0.05),
                 io.Float.Input("fps", display_name="fps", default=24.0, min=1.0, max=120.0, step=1.0),
             ],
+            hidden=[
+                io.Hidden.exec_context,
+            ],
             is_output_node=True,
         )
 
@@ -396,7 +400,7 @@ class SAM3_TrackPreview(io.ComfyNode):
                 frame[fy1:fy1+(sy2-sy1), fx1:fx1+(sx2-sx1)][glyphs[d][sy1:sy2, sx1:sx2]] = color_t
 
     @classmethod
-    def execute(cls, track_data, images=None, opacity=0.5, fps=24.0) -> io.NodeOutput:
+    def execute(cls, track_data, images=None, opacity=0.5, fps=24.0, exec_context: execution_context.ExecutionContext=None) -> io.NodeOutput:
 
         from comfy.ldm.sam3.tracker import unpack_masks
         packed = track_data["packed_masks"]
@@ -467,7 +471,7 @@ class SAM3_TrackPreview(io.ComfyNode):
                 vframe = av.VideoFrame.from_ndarray(frame_np, format='rgb24')
                 output.mux(stream.encode(vframe.reformat(format='yuv420p')))
             output.mux(stream.encode(None))
-        return io.NodeOutput(ui=ui.PreviewVideo([ui.SavedResult(filename, "", io.FolderType.temp)]))
+        return io.NodeOutput(ui=ui.PreviewVideo([ui.SavedResult(filename, "", io.FolderType.temp, user_hash=exec_context.user_hash)]))
 
 
 class SAM3_TrackToMask(io.ComfyNode):
