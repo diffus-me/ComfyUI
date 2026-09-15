@@ -86,14 +86,14 @@ def get_temp_prefixes(exec_context: execution_context.ExecutionContext) -> list[
     return [os.path.abspath(folder_paths.get_temp_directory(user_hash=exec_context.user_hash))]
 
 
-def collect_models_files() -> list[str]:
+def collect_models_files(exec_context: execution_context.ExecutionContext) -> list[str]:
     out: list[str] = []
     for folder_name, bases, _exts in get_comfy_models_folders():
-        rel_files = folder_paths.get_filename_list(folder_name) or []
+        rel_files = folder_paths.get_filename_list(exec_context, folder_name) or []
         for rel_path in rel_files:
             if not all(is_visible(part) for part in Path(rel_path).parts):
                 continue
-            abs_path = folder_paths.get_full_path(folder_name, rel_path)
+            abs_path = folder_paths.get_full_path(exec_context, folder_name, rel_path)
             if not abs_path:
                 continue
             abs_path = os.path.abspath(abs_path)
@@ -296,15 +296,15 @@ def mark_missing_outside_prefixes_safely(prefixes: list[str]) -> int:
         return 0
 
 
-def collect_paths_for_roots(roots: tuple[RootType, ...]) -> list[str]:
+def collect_paths_for_roots(exec_context: execution_context.ExecutionContext, roots: tuple[RootType, ...]) -> list[str]:
     """Collect all file paths for the given roots."""
     paths: list[str] = []
     if "models" in roots:
-        paths.extend(collect_models_files())
+        paths.extend(collect_models_files(exec_context=exec_context))
     if "input" in roots:
-        paths.extend(list_files_recursively(folder_paths.get_input_directory()))
+        paths.extend(list_files_recursively(folder_paths.get_input_directory(user_hash=exec_context.user_hash)))
     if "output" in roots:
-        paths.extend(list_files_recursively(folder_paths.get_output_directory()))
+        paths.extend(list_files_recursively(folder_paths.get_output_directory(user_hash=exec_context.user_hash)))
     return paths
 
 

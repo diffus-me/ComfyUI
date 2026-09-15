@@ -9,6 +9,7 @@ from enum import Enum
 from typing import Callable
 
 import execution_context
+from app.database.db import dependencies_available
 from app.assets.scanner import (
     ENRICHMENT_METADATA,
     ENRICHMENT_STUB,
@@ -24,7 +25,6 @@ from app.assets.scanner import (
     sync_root_safely,
     sync_temp_references_safely,
 )
-from app.database.db import dependencies_available
 
 
 class ScanInProgressError(Exception):
@@ -575,7 +575,7 @@ class _AssetSeeder:
 
             # Phase 1: Fast scan (stub records)
             if phase in (ScanPhase.FAST, ScanPhase.FULL):
-                created, skipped, paths = self._run_fast_phase(roots)
+                created, skipped, paths = self._run_fast_phase(exec_context, roots)
                 total_created, skipped_existing, total_paths = created, skipped, paths
 
                 if self._check_pause_and_cancel():
@@ -663,7 +663,7 @@ class _AssetSeeder:
                             pending["roots"],
                         )
 
-    def _run_fast_phase(self, roots: tuple[RootType, ...]) -> tuple[int, int, int]:
+    def _run_fast_phase(self, exec_context: execution_context.ExecutionContext, roots: tuple[RootType, ...]) -> tuple[int, int, int]:
         """Run phase 1: fast scan to create stub records.
 
         Returns:
@@ -689,7 +689,7 @@ class _AssetSeeder:
             return total_created, skipped_existing, 0
 
         t_collect = time.perf_counter()
-        paths = collect_paths_for_roots(roots)
+        paths = collect_paths_for_roots(exec_context, roots)
         logging.debug(
             "Fast scan: collect_paths took %.3fs (%d paths found)",
             time.perf_counter() - t_collect,
