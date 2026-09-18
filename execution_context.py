@@ -129,6 +129,13 @@ class ExecutionContext:
             return ''
 
     @property
+    def gallery_api_secret(self):
+        if self._headers:
+            return self._headers.get('x-diffus-gallery-secret', None) or self._headers.get('X-Diffus-Gallery-Secret', '')
+        else:
+            return ''
+
+    @property
     def extra_data(self):
         return self._extra_data or {}
 
