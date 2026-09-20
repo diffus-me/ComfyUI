@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field, RootModel, ValidationError, field_validat
 import version
 import diffus.redis_client
 import diffus.constant
-from diffus.repository import get_binary_path
+from diffus.repository import get_binary_path, MODEL_BINARY_CONTAINER
 from folder_paths import folder_names_and_paths
 
 _logger = logging.getLogger(__name__)
@@ -111,7 +111,7 @@ def _all_models_exist(model_requests: dict[str, list[str] | None]) -> bool:
             if "*" not in supported_models and not set(model_names).issubset(supported_models):
                 return False
 
-        if model_type == "sha256":
+        if model_type == "sha256" and MODEL_BINARY_CONTAINER:
             if not all(get_binary_path(sha256).exists() for sha256 in model_names):
                 return False
             continue

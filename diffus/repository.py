@@ -12,8 +12,8 @@ from diffus.database import gallery, comfy
 
 logger = logging.getLogger(__name__)
 
-MODEL_BINARY_CONTAINER = os.getenv('MODEL_BINARY_CONTAINER')
-MODEL_CONFIG_CONTAINER = os.getenv('MODEL_CONFIG_CONTAINER')
+MODEL_BINARY_CONTAINER = os.getenv('MODEL_BINARY_CONTAINER', '')
+MODEL_CONFIG_CONTAINER = os.getenv('MODEL_CONFIG_CONTAINER', '')
 
 
 def get_binary_path(sha256: str):
