@@ -8,25 +8,30 @@ from comfy_api.latest import IO, UI, ComfyExtension, InputImpl, Types
 
 from pathlib import Path
 
+import execution_context
+
 
 def normalize_path(path):
     return path.replace('\\', '/')
 
 class Load3D(IO.ComfyNode):
     @classmethod
-    def define_schema(cls):
-        input_dir = os.path.join(folder_paths.get_input_directory(), "3d")
+    def define_schema(cls, exec_context: execution_context.ExecutionContext):
+        if exec_context:
+            input_dir = os.path.join(folder_paths.get_input_directory(user_hash=exec_context.user_hash), "3d")
 
-        os.makedirs(input_dir, exist_ok=True)
+            os.makedirs(input_dir, exist_ok=True)
 
-        input_path = Path(input_dir)
-        base_path = Path(folder_paths.get_input_directory())
+            input_path = Path(input_dir)
+            base_path = Path(folder_paths.get_input_directory(user_hash=exec_context.user_hash))
 
-        files = [
-            normalize_path(str(file_path.relative_to(base_path)))
-            for file_path in input_path.rglob("*")
-            if file_path.suffix.lower() in {'.gltf', '.glb', '.obj', '.fbx', '.stl', '.spz', '.splat', '.ply', '.ksplat'}
-        ]
+            files = [
+                normalize_path(str(file_path.relative_to(base_path)))
+                for file_path in input_path.rglob("*")
+                if file_path.suffix.lower() in {'.gltf', '.glb', '.obj', '.fbx', '.stl', '.spz', '.splat', '.ply', '.ksplat'}
+            ]
+        else:
+            files = []
         return IO.Schema(
             node_id="Load3D",
             display_name="Load 3D & Animation",
@@ -39,6 +44,7 @@ class Load3D(IO.ComfyNode):
                 IO.Int.Input("width", default=1024, min=1, max=4096, step=1),
                 IO.Int.Input("height", default=1024, min=1, max=4096, step=1),
             ],
+            hidden=[IO.Hidden.exec_context],
             outputs=[
                 IO.Image.Output(display_name="image"),
                 IO.Mask.Output(display_name="mask"),
@@ -55,28 +61,30 @@ class Load3D(IO.ComfyNode):
     def validate_inputs(cls, model_file, **kwargs) -> bool | str:
         if not model_file or model_file == "none":
             return True
-        if not folder_paths.exists_annotated_filepath(model_file):
+        exec_context = kwargs["exec_context"]
+        if not folder_paths.exists_annotated_filepath(model_file, user_hash=exec_context.user_hash):
             return f"Invalid 3D model file: {model_file}"
         return True
 
     @classmethod
     def execute(cls, model_file, image, **kwargs) -> IO.NodeOutput:
+        exec_context = kwargs.get("exec_context")
         load_image_node = nodes.LoadImage()
-        output_image, ignore_mask = load_image_node.load_image(image=image['image'])
-        ignore_image, output_mask = load_image_node.load_image(image=image['mask'])
-        normal_image, ignore_mask2 = load_image_node.load_image(image=image['normal'])
+        output_image, ignore_mask = load_image_node.load_image(image=image['image'], exec_context=exec_context)
+        ignore_image, output_mask = load_image_node.load_image(image=image['mask'], exec_context=exec_context)
+        normal_image, ignore_mask2 = load_image_node.load_image(image=image['normal'], exec_context=exec_context)
 
         video = None
 
         if image['recording'] != "":
-            recording_video_path = folder_paths.get_annotated_filepath(image['recording'])
+            recording_video_path = folder_paths.get_annotated_filepath(image['recording'], user_hash=exec_context.user_hash)
 
             video = InputImpl.VideoFromFile(recording_video_path)
 
         file_3d = None
         mesh_path = ""
         if model_file and model_file != "none":
-            file_3d = Types.File3D(folder_paths.get_annotated_filepath(model_file))
+            file_3d = Types.File3D(folder_paths.get_annotated_filepath(model_file, user_hash=exec_context.user_hash))
             mesh_path = model_file
         model_3d_info = image.get('model_3d_info', [])
         return IO.NodeOutput(output_image, output_mask, mesh_path, normal_image, image['camera_info'], video, file_3d, model_3d_info)
@@ -112,19 +120,23 @@ class Preview3D(IO.ComfyNode):
                 IO.Load3DCamera.Input("camera_info", optional=True, advanced=True),
                 IO.Image.Input("bg_image", optional=True, advanced=True),
             ],
+            hidden=[
+                IO.Hidden.exec_context,
+            ],
             outputs=[],
         )
 
     @classmethod
     def execute(cls, model_file: str | Types.File3D, **kwargs) -> IO.NodeOutput:
+        exec_context = kwargs.get("exec_context")
         if isinstance(model_file, Types.File3D):
             filename = f"preview3d_{uuid.uuid4().hex}.{model_file.format}"
-            model_file.save_to(os.path.join(folder_paths.get_output_directory(), filename))
+            model_file.save_to(os.path.join(folder_paths.get_output_directory(user_hash=exec_context.user_hash), filename))
         else:
             filename = model_file
         camera_info = kwargs.get("camera_info", None)
         bg_image = kwargs.get("bg_image", None)
-        return IO.NodeOutput(ui=UI.PreviewUI3D(filename, camera_info, bg_image=bg_image))
+        return IO.NodeOutput(ui=UI.PreviewUI3D(filename, camera_info, bg_image=bg_image, exec_context=exec_context))
 
     process = execute  # TODO: remove
 
@@ -167,12 +179,16 @@ class Preview3DAdvanced(IO.ComfyNode):
                 IO.Int.Output(display_name="width", tooltip="Render width of the viewport in pixels."),
                 IO.Int.Output(display_name="height", tooltip="Render height of the viewport in pixels."),
             ],
+            hidden=[
+                IO.Hidden.exec_context,
+            ]
         )
 
     @classmethod
     def execute(cls, model_3d: Types.File3D, viewport_state, width: int, height: int, **kwargs) -> IO.NodeOutput:
         filename = f"preview3d_advanced_{uuid.uuid4().hex}.{model_3d.format}"
-        model_3d.save_to(os.path.join(folder_paths.get_temp_directory(), filename))
+        exec_context = kwargs.get("exec_context", None)
+        model_3d.save_to(os.path.join(folder_paths.get_temp_directory(user_hash=exec_context), filename))
 
         viewport_state = viewport_state if isinstance(viewport_state, dict) else {}
         camera_info_input = kwargs.get("camera_info", None)
@@ -238,12 +254,16 @@ class PreviewGaussianSplat(IO.ComfyNode):
                 IO.Int.Output(display_name="width"),
                 IO.Int.Output(display_name="height"),
             ],
+            hidden=[
+                IO.Hidden.exec_context,
+            ],
         )
 
     @classmethod
     def execute(cls, model_3d: Types.File3D, viewport_state, width: int, height: int, **kwargs) -> IO.NodeOutput:
         filename = f"preview_splat_{uuid.uuid4().hex}.{model_3d.format}"
-        model_3d.save_to(os.path.join(folder_paths.get_temp_directory(), filename))
+        exec_context = kwargs.get("exec_context")
+        model_3d.save_to(os.path.join(folder_paths.get_temp_directory(user_hash=exec_context.user_hash), filename))
 
         viewport_state = viewport_state if isinstance(viewport_state, dict) else {}
         camera_info_input = kwargs.get("camera_info", None)
@@ -327,12 +347,12 @@ MESH_EXTENSIONS = {'.gltf', '.glb', '.obj', '.fbx', '.stl'}
 
 class Load3DAdvanced(IO.ComfyNode):
     @classmethod
-    def define_schema(cls):
-        input_dir = os.path.join(folder_paths.get_input_directory(), "3d")
+    def define_schema(cls, exec_context: execution_context.ExecutionContext) -> IO.Schema:
+        input_dir = os.path.join(folder_paths.get_input_directory(exec_context.user_hash), "3d")
         os.makedirs(input_dir, exist_ok=True)
 
         input_path = Path(input_dir)
-        base_path = Path(folder_paths.get_input_directory())
+        base_path = Path(folder_paths.get_input_directory(exec_context.user_hash))
 
         files = [
             normalize_path(str(file_path.relative_to(base_path)))
@@ -365,21 +385,26 @@ class Load3DAdvanced(IO.ComfyNode):
                 IO.Int.Output(display_name="width", tooltip="Render width of the viewport in pixels."),
                 IO.Int.Output(display_name="height", tooltip="Render height of the viewport in pixels."),
             ],
+            hidden=[
+                IO.Hidden.exec_context
+            ]
         )
 
     @classmethod
     def validate_inputs(cls, model_file, **kwargs) -> bool | str:
+        exec_context = kwargs.get("exec_context")
         if not model_file or model_file == "none":
             return True
-        if not folder_paths.exists_annotated_filepath(model_file):
+        if not folder_paths.exists_annotated_filepath(model_file, user_hash=exec_context.user_hash):
             return f"Invalid 3D model file: {model_file}"
         return True
 
     @classmethod
     def execute(cls, model_file, viewport_state, width: int, height: int, **kwargs) -> IO.NodeOutput:
+        exec_context = kwargs.get("exec_context")
         file_3d = None
         if model_file and model_file != "none":
-            file_3d = Types.File3D(folder_paths.get_annotated_filepath(model_file))
+            file_3d = Types.File3D(folder_paths.get_annotated_filepath(model_file, user_hash=exec_context.user_hash))
         viewport_state = viewport_state if isinstance(viewport_state, dict) else {}
         model_3d_info = viewport_state.get('model_3d_info', [])
         return IO.NodeOutput(file_3d, model_3d_info, viewport_state.get('camera_info'), width, height)
@@ -389,8 +414,8 @@ class Load3DExtension(ComfyExtension):
     @override
     async def get_node_list(self) -> list[type[IO.ComfyNode]]:
         return [
-            Load3D,
-            Load3DAdvanced,
+            # Load3D,
+            # Load3DAdvanced,
             Preview3D,
             Preview3DAdvanced,
             PreviewGaussianSplat,

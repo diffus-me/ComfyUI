@@ -26,6 +26,9 @@ from typing_extensions import override
 
 SVG = IO.SVG.Type  # TODO: temporary solution for backward compatibility, will be removed later.
 
+import time
+import execution_context
+
 MAX_RESOLUTION = nodes.MAX_RESOLUTION
 
 class ImageCrop(IO.ComfyNode):
@@ -76,10 +79,13 @@ class ImageCropV2(IO.ComfyNode):
                 IO.BoundingBox.Input("crop_region", component="ImageCrop"),
             ],
             outputs=[IO.Image.Output()],
+            hidden=[
+                IO.Hidden.exec_context
+            ]
         )
 
     @classmethod
-    def execute(cls, image, crop_region) -> IO.NodeOutput:
+    def execute(cls, image, crop_region, exec_context: execution_context.ExecutionContext) -> IO.NodeOutput:
         x = crop_region.get("x", 0)
         y = crop_region.get("y", 0)
         width = crop_region.get("width", 512)
@@ -90,7 +96,7 @@ class ImageCropV2(IO.ComfyNode):
         to_x = width + x
         to_y = height + y
         img = image[:,y:to_y, x:to_x, :]
-        return IO.NodeOutput(img, ui=UI.PreviewImage(img))
+        return IO.NodeOutput(img, ui=UI.PreviewImage(exec_context, img))
 
 
 def _crop_image_with_mask(item_image, item_mask, max_image_size=1024, pad_factor=1.1,
@@ -361,16 +367,17 @@ class SaveAnimatedWEBP(IO.ComfyNode):
                 IO.Combo.Input("method", options=list(cls.COMPRESS_METHODS.keys())),
                 # "num_frames": ("INT", {"default": 0, "min": 0, "max": 8192}),
             ],
-            hidden=[IO.Hidden.prompt, IO.Hidden.extra_pnginfo],
+            hidden=[IO.Hidden.prompt, IO.Hidden.extra_pnginfo, IO.Hidden.exec_context],
             is_output_node=True,
             outputs=[IO.Image.Output(display_name="images")]
         )
 
     @classmethod
-    def execute(cls, images, fps, filename_prefix, lossless, quality, method, num_frames=0) -> IO.NodeOutput:
+    def execute(cls, images, fps, filename_prefix, lossless, quality, method, num_frames=0, exec_context: execution_context.ExecutionContext=None) -> IO.NodeOutput:
         return IO.NodeOutput(
             images,
             ui=UI.ImageSaveHelper.get_save_animated_webp_ui(
+                exec_context=exec_context,
                 images=images,
                 filename_prefix=filename_prefix,
                 cls=cls,
@@ -396,16 +403,17 @@ class SaveAnimatedPNG(IO.ComfyNode):
                 IO.Float.Input("fps", default=6.0, min=0.01, max=1000.0, step=0.01),
                 IO.Int.Input("compress_level", default=4, min=0, max=9, advanced=True),
             ],
-            hidden=[IO.Hidden.prompt, IO.Hidden.extra_pnginfo],
+            hidden=[IO.Hidden.prompt, IO.Hidden.extra_pnginfo, IO.Hidden.exec_context],
             is_output_node=True,
             outputs=[IO.Image.Output(display_name="images")]
         )
 
     @classmethod
-    def execute(cls, images, fps, compress_level, filename_prefix="ComfyUI") -> IO.NodeOutput:
+    def execute(cls, images, fps, compress_level, filename_prefix="ComfyUI", exec_context: execution_context.ExecutionContext=None) -> IO.NodeOutput:
         return IO.NodeOutput(
             images,
             ui=UI.ImageSaveHelper.get_save_animated_png_ui(
+                exec_context=exec_context,
                 images=images,
                 filename_prefix=filename_prefix,
                 cls=cls,
@@ -660,14 +668,14 @@ class SaveSVGNode(IO.ComfyNode):
                     tooltip="The prefix for the file to save. This may include formatting information such as %date:yyyy-MM-dd% or %Empty Latent Image.width% to include values from nodes.",
                 ),
             ],
-            hidden=[IO.Hidden.prompt, IO.Hidden.extra_pnginfo],
+            hidden=[IO.Hidden.prompt, IO.Hidden.extra_pnginfo, IO.Hidden.exec_context],
             is_output_node=True,
             outputs=[IO.SVG.Output("svg")],
         )
 
     @classmethod
-    def execute(cls, svg: IO.SVG.Type, filename_prefix="svg/ComfyUI") -> IO.NodeOutput:
-        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, folder_paths.get_output_directory())
+    def execute(cls, svg: IO.SVG.Type, filename_prefix="svg/ComfyUI", exec_context: execution_context.ExecutionContext=None) -> IO.NodeOutput:
+        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, folder_paths.get_output_directory(user_hash=exec_context.user_hash))
         results: list[UI.SavedResult] = []
 
         # Prepare metadata JSON
@@ -683,7 +691,7 @@ class SaveSVGNode(IO.ComfyNode):
 
         for batch_number, svg_bytes in enumerate(svg.data):
             filename_with_batch_num = filename.replace("%batch_num%", str(batch_number))
-            file = f"{filename_with_batch_num}_{counter:05}_.svg"
+            file = f"{filename_with_batch_num}_{counter:05}_{int(time.time()*1000)}.svg"
 
             # Read SVG content
             svg_bytes.seek(0)
@@ -710,7 +718,7 @@ class SaveSVGNode(IO.ComfyNode):
             with open(os.path.join(full_output_folder, file), 'wb') as svg_file:
                 svg_file.write(svg_content.encode('utf-8'))
 
-            results.append(UI.SavedResult(filename=file, subfolder=subfolder, type=IO.FolderType.output))
+            results.append(UI.SavedResult(filename=file, subfolder=subfolder, type=IO.FolderType.output, user_hash=exec_context.user_hash))
             counter += 1
         return IO.NodeOutput(svg, ui={"images": results})
 
@@ -736,7 +744,7 @@ class GetImageSize(IO.ComfyNode):
         )
 
     @classmethod
-    def execute(cls, image) -> IO.NodeOutput:
+    def execute(cls, image, unique_id=None) -> IO.NodeOutput:
         height = image.shape[1]
         width = image.shape[2]
         batch_size = image.shape[0]
@@ -1807,18 +1815,18 @@ class SaveImageAdvanced(IO.ComfyNode):
                     tooltip="The file format in which to save the image.",
                 ),
             ],
-            hidden=[IO.Hidden.prompt, IO.Hidden.extra_pnginfo],
+            hidden=[IO.Hidden.prompt, IO.Hidden.extra_pnginfo, IO.Hidden.exec_context],
             is_output_node=True,
             outputs=[IO.Image.Output(display_name="images")]
         )
 
     @classmethod
-    def execute(cls, images, filename_prefix: str, format: dict) -> IO.NodeOutput:
+    def execute(cls, images, filename_prefix: str, format: dict, exec_context: execution_context.ExecutionContext) -> IO.NodeOutput:
         file_format = format["format"]
         bit_depth = format["bit_depth"]
         colorspace = format.get("input_color_space", "sRGB")
 
-        output_dir = folder_paths.get_output_directory()
+        output_dir = folder_paths.get_output_directory(user_hash=exec_context.user_hash)
         full_output_folder, filename, counter, subfolder, filename_prefix = (
             folder_paths.get_save_image_path(
                 filename_prefix, output_dir, images[0].shape[1], images[0].shape[0]

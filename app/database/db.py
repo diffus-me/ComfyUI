@@ -10,30 +10,30 @@ _DB_AVAILABLE = False
 Session = None
 
 
-try:
-    from alembic import command
-    from alembic.config import Config
-    from alembic.runtime.migration import MigrationContext
-    from alembic.script import ScriptDirectory
-    from sqlalchemy import create_engine, event
-    from sqlalchemy.orm import sessionmaker
-    from sqlalchemy.pool import StaticPool
-
-    from app.database.models import Base
-    import app.assets.database.models  # noqa: F401 — register models with Base.metadata
-    import blake3  # noqa: F401 — verify the hard dependency is importable at startup
-
-    _DB_AVAILABLE = True
-except ImportError as e:
-    log_startup_warning(
-        f"""
-------------------------------------------------------------------------
-Error importing dependencies: {e}
-{get_missing_requirements_message()}
-This error is happening because ComfyUI now uses a local sqlite database.
-------------------------------------------------------------------------
-""".strip()
-    )
+# try:
+#     from alembic import command
+#     from alembic.config import Config
+#     from alembic.runtime.migration import MigrationContext
+#     from alembic.script import ScriptDirectory
+#     from sqlalchemy import create_engine, event
+#     from sqlalchemy.orm import sessionmaker
+#     from sqlalchemy.pool import StaticPool
+#
+#     from app.database.models import Base
+#     import app.assets.database.models  # noqa: F401 — register models with Base.metadata
+#     import blake3  # noqa: F401 — verify the hard dependency is importable at startup
+#
+#     _DB_AVAILABLE = True
+# except ImportError as e:
+#     log_startup_warning(
+#         f"""
+# ------------------------------------------------------------------------
+# Error importing dependencies: {e}
+# {get_missing_requirements_message()}
+# This error is happening because ComfyUI now uses a local sqlite database.
+# ------------------------------------------------------------------------
+# """.strip()
+#     )
 
 
 def dependencies_available():

@@ -755,12 +755,12 @@ class TencentHunyuan3DExtension(ComfyExtension):
     @override
     async def get_node_list(self) -> list[type[IO.ComfyNode]]:
         return [
-            TencentTextToModelNode,
-            TencentImageToModelNode,
-            TencentModelTo3DUVNode,
-            Tencent3DTextureEditNode,
-            Tencent3DPartNode,
-            TencentSmartTopologyNode,
+            # TencentTextToModelNode,
+            # TencentImageToModelNode,
+            # TencentModelTo3DUVNode,
+            # Tencent3DTextureEditNode,
+            # Tencent3DPartNode,
+            # TencentSmartTopologyNode,
         ]
 
 

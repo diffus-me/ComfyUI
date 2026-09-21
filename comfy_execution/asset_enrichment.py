@@ -11,6 +11,8 @@ import logging
 import os
 from typing import TYPE_CHECKING, Callable
 
+import execution_context
+
 if TYPE_CHECKING:
     from app.assets.manager import AssetManager
     from app.assets.services.schemas import RegisteredAsset
@@ -18,7 +20,7 @@ if TYPE_CHECKING:
     from execution import CacheEntry
 
 
-def _resolve_output_path(entry: dict) -> str | None:
+def _resolve_output_path(entry: dict, exec_context: execution_context.ExecutionContext) -> str | None:
     """Resolve an output entry to an absolute, in-base, on-disk file path.
 
     Returns ``None`` (skip, no registration) when the type is unknown, the
@@ -26,7 +28,7 @@ def _resolve_output_path(entry: dict) -> str | None:
     """
     import folder_paths
 
-    base = folder_paths.get_directory_by_type(entry["type"])
+    base = folder_paths.get_directory_by_type(entry["type"], user_hash=exec_context.user_hash)
     if base is None:
         return None
     base_abs = os.path.abspath(base)
@@ -45,6 +47,7 @@ def _enrich_in_place(
     output_ui: dict,
     job_id: str | None,
     register: Callable[[str, str | None], "RegisteredAsset | None"],
+    exec_context: execution_context.ExecutionContext,
 ) -> None:
     """S10.6: producers that write the same output path are not coalesced (unsupported)."""
     for entries in output_ui.values():
@@ -54,7 +57,7 @@ def _enrich_in_place(
             if not isinstance(entry, dict) or "filename" not in entry or "type" not in entry:
                 continue
             try:
-                abs_path = _resolve_output_path(entry)
+                abs_path = _resolve_output_path(entry, exec_context=exec_context)
                 if abs_path is None:
                     continue
                 result = register(abs_path, job_id)
@@ -73,16 +76,16 @@ def _strip_ids(output_ui: dict) -> None:
                 entry.pop("id", None)
 
 
-def register_executed_outputs(output_ui: dict, job_id: str, asset_manager: "AssetManager") -> dict:
+def register_executed_outputs(output_ui: dict, job_id: str, asset_manager: "AssetManager", exec_context: execution_context.ExecutionContext) -> dict:
     enriched = copy.deepcopy(output_ui)
     if not asset_manager.enabled:
         return enriched
 
-    _enrich_in_place(enriched, job_id, asset_manager.register_executed_output)
+    _enrich_in_place(enriched, job_id, asset_manager.register_executed_output, exec_context=exec_context)
     return enriched
 
 
-def register_cached_outputs(ui_wrapper: dict | None, job_id: str, asset_manager: "AssetManager") -> dict | None:
+def register_cached_outputs(ui_wrapper: dict | None, job_id: str, asset_manager: "AssetManager", exec_context: execution_context.ExecutionContext) -> dict | None:
     if ui_wrapper is None:
         return None
 
@@ -95,14 +98,14 @@ def register_cached_outputs(ui_wrapper: dict | None, job_id: str, asset_manager:
     if not asset_manager.enabled:
         return enriched
 
-    _enrich_in_place(output_ui, job_id, asset_manager.register_cached_output)
+    _enrich_in_place(output_ui, job_id, asset_manager.register_cached_output, exec_context=exec_context)
     return enriched
 
 
-def emit_cached_output(server: "ExecutionServer", node_id: str, display_node_id: str, cached: "CacheEntry", prompt_id: str, ui_outputs: dict, asset_manager: "AssetManager") -> None:
+def emit_cached_output(server: "ExecutionServer", node_id: str, display_node_id: str, cached: "CacheEntry", prompt_id: str, ui_outputs: dict, asset_manager: "AssetManager", exec_context: execution_context.ExecutionContext) -> None:
     if node_id in ui_outputs:
         return
-    enriched = register_cached_outputs(cached.ui, prompt_id, asset_manager)
+    enriched = register_cached_outputs(cached.ui, prompt_id, asset_manager, exec_context=exec_context)
     if enriched is not None:
         ui_outputs[node_id] = enriched
     if server.client_id is None:

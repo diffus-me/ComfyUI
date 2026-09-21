@@ -3,12 +3,16 @@ import json
 from aiohttp import web
 import logging
 
+def user_hash(request):
+    return request.headers.get('X-Diffus-User-Hash', None) or request.headers.get('x-diffus-user-hash', '')
 
 class AppSettings():
     def __init__(self, user_manager):
         self.user_manager = user_manager
 
     def get_settings(self, request):
+        if not user_hash(request):
+            return {}
         try:
             file = self.user_manager.get_request_user_filepath(
                 request,
@@ -28,6 +32,9 @@ class AppSettings():
             return {}
 
     def save_settings(self, request, settings):
+        if not user_hash(request):
+            return
+
         file = self.user_manager.get_request_user_filepath(
             request, "comfy.settings.json")
         with open(file, "w") as f:

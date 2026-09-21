@@ -24,3 +24,5 @@ web_custom_versions/
 filtered-openapi.yaml
 uv.lock
 .comfy_environment
+
+custom_nodes.bak*

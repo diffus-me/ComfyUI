@@ -5,6 +5,7 @@ import numpy as np
 import torch
 from PIL import Image
 
+import execution_context
 import folder_paths
 import node_helpers
 from comfy_api.latest import ComfyExtension, io, UI
@@ -65,10 +66,13 @@ class PainterNode(io.ComfyNode):
                 io.Image.Output("IMAGE"),
                 io.Mask.Output("MASK"),
             ],
+            hidden=[
+                io.Hidden.exec_context
+            ]
         )
 
     @classmethod
-    def execute(cls, mask, width, height, bg_color="#000000", image=None) -> io.NodeOutput:
+    def execute(cls, mask, width, height, bg_color="#000000", image=None, exec_context: execution_context.ExecutionContext=None) -> io.NodeOutput:
         if image is not None:
             base_image = image[:1]
             h, w = base_image.shape[1], base_image.shape[2]
@@ -81,7 +85,7 @@ class PainterNode(io.ComfyNode):
             base_image[0, :, :, 2] = b
 
         if mask and mask.strip():
-            mask_path = folder_paths.get_annotated_filepath(mask)
+            mask_path = folder_paths.get_annotated_filepath(mask, user_hash=exec_context.user_hash)
             painter_img = node_helpers.pillow(Image.open, mask_path)
             painter_img = painter_img.convert("RGBA")
 
@@ -101,12 +105,12 @@ class PainterNode(io.ComfyNode):
             mask_tensor = torch.zeros((1, h, w), dtype=torch.float32)
             out_image = base_image
 
-        return io.NodeOutput(out_image, mask_tensor, ui=UI.PreviewImage(out_image))
+        return io.NodeOutput(out_image, mask_tensor, ui=UI.PreviewImage(exec_context, out_image))
 
     @classmethod
-    def fingerprint_inputs(cls, mask, width, height, bg_color="#000000", image=None):
+    def fingerprint_inputs(cls, mask, width, height, bg_color="#000000", image=None, exec_context: execution_context.ExecutionContext=None) -> dict:
         if mask and mask.strip():
-            mask_path = folder_paths.get_annotated_filepath(mask)
+            mask_path = folder_paths.get_annotated_filepath(mask, user_hash=exec_context.user_hash)
             if os.path.exists(mask_path):
                 m = hashlib.sha256()
                 with open(mask_path, "rb") as f:

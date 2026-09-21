@@ -12,6 +12,7 @@ import logging
 import os
 import shutil
 
+import execution_context
 import folder_paths
 from sqlalchemy import select
 
@@ -76,8 +77,8 @@ def wipe_temp_db_rows(session) -> tuple[int, int]:
     return records_deleted, contents_deleted
 
 
-def cleanup_temp_filesystem() -> bool:
-    temp_dir = os.path.abspath(folder_paths.get_temp_directory())
+def cleanup_temp_filesystem(exec_context: execution_context.ExecutionContext=None) -> bool:
+    temp_dir = os.path.abspath(folder_paths.get_temp_directory(user_hash=exec_context))
     if not os.path.exists(temp_dir):
         return True
     try:

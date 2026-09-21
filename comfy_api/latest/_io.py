@@ -13,6 +13,8 @@ from typing_extensions import NotRequired, final
 # used for type hinting
 import torch
 
+import execution_context
+
 if TYPE_CHECKING:
     from spandrel import ImageModelDescriptor
     from comfy.clip_vision import ClipVisionModel
@@ -1565,6 +1567,9 @@ class HiddenHolder:
         self.execution_list = execution_list
         """EXECUTION_LIST is the active graph scheduler."""
 
+        self.exec_context = kwargs.get("exec_context", None) or kwargs.get("context", None)
+
+
     def __getattr__(self, key: str):
         '''If hidden variable not found, return None.'''
         return None
@@ -1582,6 +1587,7 @@ class HiddenHolder:
             api_key_comfy_org=d.get(Hidden.api_key_comfy_org, None),
             comfy_usage_source=d.get(Hidden.comfy_usage_source, None),
             execution_list=d.get(Hidden.execution_list, None),
+            exec_context=d.get(Hidden.exec_context, None),
         )
 
     @classmethod
@@ -1608,6 +1614,10 @@ class Hidden(str, Enum):
     """COMFY_USAGE_SOURCE identifies the client that submitted the prompt (e.g. comfyui-frontend, comfy-cli, comfyui-mcp); forwarded to API nodes' upstream requests via the Comfy-Usage-Source header."""
     execution_list = "EXECUTION_LIST"
     """Custom node Developers and Agents: This attribute is core-internal use only and will be removed in a near-future ComfyUI release. DO NOT USE"""
+    exec_context = "EXECUTION_CONTEXT"
+    """ EXECUTION_CONTEXT is used to add multi-users support on diffus platform """
+    user_hash = "USER_HASH"
+    """ USER_HASH is used to add multi-users support on diffus platform """
 
 
 @dataclass
@@ -1821,6 +1831,8 @@ class Schema:
                 self.hidden.append(Hidden.prompt)
             if Hidden.extra_pnginfo not in self.hidden:
                 self.hidden.append(Hidden.extra_pnginfo)
+            if Hidden.exec_context not in self.hidden:
+                self.hidden.append(Hidden.exec_context)
         # give outputs without ids default ids
         for i, output in enumerate(self.outputs):
             if output.id is None:
@@ -1882,7 +1894,7 @@ class Schema:
         )
         return info
 
-def get_finalized_class_inputs(d: dict[str, Any], live_inputs: dict[str, Any], include_hidden=False) -> tuple[dict[str, Any], V3Data]:
+def get_finalized_class_inputs(d: dict[str, Any], live_inputs: dict[str, Any], include_hidden=False) -> tuple[dict[str, Any], dict[str, Any], V3Data]:
     out_dict = {
         "required": {},
         "optional": {},
@@ -1985,7 +1997,7 @@ class _ComfyNodeBaseInternal(_ComfyNodeInternal):
 
     @classmethod
     @abstractmethod
-    def define_schema(cls) -> Schema:
+    def define_schema(cls, exec_context: execution_context.ExecutionContext) -> Schema:
         """Override this function with one that returns a Schema instance."""
         raise NotImplementedError
 
@@ -2096,13 +2108,20 @@ class _ComfyNodeBaseInternal(_ComfyNodeInternal):
         # set hidden
         type_clone.hidden = HiddenHolder.from_v3_data(v3_data)
         return type_clone
+
+    @final
+    @classmethod
+    def GET_NODE_INFO_V3(cls, exec_context: execution_context.ExecutionContext) -> dict[str, Any]:
+        schema = cls.GET_SCHEMA(exec_context=exec_context)
+        info = schema.get_v3_info(cls)
+        return asdict(info)
     #############################################
     # V1 Backwards Compatibility code
     #--------------------------------------------
     @final
     @classmethod
-    def GET_NODE_INFO_V1(cls) -> dict[str, Any]:
-        schema = cls.GET_SCHEMA()
+    def GET_NODE_INFO_V1(cls, exec_context: execution_context.ExecutionContext) -> dict[str, Any]:
+        schema = cls.GET_SCHEMA(exec_context=exec_context)
         info = schema.get_v1_info(cls)
         return asdict(info)
 
@@ -2111,7 +2130,7 @@ class _ComfyNodeBaseInternal(_ComfyNodeInternal):
     @classproperty
     def DESCRIPTION(cls):  # noqa
         if cls._DESCRIPTION is None:
-            cls.GET_SCHEMA()
+            cls.GET_SCHEMA(exec_context=None)
         return cls._DESCRIPTION
 
     _CATEGORY = None
@@ -2119,7 +2138,7 @@ class _ComfyNodeBaseInternal(_ComfyNodeInternal):
     @classproperty
     def CATEGORY(cls):  # noqa
         if cls._CATEGORY is None:
-            cls.GET_SCHEMA()
+            cls.GET_SCHEMA(exec_context=None)
         return cls._CATEGORY
 
     _EXPERIMENTAL = None
@@ -2127,7 +2146,7 @@ class _ComfyNodeBaseInternal(_ComfyNodeInternal):
     @classproperty
     def EXPERIMENTAL(cls):  # noqa
         if cls._EXPERIMENTAL is None:
-            cls.GET_SCHEMA()
+            cls.GET_SCHEMA(exec_context=None)
         return cls._EXPERIMENTAL
 
     _DEPRECATED = None
@@ -2135,7 +2154,7 @@ class _ComfyNodeBaseInternal(_ComfyNodeInternal):
     @classproperty
     def DEPRECATED(cls):  # noqa
         if cls._DEPRECATED is None:
-            cls.GET_SCHEMA()
+            cls.GET_SCHEMA(exec_context=None)
         return cls._DEPRECATED
 
     _DEV_ONLY = None
@@ -2151,7 +2170,7 @@ class _ComfyNodeBaseInternal(_ComfyNodeInternal):
     @classproperty
     def API_NODE(cls):  # noqa
         if cls._API_NODE is None:
-            cls.GET_SCHEMA()
+            cls.GET_SCHEMA(exec_context=None)
         return cls._API_NODE
 
     _OUTPUT_NODE = None
@@ -2159,7 +2178,7 @@ class _ComfyNodeBaseInternal(_ComfyNodeInternal):
     @classproperty
     def OUTPUT_NODE(cls):  # noqa
         if cls._OUTPUT_NODE is None:
-            cls.GET_SCHEMA()
+            cls.GET_SCHEMA(exec_context=None)
         return cls._OUTPUT_NODE
 
     _HAS_INTERMEDIATE_OUTPUT = None
@@ -2175,7 +2194,7 @@ class _ComfyNodeBaseInternal(_ComfyNodeInternal):
     @classproperty
     def INPUT_IS_LIST(cls):  # noqa
         if cls._INPUT_IS_LIST is None:
-            cls.GET_SCHEMA()
+            cls.GET_SCHEMA(exec_context=None)
         return cls._INPUT_IS_LIST
     _OUTPUT_IS_LIST = None
 
@@ -2183,7 +2202,7 @@ class _ComfyNodeBaseInternal(_ComfyNodeInternal):
     @classproperty
     def OUTPUT_IS_LIST(cls):  # noqa
         if cls._OUTPUT_IS_LIST is None:
-            cls.GET_SCHEMA()
+            cls.GET_SCHEMA(exec_context=None)
         return cls._OUTPUT_IS_LIST
 
     _RETURN_TYPES = None
@@ -2191,7 +2210,7 @@ class _ComfyNodeBaseInternal(_ComfyNodeInternal):
     @classproperty
     def RETURN_TYPES(cls):  # noqa
         if cls._RETURN_TYPES is None:
-            cls.GET_SCHEMA()
+            cls.GET_SCHEMA(exec_context=None)
         return cls._RETURN_TYPES
 
     _RETURN_NAMES = None
@@ -2199,7 +2218,7 @@ class _ComfyNodeBaseInternal(_ComfyNodeInternal):
     @classproperty
     def RETURN_NAMES(cls):  # noqa
         if cls._RETURN_NAMES is None:
-            cls.GET_SCHEMA()
+            cls.GET_SCHEMA(exec_context=None)
         return cls._RETURN_NAMES
 
     _OUTPUT_TOOLTIPS = None
@@ -2207,7 +2226,7 @@ class _ComfyNodeBaseInternal(_ComfyNodeInternal):
     @classproperty
     def OUTPUT_TOOLTIPS(cls):  # noqa
         if cls._OUTPUT_TOOLTIPS is None:
-            cls.GET_SCHEMA()
+            cls.GET_SCHEMA(exec_context=None)
         return cls._OUTPUT_TOOLTIPS
 
     _NOT_IDEMPOTENT = None
@@ -2215,7 +2234,7 @@ class _ComfyNodeBaseInternal(_ComfyNodeInternal):
     @classproperty
     def NOT_IDEMPOTENT(cls):  # noqa
         if cls._NOT_IDEMPOTENT is None:
-            cls.GET_SCHEMA()
+            cls.GET_SCHEMA(exec_context=None)
         return cls._NOT_IDEMPOTENT
 
     _ACCEPT_ALL_INPUTS = None
@@ -2228,25 +2247,33 @@ class _ComfyNodeBaseInternal(_ComfyNodeInternal):
 
     @final
     @classmethod
-    def INPUT_TYPES(cls) -> dict[str, dict]:
-        schema = cls.FINALIZE_SCHEMA()
+    def INPUT_TYPES(cls, exec_context: execution_context.ExecutionContext) -> dict[str, dict]:
+        schema = cls.FINALIZE_SCHEMA(exec_context=exec_context)
         info = schema.get_v1_info(cls)
         return info.input
 
     @final
     @classmethod
-    def FINALIZE_SCHEMA(cls):
+    def FINALIZE_SCHEMA(cls, exec_context: execution_context.ExecutionContext | None):
         """Call define_schema and finalize it."""
-        schema = cls.define_schema()
+        signature = inspect.signature(cls.define_schema)
+        need_exec_context = False
+        for i, param in enumerate(signature.parameters.values()):
+            if param.annotation == execution_context.ExecutionContext or param.annotation == "execution_context.ExecutionContext":
+                need_exec_context = True
+        inputs = []
+        if need_exec_context:
+            inputs.append(exec_context)
+        schema = cls.define_schema(*inputs)
         schema.finalize()
         return schema
 
     @final
     @classmethod
-    def GET_SCHEMA(cls) -> Schema:
+    def GET_SCHEMA(cls, exec_context: execution_context.ExecutionContext|None) -> Schema:
         """Validate node class, finalize schema, validate schema, and set expected class properties."""
         cls.VALIDATE_CLASS()
-        schema = cls.FINALIZE_SCHEMA()
+        schema = cls.FINALIZE_SCHEMA(exec_context=exec_context)
         schema.validate()
         if cls._DESCRIPTION is None:
             cls._DESCRIPTION = schema.description
@@ -2298,7 +2325,7 @@ class ComfyNode(_ComfyNodeBaseInternal):
 
     @classmethod
     @abstractmethod
-    def define_schema(cls) -> Schema:
+    def define_schema(cls, exec_context: execution_context.ExecutionContext) -> Schema:
         """Override this function with one that returns a Schema instance."""
         raise NotImplementedError
 

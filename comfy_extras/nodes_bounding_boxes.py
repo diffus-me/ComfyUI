@@ -5,6 +5,7 @@ import torch
 from PIL import Image, ImageDraw, ImageEnhance, ImageFont
 from typing_extensions import override
 
+import execution_context
 from comfy_api.latest import ComfyExtension, io
 from comfy_extras.color_util import hex_to_rgb, normalize_palette, readable_color
 
@@ -346,12 +347,15 @@ class CreateBoundingBoxes(io.ComfyNode):
                 io.BoundingBox.Output(display_name="bboxes"),
                 io.Array.Output(display_name="elements"),
             ],
+            hidden=[
+                io.Hidden.exec_context
+            ],
             is_output_node=True,
             is_experimental=True,
         )
 
     @classmethod
-    def execute(cls, width, height, editor_state=None, last_incoming=None, background=None, bboxes=None) -> io.NodeOutput:
+    def execute(cls, width, height, editor_state=None, last_incoming=None, background=None, bboxes=None, exec_context: execution_context.ExecutionContext=None) -> io.NodeOutput:
         incoming = boxes_from_input(bboxes, width, height)
         applied = last_incoming if isinstance(last_incoming, list) else []
         upstream_changed = bool(incoming) and incoming != applied
