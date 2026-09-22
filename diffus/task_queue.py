@@ -187,6 +187,8 @@ def _load_installed_models_info():
             "diffusion_models",
             "unet_gguf",
             "seedvr2",
+            "vae",
+            "text_encoders"
         )
         model_config = {}
         for model_type in model_types:
