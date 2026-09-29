@@ -17,6 +17,7 @@ from comfy_execution.jobs import (
     CANCEL_PENDING,
     CANCEL_RUNNING,
 )
+from comfy_execution.message_queue import get_compacted_messages
 import uuid
 import urllib
 import json
@@ -264,6 +265,8 @@ class PromptServer():
         self.prompt_queue = execution.PromptQueue(self)
         self.loop = loop
         self.messages = asyncio.Queue()
+        self.message_backlog_dropped = 0
+        self.last_message_backlog_warning = 0.0
         self.client_session:Optional[aiohttp.ClientSession] = None
         self.number = 0
 
@@ -309,7 +312,9 @@ class PromptServer():
 
         self.on_prompt_handlers = []
 
-        self.dffis_message_queue = diffus.message.MessageQueue()
+        self.diffus_message_queue = diffus.message.MessageQueue(
+            disable_prompt_message=os.getenv("DISABLE_PROMPT_MESSAGE", "").lower() in ("true", "1"),
+        )
 
         @routes.get('/ws')
         async def websocket_handler(request):
@@ -1593,7 +1598,7 @@ class PromptServer():
 
     async def send_bytes(self, event, data, sid=None):
         message = self.encode_bytes(event, data)
-        self.dffis_message_queue.send_message(sid, bytes(message))
+        self.diffus_message_queue.send_message(sid, bytes(message))
 
         if sid is None:
             sockets = list(self.sockets.values())
@@ -1604,7 +1609,7 @@ class PromptServer():
 
     async def send_json(self, event, data, sid=None):
         message = {"type": event, "data": data}
-        self.dffis_message_queue.send_message(sid, json.dumps(message))
+        self.diffus_message_queue.send_message(sid, json.dumps(message))
 
         if sid is None:
             sockets = list(self.sockets.values())
@@ -1622,8 +1627,16 @@ class PromptServer():
 
     async def publish_loop(self):
         while True:
-            msg = await self.messages.get()
-            await self.send(*msg)
+            messages, dropped = await get_compacted_messages(self.messages)
+            if dropped:
+                self.message_backlog_dropped += dropped
+                current_time = time.monotonic()
+                if current_time - self.last_message_backlog_warning >= 10.0:
+                    logging.warning(f"Dropped {self.message_backlog_dropped} stale messages from the server backlog")
+                    self.message_backlog_dropped = 0
+                    self.last_message_backlog_warning = current_time
+            for msg in messages:
+                await self.send(*msg)
 
     async def start(self, address, port, verbose=True, call_on_start=None):
         await self.start_multi_address([(address, port)], call_on_start=call_on_start)

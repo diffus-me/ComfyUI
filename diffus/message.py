@@ -10,6 +10,9 @@ import diffus.redis_client
 
 logger = logging.getLogger(__name__)
 
+MESSAGE_TTL = 60 * 60
+MONITOR_REQUEST_TIMEOUT = 5
+
 
 class ImageResult(BaseModel):
     filename: str | None = None
@@ -154,7 +157,7 @@ def _update_prompt_result(
     redis_client.set(
         name=_make_prompt_result_key(prompt_id),
         value=prompt_result.model_dump_json(),
-        ex=60 * 60
+        ex=MESSAGE_TTL
     )
 
     if prompt_result.finished and prompt_messages.data.monitor_info:
@@ -162,6 +165,7 @@ def _update_prompt_result(
         system_monitor_api_secret = prompt_messages.data.monitor_info.system_monitor_api_secret
         resp = requests.patch(
             url=f"{monitor_addr}/{prompt_id}",
+            timeout=MONITOR_REQUEST_TIMEOUT,
             headers={
                 "Content-Type": "application/json",
                 'Api-Secret': system_monitor_api_secret,
@@ -255,8 +259,9 @@ def _process_prompt_message(
 
 
 class MessageQueue:
-    def __init__(self):
+    def __init__(self, disable_prompt_message: bool = False):
         self._redis_client = diffus.redis_client.get_redis_client()
+        self._disable_prompt_message = disable_prompt_message
 
     def reset_redis_client(self):
         try:
@@ -268,19 +273,19 @@ class MessageQueue:
     def _publish_prompt_message(self, sid, message):
         if not sid:
             sid = "anonymous"
-        keys = [
-            f'diffus:comfyui:message:{sid}'
-        ]
+        key = f'diffus:comfyui:message:{sid}'
 
-        for key in keys:
-            if isinstance(message, str) and "monitor_info" in message:
-                msg_dict = json.loads(message)
-                del msg_dict["data"]["monitor_info"]
-                msg = json.dumps(msg_dict)
-            else:
-                msg = message
-            self._redis_client.rpush(key, msg)
-            self._redis_client.expire(key, 60 * 60)
+        if isinstance(message, str) and "monitor_info" in message:
+            msg_dict = json.loads(message)
+            del msg_dict["data"]["monitor_info"]
+            msg = json.dumps(msg_dict)
+        else:
+            msg = message
+
+        pipeline = self._redis_client.pipeline(transaction=False)
+        pipeline.rpush(key, msg)
+        pipeline.expire(key, MESSAGE_TTL)
+        pipeline.execute()
 
     def _update_prompt_result(self, sid, message):
         if not isinstance(message, str) or "prompt_id" not in message:
@@ -308,25 +313,24 @@ class MessageQueue:
                 prompt_messages=msg,
                 prompt_result=prompt_result,
             )
+            logger.debug("updated prompt result %s to %s", prompt_id, prompt_result.state)
         except Exception as e:
             logger.exception(f"failed to update prompt result '{message}': {e}")
 
     def send_message(self, sid: str, message: bytes | str, retry=1):
-        try:
-            self._redis_client.ping()
-        except Exception as e:
-            logger.exception(f"failed to publish message to redis: {e}")
-            self.reset_redis_client()
-
         if self._redis_client is None:
-            return
+            self.reset_redis_client()
+            if self._redis_client is None:
+                return
         try:
-            self._publish_prompt_message(sid, message)
+            if not self._disable_prompt_message:
+                self._publish_prompt_message(sid, message)
             self._update_prompt_result(sid, message)
         except Exception as e:
             logger.exception(f"failed to send message: {e}")
             if retry > 0:
                 self._redis_client = None
+                self.reset_redis_client()
                 self.send_message(sid, message, retry=retry - 1)
 
 
