@@ -2135,7 +2135,9 @@ def load_checkpoint(config_path=None, ckpt_path=None, output_vae=True, output_cl
     return (model, clip, vae)
 
 def load_checkpoint_guess_config(ckpt_path, output_vae=True, output_clip=True, output_clipvision=False, embedding_directory=None, output_model=True, model_options={}, te_model_options={}, disable_dynamic=False):
-    if hasattr(ckpt_path, 'stem'):
+    if hasattr(ckpt_path, 'filename'):
+        model_name = ckpt_path.filename
+    elif hasattr(ckpt_path, 'stem'):
         extension = getattr(ckpt_path, 'extension', "unknown")
         model_name = f"{ckpt_path.stem}.{extension}"
     else:
