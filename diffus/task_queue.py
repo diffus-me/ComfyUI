@@ -16,6 +16,7 @@ import version
 import diffus.redis_client
 import diffus.constant
 from diffus.repository import get_binary_path, MODEL_BINARY_CONTAINER
+from diffus.utils import get_model_name
 from folder_paths import folder_names_and_paths
 
 _logger = logging.getLogger(__name__)
@@ -54,6 +55,7 @@ class ServiceStatusResponse(BaseModel):
     pending_task_count: int = Field(title='PendingTaskCount', default=0)
     consecutive_failed_task_count: int = Field(title='ConsecutiveFailedTaskCount', default=0)
     gpu_utilization: float = Field(title='GpuUtilization', default=0)
+    loaded_model_names: list[str] = Field(title='LoadedModelNames', default_factory=list)
 
     last_error_message: str = Field(title='LastErrorMessage', default='')
 
@@ -225,6 +227,14 @@ def _load_supported_models() -> dict[str, list[str]] | None:
     return supported_models
 
 
+def _get_loaded_model_names() -> list[str]:
+    # main.py initializes comfy_aimdo before model management can be imported safely.
+    import comfy.model_management
+
+    names = (get_model_name(model) for model in comfy.model_management.loaded_models())
+    return list(dict.fromkeys(name for name in names if name))
+
+
 def _setup_daemon_api(_server_instance, _task_state: _State, routes: aiohttp.web_routedef.RouteTableDef):
     global _supported_models
     _supported_models = _load_supported_models()
@@ -245,6 +255,10 @@ def _setup_daemon_api(_server_instance, _task_state: _State, routes: aiohttp.web
                 break
             await asyncio.sleep(0.05)
 
+        if _task_state.finished_task_count > 0:
+            loaded_model_names = _get_loaded_model_names()
+        else:
+            loaded_model_names = []
         _prompt_queue = _server_instance.prompt_queue
         resp = ServiceStatusResponse(
             release_version=version.version,
@@ -260,6 +274,7 @@ def _setup_daemon_api(_server_instance, _task_state: _State, routes: aiohttp.web
             pending_task_count=_prompt_queue.get_tasks_remaining(),
             consecutive_failed_task_count=_task_state.consecutive_failed_task_count,
             gpu_utilization=busy_time / live_time,
+            loaded_model_names=loaded_model_names,
             last_error_message=_task_state.last_error_message
         )
 
