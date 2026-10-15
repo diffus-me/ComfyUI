@@ -50,6 +50,7 @@ if args.enable_manager:
     import comfyui_manager
 
 import execution_context
+from diffus.repository import ModelInfo
 
 def before_node_execution():
     comfy.model_management.throw_exception_if_processing_interrupted()
@@ -610,7 +611,13 @@ class CheckpointLoader:
     @classmethod
     def INPUT_TYPES(s, context: execution_context.ExecutionContext):
         return {"required": { "config_name": (folder_paths.get_filename_list(context, "configs"), ),
-                              "ckpt_name": (folder_paths.get_filename_list(context, "checkpoints"), )},
+                              "ckpt_name": (
+                                  folder_paths.get_filename_list(context, "checkpoints"),
+                                  {
+                                      "tooltip": "The name of the checkpoint (model) to load.",
+                                      "model_selector": {"model_types": ["checkpoints"]},
+                                  }
+                              ),},
                 "hidden": {"context": "EXECUTION_CONTEXT"}}
     RETURN_TYPES = ("MODEL", "CLIP", "VAE")
     FUNCTION = "load_checkpoint"
@@ -634,7 +641,13 @@ class CheckpointLoaderSimple:
     def INPUT_TYPES(s, context: execution_context.ExecutionContext):
         return {
             "required": {
-                "ckpt_name": (folder_paths.get_filename_list(context, "checkpoints"), {"tooltip": "The name of the checkpoint (model) to load."}),
+                "ckpt_name": (
+                    folder_paths.get_filename_list(context, "checkpoints"),
+                    {
+                        "tooltip": "The name of the checkpoint (model) to load.",
+                        "model_selector": {"model_types": ["checkpoints"]},
+                    }
+                ),
             },
             "hidden": {
                 "context": "EXECUTION_CONTEXT"
@@ -650,15 +663,26 @@ class CheckpointLoaderSimple:
     DESCRIPTION = "Loads a diffusion model checkpoint, diffusion models are used to denoise latents."
     SEARCH_ALIASES = ["load model", "checkpoint", "model loader", "load checkpoint", "ckpt", "model"]
 
+    @staticmethod
+    def _resolve_checkpoint(ckpt_name, context):
+        ckpt_path = folder_paths.get_full_path_or_raise(context, "checkpoints", ckpt_name)
+        if isinstance(ckpt_path, ModelInfo):
+            if ckpt_path.model_type != "checkpoint":
+                raise ValueError(f"Expected a checkpoint model, got {ckpt_path.model_type}.")
+            context.validate_model("checkpoints", ckpt_name, ckpt_path)
+        return ckpt_path
+
     @classmethod
     def VALIDATE_INPUTS(cls, ckpt_name, context: execution_context.ExecutionContext = None):
-        context.validate_model("checkpoints", ckpt_name)
-        ckpt_path = folder_paths.get_full_path_or_raise(context, "checkpoints", ckpt_name)
+        try:
+            ckpt_path = cls._resolve_checkpoint(ckpt_name, context)
+        except ValueError as error:
+            return str(error)
         return ckpt_path is not None
 
     @measure_model_load_vram(logger=print)
     def load_checkpoint(self, ckpt_name, context: execution_context.ExecutionContext = None):
-        ckpt_path = folder_paths.get_full_path_or_raise(context, "checkpoints", ckpt_name)
+        ckpt_path = self._resolve_checkpoint(ckpt_name, context)
         out = comfy.sd.load_checkpoint_guess_config(ckpt_path, output_vae=True, output_clip=True, embedding_directory=folder_paths.get_folder_paths("embeddings"))
         return out[:3]
 
@@ -754,7 +778,12 @@ class LoraLoader:
             "required": {
                 "model": ("MODEL", {"tooltip": "The diffusion model the LoRA will be applied to."}),
                 "clip": ("CLIP", {"tooltip": "The CLIP model the LoRA will be applied to."}),
-                "lora_name": (["None"] + folder_paths.get_filename_list(context, "loras"), {"tooltip": "The name of the LoRA."}),
+                "lora_name": (
+                    ["None"] + folder_paths.get_filename_list(context, "loras"),
+                    {
+                        "tooltip": "The name of the LoRA.",
+                        "model_selector": {"model_types": ["loras", "lycoris"]},
+                    }),
                 "strength_model": ("FLOAT", {"default": 1.0, "min": -100.0, "max": 100.0, "step": 0.01, "tooltip": "How strongly to modify the diffusion model. This value can be negative."}),
                 "strength_clip": ("FLOAT", {"default": 1.0, "min": -100.0, "max": 100.0, "step": 0.01, "tooltip": "How strongly to modify the CLIP model. This value can be negative."}),
             },
@@ -771,19 +800,32 @@ class LoraLoader:
     DESCRIPTION = "This LoRA loader is used to modify both diffusion and CLIP models, altering the way in which latents are denoised such as applying styles. Multiple LoRA nodes can be linked together."
     SEARCH_ALIASES = ["lora", "load lora", "apply lora", "lora loader", "lora model"]
 
+    @staticmethod
+    def _resolve_lora(lora_name, context):
+        lora_path = folder_paths.get_full_path_or_raise(context, "loras", lora_name)
+        if isinstance(lora_path, ModelInfo):
+            if lora_path.model_type not in {"lora", "lycoris"}:
+                raise ValueError(f"Expected a LoRA or LyCORIS model, got {lora_path.model_type}.")
+            context.validate_model("loras", lora_name, lora_path)
+        else:
+            context.validate_model("loras", lora_name)
+        return lora_path
+
     @classmethod
     def VALIDATE_INPUTS(cls, model, clip, lora_name, strength_model, strength_clip, context: execution_context.ExecutionContext):
         if (not lora_name or lora_name == "None") or (strength_model == 0 and strength_clip == 0):
             return True
-        context.validate_model("loras", lora_name)
-        lora_path = folder_paths.get_full_path_or_raise(context, "loras", lora_name)
+        try:
+            lora_path = cls._resolve_lora(lora_name, context)
+        except ValueError as error:
+            return str(error)
         return lora_path is not None
 
     def load_lora(self, model, clip, lora_name, strength_model, strength_clip, context: execution_context.ExecutionContext):
         if (not lora_name or lora_name == "None") or (strength_model == 0 and strength_clip == 0):
             return (model, clip)
 
-        lora_path = folder_paths.get_full_path_or_raise(context, "loras", lora_name)
+        lora_path = self._resolve_lora(lora_name, context)
         lora = None
         lora_metadata = None
         if self.loaded_lora is not None:
@@ -804,7 +846,10 @@ class LoraLoaderModelOnly(LoraLoader):
     @classmethod
     def INPUT_TYPES(s, context: execution_context.ExecutionContext):
         return {"required": { "model": ("MODEL",),
-                              "lora_name": (["None"] + folder_paths.get_filename_list(context, "loras"), ),
+                              "lora_name": (
+                                  ["None"] + folder_paths.get_filename_list(context, "loras"),
+                                  {"model_selector": {"model_types": ["loras", "lycoris"]}},
+                              ),
                               "strength_model": ("FLOAT", {"default": 1.0, "min": -100.0, "max": 100.0, "step": 0.01}),
                             },
                 "hidden": {"context": "EXECUTION_CONTEXT"}}
@@ -815,8 +860,11 @@ class LoraLoaderModelOnly(LoraLoader):
 
     @classmethod
     def VALIDATE_INPUTS(cls, model, lora_name, strength_model, context: execution_context.ExecutionContext):
-        if lora_name and lora_name != "None":
-            context.validate_model("loras", lora_name)
+        if lora_name and lora_name != "None" and strength_model != 0:
+            try:
+                cls._resolve_lora(lora_name, context)
+            except ValueError as error:
+                return str(error)
         return True
 
     def load_lora_model_only(self, model, lora_name, strength_model, context: execution_context.ExecutionContext):
@@ -1074,7 +1122,12 @@ class ControlNetApplyAdvanced:
 class UNETLoader:
     @classmethod
     def INPUT_TYPES(s, context: execution_context.ExecutionContext):
-        return {"required": { "unet_name": (folder_paths.get_filename_list(context, "diffusion_models"), ),
+        return {"required": { "unet_name": (
+                                    folder_paths.get_filename_list(context, "diffusion_models"),
+                                    {
+                                        "model_selector": {"model_types": ["checkpoints"]},
+                                    }
+                                ),
                              "weight_dtype": (["default", "fp8_e4m3fn", "fp8_e4m3fn_fast", "fp8_e5m2"], {"advanced": True})
                              },
                 "hidden": {"context": "EXECUTION_CONTEXT"}}

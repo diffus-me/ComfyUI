@@ -519,8 +519,7 @@ def get_full_path(context: execution_context.ExecutionContext, folder_name: str,
             model_info = diffus.repository.get_favorite_model_full_path(
                 context.user_id,
                 folder_name,
-                filename,
-                favorite_if_not = context.is_prompt
+                filename
             )
             context.validate_model(folder_name, filename, model_info)
         if model_info:
@@ -544,7 +543,7 @@ def get_full_path(context: execution_context.ExecutionContext, folder_name: str,
     return None
 
 
-def get_full_path_or_raise(context: execution_context.ExecutionContext, folder_name: str, filename: str) -> str:
+def get_full_path_or_raise(context: execution_context.ExecutionContext, folder_name: str, filename: str) -> str | ModelInfo:
     """
     Get the full path of a file in a folder, has to be a file
     """
