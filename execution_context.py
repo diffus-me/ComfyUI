@@ -52,8 +52,7 @@ class ExecutionContext:
                 model_info = diffus.repository.get_favorite_model_full_path(
                     self.user_id,
                     model_type,
-                    model_name,
-                    favorite_if_not=self.is_prompt
+                    model_name
                 )
             self._used_models[model_type][model_name] = model_info
 

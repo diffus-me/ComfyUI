@@ -1,16 +1,17 @@
-import datetime
 import logging
 import os
 import pathlib
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, StringConstraints
 from sqlalchemy.orm import Session, Query
 
 from diffus import constant, models
 from diffus.database import gallery, comfy
 
 logger = logging.getLogger(__name__)
+
+Sha256 = Annotated[str, StringConstraints(pattern=r"^[0-9a-fA-F]{64}$")]
 
 MODEL_BINARY_CONTAINER = os.getenv('MODEL_BINARY_CONTAINER', '')
 MODEL_CONFIG_CONTAINER = os.getenv('MODEL_CONFIG_CONTAINER', '')
@@ -32,8 +33,8 @@ class ModelInfo(BaseModel):
     base: str | None
     stem: str
     extension: str
-    sha256: str
-    config_sha256: str | None
+    sha256: Sha256
+    config_sha256: Sha256 | None
 
     @property
     def name(self):
@@ -104,7 +105,7 @@ def _get_model_full_path(session, folder_name: str, filename: str) -> ModelInfo 
         return create_model_info(record)
 
 
-def get_favorite_model_full_path(user_id: str, folder_name: str, filename: str, favorite_if_not: bool) -> ModelInfo | None:
+def get_favorite_model_full_path(user_id: str, folder_name: str, filename: str) -> ModelInfo | None:
     if folder_name not in constant.FAVORITE_MODEL_TYPES:
         return None
     model_type = constant.FAVORITE_MODEL_TYPES[folder_name]
@@ -117,15 +118,7 @@ def get_favorite_model_full_path(user_id: str, folder_name: str, filename: str, 
         if record:
             return create_model_info(record)
 
-        model_info = _get_model_full_path(session, folder_name, filename)
-        # Favorite this model for user
-        if model_info and favorite_if_not:
-            session.add(models.FavoriteModel(
-                favorited_by=user_id,
-                favorited_at=datetime.datetime.now(datetime.UTC),
-                model_id=model_info.id,
-            ))
-        return model_info
+        return _get_model_full_path(session, folder_name, filename)
 
 
 def _make_favorite_model_query(session: Session) -> Query:
