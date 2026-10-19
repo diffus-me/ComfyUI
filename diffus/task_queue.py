@@ -129,7 +129,7 @@ class ModelsExistenceRequest(RootModel[dict[str, list[str] | None]]):
     @field_validator("root")
     @classmethod
     def validate_model_requests(
-        cls, model_requests: dict[str, list[str] | None]
+            cls, model_requests: dict[str, list[str] | None]
     ) -> dict[str, list[str] | None]:
         if sum(len(models) for models in model_requests.values() if models is not None) > 1000:
             raise ValueError("At most 1000 models can be checked per request")
@@ -147,6 +147,9 @@ class ModelsExistenceResponse(BaseModel):
 
 def _model_exists_in_paths(model_paths: list[str], model_name: str) -> bool:
     if not model_name:
+        _logger.info(
+            f"_all_models_exist: False, not model_name"
+        )
         return False
 
     for model_path in model_paths:
@@ -155,7 +158,9 @@ def _model_exists_in_paths(model_paths: list[str], model_name: str) -> bool:
 
         if candidate != root and candidate.is_file():
             return True
-
+    _logger.warning(
+        f"_all_models_exist:  False, {model_name} not found in {model_paths}"
+    )
     return False
 
 
@@ -167,7 +172,11 @@ def _all_models_exist(model_requests: dict[str, list[str] | None]) -> bool:
             supported_models = set(_supported_models.get(model_type) or [])
             if not supported_models:
                 return False
-
+            for installed_model in supported_models:
+                for model_name in model_names:
+                    if model_name in installed_model and installed_model.startswith("-"):
+                        _logger.info(f"_all_models_exist: False, {model_name} is excluded from model {model_type}")
+                        return False
             if "*" not in supported_models and not set(model_names).issubset(supported_models):
                 return False
 

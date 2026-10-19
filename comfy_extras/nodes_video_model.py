@@ -12,7 +12,8 @@ import execution_context
 class ImageOnlyCheckpointLoader:
     @classmethod
     def INPUT_TYPES(s, context: execution_context.ExecutionContext):
-        return {"required": { "ckpt_name": (folder_paths.get_filename_list(context, "checkpoints"), ),
+        return {"required": { "ckpt_name": (folder_paths.get_filename_list(context, "checkpoints"),
+                                            {"model_selector": {"model_types": ["checkpoints"]},}),
                              },
                 "hidden": {"context": "EXECUTION_CONTEXT"}}
     RETURN_TYPES = ("MODEL", "CLIP_VISION", "VAE")

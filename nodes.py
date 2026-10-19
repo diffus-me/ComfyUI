@@ -1125,7 +1125,9 @@ class UNETLoader:
         return {"required": { "unet_name": (
                                     folder_paths.get_filename_list(context, "diffusion_models"),
                                     {
-                                        "model_selector": {"model_types": ["checkpoints"]},
+                                        "model_selector": {
+                                            "model_types": ["diffusion_models"]
+                                        },
                                     }
                                 ),
                              "weight_dtype": (["default", "fp8_e4m3fn", "fp8_e4m3fn_fast", "fp8_e5m2"], {"advanced": True})
@@ -1138,8 +1140,13 @@ class UNETLoader:
 
     @classmethod
     def VALIDATE_INPUTS(cls, unet_name, weight_dtype, context: execution_context.ExecutionContext):
-        context.validate_model(context, "diffusion_models", unet_name)
         unet_path = folder_paths.get_full_path_or_raise(context, "diffusion_models", unet_name)
+        if isinstance(unet_path, ModelInfo):
+            if unet_path.model_type != "checkpoint":
+                return f"Expected a checkpoint model, got {unet_path.model_type}."
+            context.validate_model("checkpoints", unet_name, unet_path)
+        else:
+            context.validate_model("checkpoints", unet_name)
         return unet_path is not None
 
     @measure_model_load_vram(logger=print)
