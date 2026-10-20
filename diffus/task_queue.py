@@ -20,6 +20,64 @@ from folder_paths import folder_names_and_paths
 
 _logger = logging.getLogger(__name__)
 
+CURRENT_TASK_LEASE_TTL = 5 * 60
+CURRENT_TASK_RENEW_INTERVAL = 10
+
+_RENEW_CURRENT_TASK_LEASE = """
+local encoded = redis.call('GET', KEYS[1])
+if not encoded then
+    return 0
+end
+local ok, current = pcall(cjson.decode, encoded)
+if not ok or current.task_id ~= ARGV[1] or tostring(current.attempt_number) ~= ARGV[2] then
+    return 0
+end
+current.lease_seq = tonumber(ARGV[3])
+current.renewed_at = tonumber(ARGV[4])
+if (not current.node_incarnation or next(current.node_incarnation) == nil) and ARGV[6] ~= '' then
+    current.node_incarnation = cjson.decode(ARGV[6])
+end
+redis.call('SET', KEYS[1], cjson.encode(current), 'EX', ARGV[5])
+return 1
+"""
+
+_DELETE_CURRENT_TASK_LEASE = """
+local encoded = redis.call('GET', KEYS[1])
+if not encoded then
+    return 0
+end
+local ok, current = pcall(cjson.decode, encoded)
+if not ok or current.task_id ~= ARGV[1] or tostring(current.attempt_number) ~= ARGV[2] then
+    return 0
+end
+return redis.call('DEL', KEYS[1])
+"""
+
+
+def _redis_time_millis(redis_client) -> int:
+    seconds, microseconds = redis_client.time()
+    return seconds * 1000 + microseconds // 1000
+
+
+def _read_node_incarnation(redis_client, endpoint: str) -> dict:
+    heartbeat = redis_client.get(f"service:comfyui_shared:{endpoint}")
+    if not heartbeat:
+        return {}
+    try:
+        heartbeat = json.loads(heartbeat)
+    except (json.JSONDecodeError, TypeError):
+        return {}
+    if not isinstance(heartbeat, dict):
+        return {}
+    incarnation = {}
+    restarted_at = (heartbeat.get("timestamps") or {}).get("restarted_at")
+    if restarted_at:
+        incarnation["restarted_at"] = restarted_at
+    restarted_count = (heartbeat.get("tasks") or {}).get("restarted_count")
+    if restarted_count is not None:
+        incarnation["restarted_count"] = restarted_count
+    return incarnation
+
 
 class _InstalledModels(BaseModel):
     checkpoints: list[str] | None = None
@@ -479,53 +537,122 @@ class TaskDispatcher:
     def _publish_current_task_prams_to_redis(self, task_item):
         context = task_item[-1]
         user_id = context.user_id
+        prompt_id = task_item[1]
+        attempt_number = context.attempt_number
         key = self._make_current_key_in_redis()
-        if self._task_state.redis_client is None:
-            return
-        self._task_state.redis_client.set(
-            key,
-            json.dumps({
-                "user_id": user_id,
-                "prompt": [
-                    0,
-                    task_item[1],
-                    task_item[2],
-                    {},
-                    task_item[4],
-                    int(time.time())
-                ],
-            }),
-            ex=3600,
-        )
-        _logger.info(f'published current task to redis, key: {key}, user_id: {user_id}, prompt_id: {task_item[1]}')
+        redis_client = self._task_state.redis_client
+        if redis_client is None:
+            return attempt_number
 
-    def _remove_current_task_prams_from_redis(self):
-        if self._task_state.redis_client is None:
+        payload = {
+            "user_id": user_id,
+            "prompt": [
+                0,
+                prompt_id,
+                task_item[2],
+                {},
+                task_item[4],
+                int(time.time())
+            ],
+        }
+        ttl = 3600
+        if attempt_number is not None:
+            endpoint = f"{self._task_state.host_ip}:{self._task_state.service_port}"
+            payload.update({
+                "task_id": prompt_id,
+                "attempt_number": attempt_number,
+                "node_endpoint": endpoint,
+                "lease_seq": 1,
+                "renewed_at": _redis_time_millis(redis_client),
+                "node_incarnation": _read_node_incarnation(redis_client, endpoint),
+            })
+            ttl = CURRENT_TASK_LEASE_TTL
+
+        redis_client.set(key, json.dumps(payload), ex=ttl)
+        _logger.info(f'published current task to redis, key: {key}, user_id: {user_id}, prompt_id: {prompt_id}, attempt_number: {attempt_number}')
+        return attempt_number
+
+    def _renew_current_task_lease(self, stop_event, task_id, attempt_number):
+        key = self._make_current_key_in_redis()
+        endpoint = f"{self._task_state.host_ip}:{self._task_state.service_port}"
+        lease_seq = 1
+        while not stop_event.wait(CURRENT_TASK_RENEW_INTERVAL):
+            redis_client = self._task_state.redis_client
+            if redis_client is None:
+                continue
+            try:
+                lease_seq += 1
+                renewed = redis_client.eval(
+                    _RENEW_CURRENT_TASK_LEASE,
+                    1,
+                    key,
+                    task_id,
+                    attempt_number,
+                    lease_seq,
+                    _redis_time_millis(redis_client),
+                    CURRENT_TASK_LEASE_TTL,
+                    json.dumps(_read_node_incarnation(redis_client, endpoint)),
+                )
+                if not renewed:
+                    return
+            except Exception as error:
+                _logger.warning(f'failed to renew current task lease for {task_id}: {error}')
+                self._task_state.reset_redis_client()
+
+    def _remove_current_task_prams_from_redis(self, task_id, attempt_number):
+        redis_client = self._task_state.redis_client
+        if redis_client is None:
             return
-        self._task_state.redis_client.delete(self._make_current_key_in_redis())
+        key = self._make_current_key_in_redis()
+        if attempt_number is None:
+            redis_client.delete(key)
+            return
+        redis_client.eval(
+            _DELETE_CURRENT_TASK_LEASE,
+            1,
+            key,
+            task_id,
+            attempt_number,
+        )
 
     @contextmanager
     def dispatch(self, task_item):
         prompt_id = task_item[1]
+        context = task_item[-1]
 
         _logger.info(f'on_task_started, {prompt_id}')
-        self._publish_current_task_prams_to_redis(task_item)
+        self._server_instance.diffus_message_queue.register_prompt_attempt(prompt_id, context.attempt_number)
+        attempt_number = self._publish_current_task_prams_to_redis(task_item)
+        lease_stop = threading.Event()
+        lease_thread = None
+        if attempt_number is not None:
+            lease_thread = threading.Thread(
+                target=self._renew_current_task_lease,
+                args=(lease_stop, prompt_id, attempt_number),
+                name=f'comfy-task-lease-{prompt_id}',
+                daemon=True,
+            )
+            lease_thread.start()
 
         self._task_state.current_task = prompt_id
         self._task_state.current_task_start_time = time.time()
 
-        yield self._on_task_finished
+        try:
+            yield self._on_task_finished
+        finally:
+            lease_stop.set()
+            if lease_thread is not None:
+                lease_thread.join(timeout=1)
+            if self._task_state.current_task != prompt_id:
+                _logger.warning(
+                    f'on_task_finished, task_state.current_task({self._task_state.current_task}) and task_id{prompt_id} are mismatched'
+                )
+            self._task_state.busy_time += time.time() - self._task_state.current_task_start_time
+            self._task_state.current_task_start_time = 0
+            self._task_state.current_task = ''
 
-        if self._task_state.current_task != prompt_id:
-            _logger.warning(
-                f'on_task_finished, task_state.current_task({self._task_state.current_task}) and task_id{prompt_id} are mismatched'
-            )
-        self._task_state.busy_time += time.time() - self._task_state.current_task_start_time
-        self._task_state.current_task_start_time = 0
-        self._task_state.current_task = ''
-
-        self._remove_current_task_prams_from_redis()
-        _logger.info(f'on_task_finished, {prompt_id}')
+            self._remove_current_task_prams_from_redis(prompt_id, attempt_number)
+            _logger.info(f'on_task_finished, {prompt_id}')
 
     def _on_task_finished(self, task_id, success, messages, monitor_error=None):
         if success or monitor_error is not None:

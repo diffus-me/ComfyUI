@@ -52,6 +52,7 @@ class MonitorInfo(BaseModel):
 class PromptState(str, Enum):
     waiting = "waiting"
     queued = "queued"
+    recovering = "recovering"
     started = "started"
     executing = "executing"
     success = "success"
@@ -120,6 +121,7 @@ class ProgressResult(BaseModel):
 
 class PromptStatus(BaseModel):
     prompt_id: str
+    attempt_number: int | None = None
     client_id: str | None = None
     progress: ProgressProgress | None = None
     outputs: list[PromptOutput|None] | None = None
@@ -154,9 +156,10 @@ def _update_prompt_result(
     if not prompt_result:
         return
 
+    exclude = {"attempt_number"} if prompt_result.attempt_number is None else None
     redis_client.set(
         name=_make_prompt_result_key(prompt_id),
-        value=prompt_result.model_dump_json(),
+        value=prompt_result.model_dump_json(exclude=exclude),
         ex=MESSAGE_TTL
     )
 
@@ -198,17 +201,21 @@ def _process_prompt_message(
         client_id: str,
         prompt_id: str,
         status: PromptStatus,
-        msg: PromptMessages
+        msg: PromptMessages,
+        attempt_number: int | None = None,
 ) -> PromptStatus:
     # fetch existing prompt from redis, or create a new if not exists
     if not status:
         prompt_status = PromptStatus(
             prompt_id=prompt_id,
+            attempt_number=attempt_number,
             client_id=client_id,
             outputs=[],
         )
     else:
         prompt_status = status
+        if attempt_number is not None:
+            prompt_status.attempt_number = attempt_number
 
     # update status
     if msg.type == "status":
@@ -262,6 +269,11 @@ class MessageQueue:
     def __init__(self, disable_prompt_message: bool = False):
         self._redis_client = diffus.redis_client.get_redis_client()
         self._disable_prompt_message = disable_prompt_message
+        self._prompt_attempts: dict[str, int] = {}
+
+    def register_prompt_attempt(self, prompt_id: str, attempt_number: int | None):
+        if attempt_number is not None:
+            self._prompt_attempts[prompt_id] = attempt_number
 
     def reset_redis_client(self):
         try:
@@ -305,7 +317,8 @@ class MessageQueue:
                 client_id=sid,
                 prompt_id=prompt_id,
                 status=_fetch_prompt_status(self._redis_client, prompt_id),
-                msg=msg
+                msg=msg,
+                attempt_number=self._prompt_attempts.get(prompt_id),
             )
             _update_prompt_result(
                 redis_client=self._redis_client,
@@ -313,6 +326,8 @@ class MessageQueue:
                 prompt_messages=msg,
                 prompt_result=prompt_result,
             )
+            if prompt_result.finished:
+                self._prompt_attempts.pop(prompt_id, None)
             logger.debug("updated prompt result %s to %s", prompt_id, prompt_result.state)
         except Exception as e:
             logger.exception(f"failed to update prompt result '{message}': {e}")

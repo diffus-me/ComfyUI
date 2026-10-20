@@ -3,6 +3,22 @@ import uuid
 from diffus.constant import FAVORITE_MODEL_TYPES
 
 
+DIFFUS_TASK_ATTEMPT_HEADER = "x-diffus-task-attempt"
+
+
+def _parse_attempt_number(headers):
+    value = next((value for key, value in headers.items() if key.lower() == DIFFUS_TASK_ATTEMPT_HEADER), None)
+    if value is None:
+        return None
+    try:
+        attempt_number = int(value)
+    except (TypeError, ValueError) as error:
+        raise ValueError(f"{DIFFUS_TASK_ATTEMPT_HEADER} must be a positive integer") from error
+    if attempt_number < 1:
+        raise ValueError(f"{DIFFUS_TASK_ATTEMPT_HEADER} must be a positive integer")
+    return attempt_number
+
+
 class Geninfo:
     def __init__(self, task_id):
         self.positive_prompt = ''
@@ -35,6 +51,7 @@ class ExecutionContext:
         self._used_models: dict[str, dict] = {}
         self._checkpoints_model_base = ""
         self._task_id = self._headers.get('x-task-id', str(uuid.uuid4()))
+        self._attempt_number = _parse_attempt_number(self._headers)
 
         self._geninfo = Geninfo(self._task_id)
 
@@ -68,6 +85,10 @@ class ExecutionContext:
     @property
     def task_id(self):
         return self._task_id
+
+    @property
+    def attempt_number(self):
+        return self._attempt_number
 
     @property
     def geninfo(self):
