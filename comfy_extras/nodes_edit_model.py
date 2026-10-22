@@ -3,6 +3,9 @@ from typing_extensions import override
 from comfy_api.latest import ComfyExtension, io
 
 
+_MISSING_LATENT = object()
+
+
 class ReferenceLatent(io.ComfyNode):
     @classmethod
     def define_schema(cls):
@@ -13,13 +16,19 @@ class ReferenceLatent(io.ComfyNode):
             description="This node sets the guiding latent for an edit model. If the model supports it you can chain multiple to set multiple reference images.",
             inputs=[
                 io.Conditioning.Input("conditioning"),
-                io.Latent.Input("latent", optional=True),
-                io.Boolean.Input("enable", optional=True)
+                io.Latent.Input("latent", optional=True, lazy=True),
+                io.Boolean.Input("enable", optional=True, default=True)
             ],
             outputs=[
                 io.Conditioning.Output(),
             ]
         )
+
+    @classmethod
+    def check_lazy_status(cls, latent=_MISSING_LATENT, enable: bool=True):
+        if enable and latent is None:
+            return ["latent"]
+        return []
 
     @classmethod
     def execute(cls, conditioning, latent=None, enable: bool=True) -> io.NodeOutput:
