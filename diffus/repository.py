@@ -94,8 +94,6 @@ def list_favorite_model_by_model_type(user_id: str, folder_name: str, **kwargs):
 
 
 def _get_model_full_path(session, folder_name: str, filename: str) -> ModelInfo | None:
-    if folder_name not in constant.FAVORITE_MODEL_TYPES:
-        return None
     model_type = constant.FAVORITE_MODEL_TYPES[folder_name]
     query = session.query(models.Model)
     query = _filter_model_by_model_type(query, model_type, None)
@@ -103,6 +101,15 @@ def _get_model_full_path(session, folder_name: str, filename: str) -> ModelInfo 
     record = session.scalar(query)
     if record:
         return create_model_info(record)
+    else:
+        return None
+
+
+def get_model_full_path(folder_name: str, filename: str) -> ModelInfo | None:
+    if folder_name not in constant.FAVORITE_MODEL_TYPES:
+        return None
+    with gallery.Database() as session:
+        return _get_model_full_path(session, folder_name, filename)
 
 
 def get_favorite_model_full_path(user_id: str, folder_name: str, filename: str) -> ModelInfo | None:

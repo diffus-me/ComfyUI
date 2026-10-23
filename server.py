@@ -76,6 +76,7 @@ def _remove_sensitive_from_queue(queue: list) -> list:
 import diffus.message
 import execution_context
 import diffus.auth
+from diffus.repository import ModelInfo
 
 async def send_socket_catch_exception(function, message):
     try:
@@ -1405,14 +1406,24 @@ class PromptServer():
             exec_context = execution_context.ExecutionContext(request)
             json_data = await request.json()
             response = []
-            for model_type, model_filenames in json_data.items():
-                for filename in model_filenames:
-                    fullpath = folder_paths.get_full_path(exec_context, model_type, filename)
+            for model_type, model_references in json_data.items():
+                for model_reference in model_references:
+                    if isinstance(model_reference, dict):
+                        lookup_value = json.dumps(model_reference)
+                    elif isinstance(model_reference, str):
+                        lookup_value = model_reference
+                    else:
+                        continue
+                    fullpath = folder_paths.get_full_path(exec_context, model_type, lookup_value)
                     if fullpath:
-                        response.append({
+                        result = {
                             "model_type": model_type,
-                            "filename": filename,
-                        })
+                            "filename": model_reference if isinstance(model_reference, str) else lookup_value,
+                        }
+                        if isinstance(fullpath, ModelInfo):
+                            result["filename"] = fullpath.name
+                            result["model_info"] = fullpath.model_dump(mode="json")
+                        response.append(result)
             return web.json_response(response)
 
     async def setup(self):
