@@ -12,10 +12,11 @@ import logging
 import mimetypes
 import os
 
+import execution_context
 import folder_paths
 
 
-def resolve_output_entry_path(entry) -> str | None:
+def resolve_output_entry_path(exec_context: execution_context.ExecutionContext, entry) -> str | None:
     """Resolve a file-type output entry to an absolute path inside its base dir.
 
     Returns ``None`` for non-file entries (no ``filename``/``type``, or
@@ -29,7 +30,7 @@ def resolve_output_entry_path(entry) -> str | None:
     subfolder = entry.get("subfolder", "")
     if not isinstance(filename, str) or not isinstance(subfolder, str) or not isinstance(entry["type"], str):
         return None
-    base = folder_paths.get_directory_by_type(entry["type"])
+    base = folder_paths.get_directory_by_type(entry["type"], exec_context.user_hash)
     if base is None:
         return None
     # realpath (not abspath) so a symlink planted inside the base directory
@@ -49,7 +50,7 @@ def resolve_output_entry_path(entry) -> str | None:
     return real_path
 
 
-def enrich_output_with_media_metadata(output_ui: dict) -> dict:
+def enrich_output_with_media_metadata(exec_context: execution_context.ExecutionContext, output_ui: dict) -> dict:
     """Attach a ``metadata`` media-properties object to file output entries.
 
     Runs once per produced output at output-processing time. Returns a new
@@ -76,7 +77,7 @@ def enrich_output_with_media_metadata(output_ui: dict) -> dict:
         for entry in entries:
             try:
                 if isinstance(entry, dict) and "metadata" not in entry:
-                    abs_path = resolve_output_entry_path(entry)
+                    abs_path = resolve_output_entry_path(exec_context, entry)
                     if abs_path is not None:
                         mime_type = mimetypes.guess_type(entry["filename"], strict=False)[0]
                         media = extract_media_metadata(abs_path, mime_type=mime_type)

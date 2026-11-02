@@ -40,6 +40,10 @@ from comfy_execution.utils import get_executing_context
 from comfy_api import feature_flags
 import app.agent_host
 
+import diffus.message
+import diffus.task_queue
+import diffus.system_monitor
+
 if __name__ == "__main__":
     #NOTE: These do not do anything on core ComfyUI, they are for custom nodes.
     os.environ['HF_HUB_DISABLE_TELEMETRY'] = '1'
@@ -85,7 +89,7 @@ if enables_dynamic_vram():
 if os.name == "nt":
     os.environ['MIMALLOC_PURGE_DELAY'] = '0'
 
-if __name__ == "__main__":
+def init_cuda_device():
     os.environ['TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL'] = '1'
     if args.default_device is not None and args.cuda_device != "all":
         default_dev = args.default_device
@@ -114,6 +118,11 @@ if __name__ == "__main__":
 
     if "rocm" in cuda_malloc.get_torch_version_noimport():
         os.environ['OCL_SET_SVM_SIZE'] = '4194304'  # 4TB. Much larger than the ROCM 64GB/256GB defaults for Aimdos liberal VA use
+
+
+import cuda_malloc
+
+init_cuda_device()
 
 
 def handle_comfyui_manager_unavailable():
@@ -153,33 +162,33 @@ def apply_custom_paths():
         logging.info(f"Setting models directory to: {folder_paths.models_dir}")
 
     # --output-directory, --input-directory, --user-directory
-    if args.output_directory:
-        output_dir = os.path.abspath(args.output_directory)
-        logging.info(f"Setting output directory to: {output_dir}")
-        folder_paths.set_output_directory(output_dir)
+    # if args.output_directory:
+    #     output_dir = os.path.abspath(args.output_directory)
+    #     logging.info(f"Setting output directory to: {output_dir}")
+    #     folder_paths.set_output_directory(output_dir)
 
     # These are the default folders that checkpoints, clip and vae models will be saved to when using CheckpointSave, etc.. nodes
-    folder_paths.add_model_folder_path("checkpoints", os.path.join(folder_paths.get_output_directory(), "checkpoints"))
-    folder_paths.add_model_folder_path("clip", os.path.join(folder_paths.get_output_directory(), "clip"))
-    folder_paths.add_model_folder_path("vae", os.path.join(folder_paths.get_output_directory(), "vae"))
-    folder_paths.add_model_folder_path("diffusion_models",
-                                       os.path.join(folder_paths.get_output_directory(), "diffusion_models"))
-    folder_paths.add_model_folder_path("loras", os.path.join(folder_paths.get_output_directory(), "loras"))
+    # folder_paths.add_model_folder_path("checkpoints", os.path.join(folder_paths.get_output_directory(), "checkpoints"))
+    # folder_paths.add_model_folder_path("clip", os.path.join(folder_paths.get_output_directory(), "clip"))
+    # folder_paths.add_model_folder_path("vae", os.path.join(folder_paths.get_output_directory(), "vae"))
+    # folder_paths.add_model_folder_path("diffusion_models",
+    #                                    os.path.join(folder_paths.get_output_directory(), "diffusion_models"))
+    # folder_paths.add_model_folder_path("loras", os.path.join(folder_paths.get_output_directory(), "loras"))
 
-    if args.input_directory:
-        input_dir = os.path.abspath(args.input_directory)
-        logging.info(f"Setting input directory to: {input_dir}")
-        folder_paths.set_input_directory(input_dir)
+    # if args.input_directory:
+    #     input_dir = os.path.abspath(args.input_directory)
+    #     logging.info(f"Setting input directory to: {input_dir}")
+    #     folder_paths.set_input_directory(input_dir)
 
-    if args.previews_directory:
-        previews_dir = os.path.abspath(args.previews_directory)
-        logging.info(f"Setting previews directory to: {previews_dir}")
-        folder_paths.set_previews_directory(previews_dir)
-
-    if args.user_directory:
-        user_dir = os.path.abspath(args.user_directory)
-        logging.info(f"Setting user directory to: {user_dir}")
-        folder_paths.set_user_directory(user_dir)
+    # if args.previews_directory:
+    #     previews_dir = os.path.abspath(args.previews_directory)
+    #     logging.info(f"Setting previews directory to: {previews_dir}")
+    #     folder_paths.set_previews_directory(previews_dir)
+    #
+    # if args.user_directory:
+    #     user_dir = os.path.abspath(args.user_directory)
+    #     logging.info(f"Setting user directory to: {user_dir}")
+    #     folder_paths.set_user_directory(user_dir)
 
 
 def execute_prestartup_script():
@@ -334,7 +343,7 @@ def cuda_malloc_warning():
             logging.warning("\nWARNING: this card most likely does not support cuda-malloc, if you get \"CUDA error\" please run ComfyUI with: --disable-cuda-malloc\n")
 
 
-def prompt_worker(q, server_instance, asset_manager):
+def prompt_worker(q, server_instance, asset_manager, task_dispatcher: diffus.task_queue.TaskDispatcher):
     current_time: float = 0.0
     cache_ram = 0
     cache_ram_inactive = 0
@@ -360,6 +369,8 @@ def prompt_worker(q, server_instance, asset_manager):
     gc_collect_interval = 10.0
     background_scan_paused = False
 
+    task_dispatcher.start()
+
     while True:
         try:
             timeout = 1000.0
@@ -367,23 +378,55 @@ def prompt_worker(q, server_instance, asset_manager):
                 timeout = max(gc_collect_interval - (current_time - last_gc_collect), 0.0)
 
             queue_item = q.get(timeout=timeout)
+            logging.info(f"[prompt_worker] popped item: {queue_item is not None}")
             if queue_item is not None:
                 item, item_id = queue_item
                 execution_start_time = time.perf_counter()
                 prompt_id = item[1]
                 server_instance.last_prompt_id = prompt_id
+                server_instance.current_prompt_id = prompt_id
                 server_instance.workflow_metadata = item[3].get("workflow_metadata", {})
 
                 sensitive = item[5]
                 extra_data = item[3].copy()
+                extra_data["prompt_id"] = prompt_id
                 for k in sensitive:
                     extra_data[k] = sensitive[k]
 
                 asset_manager.pause_background_scan()
                 background_scan_paused = True
-                e.execute(item[2], prompt_id, extra_data, item[4])
-
-                need_gc = True
+                exec_context = item[-1]
+                logging.info(f"[prompt_worker] prepare to execute prompt {prompt_id}, extra_data: {extra_data}")
+                with task_dispatcher.dispatch(item) as handle_dispatcher_result:
+                    monitor_error = None
+                    try:
+                        logging.info(f"[prompt_worker] prepare monitor_call_context to execute prompt {prompt_id}")
+                        with diffus.system_monitor.monitor_call_context(
+                                extra_data,
+                                'comfy',
+                                'comfyui',
+                                prompt_id,
+                                is_intermediate=False,
+                        ) as result_encoder:
+                            logging.info(f"[prompt_worker] begin to execute prompt {prompt_id}")
+                            e.execute(exec_context, item[2], prompt_id, extra_data, item[4])
+                            logging.info(
+                                f"[prompt_worker] finished execute prompt {prompt_id}, success: {e.success}, message: {e.status_messages}"
+                            )
+                            need_gc = True
+                            result_encoder(e.success, e.status_messages)
+                            logging.info(
+                                f"[prompt_worker] finished execute prompt {prompt_id}, result was encoded by task_dispatcher"
+                            )
+                    except diffus.system_monitor.MonitorException as ex:
+                        logging.warning(f"[prompt_worker] failed execute prompt {prompt_id}, MonitorException")
+                        monitor_error = ex
+                    except diffus.system_monitor.MonitorTierMismatchedException as ex:
+                        logging.warning(
+                            f"[prompt_worker] failed execute prompt {prompt_id}, MonitorTierMismatchedException")
+                        monitor_error = ex
+                    except Exception as ex:
+                        logging.exception(f"[prompt_worker] failed execute prompt {prompt_id}, {ex}")
 
                 remove_sensitive = lambda prompt: prompt[:5] + prompt[6:]
                 q.task_done(item_id,
@@ -392,15 +435,48 @@ def prompt_worker(q, server_instance, asset_manager):
                                 status_str='success' if e.success else 'error',
                                 completed=e.success,
                                 messages=e.status_messages), process_item=remove_sensitive)
+                logging.info(f"[prompt_worker] queue task_done event handled")
+                current_time = time.perf_counter()
+                execution_time = current_time - execution_start_time
+
                 if q.get_tasks_remaining() == 0:
                     # Nothing else is queued, so let the background scan run now rather than on the next GC tick.
                     asset_manager.resume_background_scan()
                 if server_instance.client_id is not None:
                     server_instance.send_sync("executing", {"node": None, "prompt_id": prompt_id}, server_instance.client_id)
+                    header_dict = diffus.system_monitor.make_headers(extra_data=extra_data)
+                    monitor_addr, system_monitor_api_secret = diffus.system_monitor.get_system_monitor_config(
+                        header_dict)
+                    monitor_info = {
+                        "monitor_addr": monitor_addr,
+                        "system_monitor_api_secret": system_monitor_api_secret,
+                    }
+                    if monitor_error is None:
+                        server_instance.send_sync(
+                            "finished",
+                            {
+                                "node": None,
+                                'prompt_id': prompt_id,
+                                'used_time': execution_time,
+                                'subscription_consumption': extra_data.get('subscription_consumption', None),
+                                "monitor_info": monitor_info
+                            },
+                            server_instance.client_id
+                        )
+                    else:
+                        server_instance.send_sync(
+                            "monitor_error",
+                            {
+                                "node": None,
+                                'prompt_id': prompt_id,
+                                'used_time': execution_time,
+                                'message': diffus.system_monitor.make_monitor_error_message(monitor_error),
+                                "monitor_info": monitor_info
+                            },
+                            server_instance.client_id
+                        )
+                    logging.info(f"[prompt_worker] monitor_info was sent")
                 server_instance.workflow_metadata = {}
-
-                current_time = time.perf_counter()
-                execution_time = current_time - execution_start_time
 
                 # Log Time in a more readable way after 10 minutes
                 if execution_time > 600:
@@ -413,6 +489,17 @@ def prompt_worker(q, server_instance, asset_manager):
                 if job_hint is not None:
                     logging.info(job_hint)
 
+                handle_dispatcher_result(
+                    task_id=prompt_id,
+                    success=e.success,
+                    messages=e.status_messages,
+                    monitor_error=monitor_error
+                )
+                logging.info(
+                    "[prompt_worker] handle_dispatcher_result finished, {prompt_id} everything is done, ready to accept next prompt"
+                )
+
+                server_instance.current_prompt_id = None
             flags = q.get_flags()
             free_memory = flags.get("free_memory", False)
 
@@ -595,14 +682,15 @@ def start_comfyui(asyncio_loop=None):
         stop_startup("missing_packages", f"The assets system needs packages that could not be imported: {missing}.\n"
                                          f"{get_missing_requirements_message()}\n{WITHOUT_ASSETS}")
     asset_manager: AssetManager = default_asset_manager()
-    feature_flags.set_server_feature("assets", asset_manager.enabled)
-    if not asset_manager.enabled:
-        cleanup_temp_filesystem()
+    # feature_flags.set_server_feature("assets", asset_manager.enabled)
+    # if not asset_manager.enabled:
+    #     cleanup_temp_filesystem()
 
     if not asyncio_loop:
         asyncio_loop = asyncio.new_event_loop()
         asyncio.set_event_loop(asyncio_loop)
     prompt_server = server.PromptServer(asyncio_loop, asset_manager)
+    task_dispatcher = diffus.task_queue.TaskDispatcher(prompt_server, prompt_server.routes)
 
     if args.enable_manager and not args.disable_manager_ui:
         comfyui_manager.start()
@@ -622,17 +710,17 @@ def start_comfyui(asyncio_loop=None):
     hook_breaker_ac10a0.restore_functions()
 
     cuda_malloc_warning()
-    setup_database(asset_manager)
+    # setup_database(asset_manager)
 
     prompt_server.add_routes()
     hijack_progress(prompt_server)
 
-    threading.Thread(target=prompt_worker, daemon=True, args=(prompt_server.prompt_queue, prompt_server, asset_manager)).start()
+    threading.Thread(target=prompt_worker, daemon=True, args=(prompt_server.prompt_queue, prompt_server, asset_manager, task_dispatcher,)).start()
 
     if args.quick_test_for_ci:
         exit(0)
 
-    os.makedirs(folder_paths.get_temp_directory(), exist_ok=True)
+    # os.makedirs(folder_paths.get_temp_directory(), exist_ok=True)
     call_on_start = None
     if args.auto_launch:
         def startup_server(scheme, address, port):
@@ -658,10 +746,10 @@ def start_comfyui(asyncio_loop=None):
         await run(prompt_server, address=args.listen, port=args.port, verbose=not args.dont_print_server, call_on_start=call_on_start)
 
     # Returning these so that other code can integrate with the ComfyUI loop and server
-    return asyncio_loop, prompt_server, start_all
+    return asyncio_loop, prompt_server, start_all, task_dispatcher
 
 
-if __name__ == "__main__":
+def main():
     # Running directly, just start ComfyUI.
     logging.info("Python version: {}".format(sys.version))
     logging.info("ComfyUI version: {}".format(comfyui_version.__version__))
@@ -684,7 +772,7 @@ if __name__ == "__main__":
             "dynamic vram enabled and using native ComfyUI model formats instead. "
             "ComfyUI native formats like fp8, int8 and w4a8 will be faster even if they are larger than your memory."
         )
-    event_loop, prompt_server, start_all_func = start_comfyui()
+    event_loop, prompt_server, start_all_func, task_dispatcher = start_comfyui()
     try:
         x = start_all_func()
         if product_tips.tips_enabled(args, os.environ):
@@ -694,5 +782,10 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         logging.info("\nStopped server")
     finally:
+        task_dispatcher.stop()
         app.agent_host.stop()
         prompt_server.asset_manager.shutdown()
+
+
+if __name__ == "__main__":
+    main()

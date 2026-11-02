@@ -6,6 +6,7 @@ import numpy as np
 import torch
 from PIL import Image
 
+import execution_context
 from comfy_api.latest import ComfyExtension, io, UI
 from comfy_extras.compositor_blend import (
     _LAYER_MODES,
@@ -510,10 +511,13 @@ class ImageCompositor(io.ComfyNode):
                     tooltip="Transparency of the composite (1 = fully transparent). All zeros when the composite is opaque."
                 ),
             ],
+            hidden=[
+                io.Hidden.exec_context
+            ]
         )
 
     @classmethod
-    def execute(cls, layers: io.Layers.Type, compositor: io.Compositor.Type = None) -> io.NodeOutput:
+    def execute(cls, layers: io.Layers.Type, compositor: io.Compositor.Type = None, exec_context: execution_context.ExecutionContext=None) -> io.NodeOutput:
         frames = expand_item_frames(document_items(layers))
         tensors = [frame["tensor"] for frame in frames]
         alphas = [frame_alpha(frame["tensor"], frame["mask"]) for frame in frames]
@@ -521,7 +525,7 @@ class ImageCompositor(io.ComfyNode):
         layer_refs = []
         for tensor, alpha in zip(tensors, alphas):
             layer_refs.extend(
-                UI.PreviewImage(layer_preview_tensor(tensor, alpha), cls=cls).values
+                UI.PreviewImage(exec_context, layer_preview_tensor(tensor, alpha), cls=cls).values
             )
 
         fp = input_fingerprints(frames, alphas)

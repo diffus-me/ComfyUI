@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 import aiohttp
 from aiohttp import web
 
+import execution_context
 import folder_paths
 from comfy.cli_args import args
 from comfy_api import feature_flags
@@ -23,22 +24,24 @@ HEADLESS_MARKER = "used_headlessly"
 _marker_warning_logged = False
 
 
-def headless_marker_path() -> str:
-    return os.path.join(folder_paths.get_user_directory(), HEADLESS_MARKER)
+def headless_marker_path(exec_context: execution_context.ExecutionContext) -> str:
+    return os.path.join(folder_paths.get_user_directory(exec_context.user_hash), HEADLESS_MARKER)
 
 
-def used_headlessly() -> bool:
-    return os.path.exists(headless_marker_path())
+def used_headlessly(exec_context: execution_context.ExecutionContext) -> bool:
+    return os.path.exists(headless_marker_path(exec_context))
 
 
-def update_feature_flag() -> None:
-    feature_flags.set_server_feature("deploy_to_cloud", not args.offline and used_headlessly())
+def update_feature_flag(exec_context: execution_context.ExecutionContext) -> None:
+    if args.offline:
+        return
+    feature_flags.set_server_feature("deploy_to_cloud", not args.offline and used_headlessly(exec_context))
 
 
-def mark_used_headlessly() -> None:
+def mark_used_headlessly(exec_context: execution_context.ExecutionContext) -> None:
     """Record, once and permanently, that a prompt was queued without a client_id."""
     global _marker_warning_logged
-    path = headless_marker_path()
+    path = headless_marker_path(exec_context)
     if os.path.exists(path):
         return
     try:
@@ -49,7 +52,7 @@ def mark_used_headlessly() -> None:
             _marker_warning_logged = True
             logging.warning("Could not write headless marker %s: %s", path, e)
         return
-    update_feature_flag()
+    update_feature_flag(exec_context)
 
 
 # Installation snapshot in Comfy-Desktop's "comfyui-desktop-2-snapshot" format.
@@ -366,9 +369,12 @@ def _created(data) -> tuple | None:
 class DeployToCloudRoutes:
     def __init__(self, prompt_server):
         self.prompt_server = prompt_server
-        update_feature_flag()
+        update_feature_flag(None)
 
     def add_routes(self, app: web.Application) -> None:
+        if args.offline:
+            return
+
         app.add_routes([
             web.get("/api/deploy/summary", self.summary),
             web.post("/api/deploy/bundle", self.bundle),

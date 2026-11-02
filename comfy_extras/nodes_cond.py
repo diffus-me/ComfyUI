@@ -6,6 +6,7 @@ import torch
 from typing_extensions import override
 
 import comfy.utils
+import execution_context
 import folder_paths
 from comfy_api.latest import ComfyExtension, io
 
@@ -35,6 +36,7 @@ class CLIPTextEncodeControlnet(io.ComfyNode):
             n = [t[0], t[1].copy()]
             n[1]['cross_attn_controlnet'] = cond
             n[1]['pooled_output_controlnet'] = pooled
+            n[1]['_origin_text_'] = text
             c.append(n)
         return io.NodeOutput(c)
 
@@ -66,21 +68,24 @@ class T5TokenizerOptions(io.ComfyNode):
 
 class ConditioningLoader(io.ComfyNode):
     @classmethod
-    def define_schema(cls) -> io.Schema:
+    def define_schema(cls, exec_context: execution_context.ExecutionContext) -> io.Schema:
         return io.Schema(
             node_id="ConditioningLoader",
             display_name="Load Conditioning",
             category="model/loaders",
             description="Loads a conditioning saved with Save Conditioning, or any safetensors file with a 'conditioning' tensor, from the embeddings folder.",
             inputs=[
-                io.Combo.Input("conditioning_name", options=folder_paths.get_filename_list("embeddings")),
+                io.Combo.Input("conditioning_name", options=folder_paths.get_filename_list(exec_context, "embeddings")),
             ],
             outputs=[io.Conditioning.Output()],
+            hidden=[
+                io.Hidden.exec_context
+            ]
         )
 
     @classmethod
-    def execute(cls, conditioning_name) -> io.NodeOutput:
-        sd, metadata = comfy.utils.load_torch_file(folder_paths.get_full_path_or_raise("embeddings", conditioning_name), safe_load=True, return_metadata=True)
+    def execute(cls, conditioning_name, exec_context: execution_context.ExecutionContext) -> io.NodeOutput:
+        sd, metadata = comfy.utils.load_torch_file(folder_paths.get_full_path_or_raise(exec_context, "embeddings", conditioning_name), safe_load=True, return_metadata=True)
         cond = sd.pop("conditioning")
         options = json.loads((metadata or {}).get("conditioning_options", "{}"))
         lists = {}
@@ -109,10 +114,11 @@ class SaveConditioning(io.ComfyNode):
                 io.String.Input("filename_prefix", default="conditioning/ComfyUI"),
             ],
             outputs=[io.Conditioning.Output(display_name="conditioning")],
+            hidden=[io.Hidden.exec_context]
         )
 
     @classmethod
-    def execute(cls, conditioning, filename_prefix) -> io.NodeOutput:
+    def execute(cls, conditioning, filename_prefix, exec_context: execution_context.ExecutionContext) -> io.NodeOutput:
         if len(conditioning) != 1:
             raise ValueError("Save Conditioning supports a single conditioning entry, save it before combining.")
         cond, options = conditioning[0]
@@ -127,7 +133,7 @@ class SaveConditioning(io.ComfyNode):
                 values[k] = v
             elif v is not None:
                 raise ValueError(f"Conditioning option '{k}' ({type(v).__name__}) can't be saved.")
-        full_output_folder, filename, counter, _, _ = folder_paths.get_save_image_path(filename_prefix, folder_paths.get_output_directory())
+        full_output_folder, filename, counter, _, _ = folder_paths.get_save_image_path(filename_prefix, folder_paths.get_output_directory(user_hash=exec_context.user_hash))
         safetensors.torch.save_file({k: v.detach().to("cpu", copy=True).contiguous() for k, v in sd.items()},
                                     os.path.join(full_output_folder, f"{filename}_{counter:05}_.safetensors"),
                                     metadata={"conditioning_options": json.dumps(values)})
@@ -140,8 +146,8 @@ class CondExtension(ComfyExtension):
         return [
             CLIPTextEncodeControlnet,
             T5TokenizerOptions,
-            ConditioningLoader,
-            SaveConditioning,
+            # ConditioningLoader,
+            # SaveConditioning,
         ]
 
 

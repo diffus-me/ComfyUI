@@ -17,6 +17,7 @@ from itertools import islice
 from pathlib import Path
 from typing import Callable, Literal, NamedTuple, Protocol, TypedDict
 
+import execution_context
 import folder_paths
 import sqlalchemy as sa
 from sqlalchemy.exc import IntegrityError
@@ -183,39 +184,39 @@ def _log_scan_error(phase: str, error: OSError) -> None:
     logging.warning("Asset scan error: phase=%s error_type=%s", phase, error_type)
 
 
-def get_scan_prefixes_for_root(root: RootType) -> list[str]:
+def get_scan_prefixes_for_root(root: RootType, exec_context: execution_context.ExecutionContext) -> list[str]:
     if root == "models":
         bases: list[str] = []
         for _bucket, paths, _exts in get_comfy_models_folders():
             bases.extend(paths)
         return [os.path.abspath(p) for p in bases]
     if root == "input":
-        return [os.path.abspath(folder_paths.get_input_directory())]
+        return [os.path.abspath(folder_paths.get_input_directory(user_hash=exec_context.user_hash))]
     if root == "output":
-        return [os.path.abspath(folder_paths.get_output_directory())]
+        return [os.path.abspath(folder_paths.get_output_directory(user_hash=exec_context.user_hash))]
     return []
 
 
-def get_owned_prefixes() -> list[str]:
+def get_owned_prefixes(exec_context: execution_context.ExecutionContext) -> list[str]:
     """Every directory an asset may live in; references outside these are marked missing."""
     scan_roots: tuple[RootType, ...] = ("models", "input", "output")
-    prefixes = [p for root in scan_roots for p in get_scan_prefixes_for_root(root)]
+    prefixes = [p for root in scan_roots for p in get_scan_prefixes_for_root(root, exec_context=exec_context)]
     # Owned but never scanned: previews are only ever registered by Core or an upload.
     return prefixes + get_temp_prefixes() + [os.path.abspath(folder_paths.get_previews_directory())]
 
 
-def get_temp_prefixes() -> list[str]:
-    temp_dir = os.path.abspath(folder_paths.get_temp_directory())
+def get_temp_prefixes(exec_context: execution_context.ExecutionContext) -> list[str]:
+    temp_dir = os.path.abspath(folder_paths.get_temp_directory(user_hash=exec_context))
     if temp_dir in get_excluded_scan_roots():
         return []
     return [temp_dir]
 
 
-def collect_models_files() -> list[str]:
+def collect_models_files(exec_context: execution_context.ExecutionContext) -> list[str]:
     out: list[str] = []
     for folder_name, bases, _exts in get_comfy_models_folders():
         try:
-            rel_files = folder_paths.get_filename_list(folder_name) or []
+            rel_files = folder_paths.get_filename_list(exec_context, folder_name) or []
         except OSError:
             # The cached listing raises on every call once a folder it recorded has gone
             # away; a fresh listing skips that folder and lists the rest.
@@ -227,7 +228,7 @@ def collect_models_files() -> list[str]:
         for rel_path in rel_files:
             if not all(is_visible(part) for part in Path(rel_path).parts):
                 continue
-            abs_path = folder_paths.get_full_path(folder_name, rel_path)
+            abs_path = folder_paths.get_full_path(exec_context, folder_name, rel_path)
             if not abs_path:
                 continue
             abs_path = os.path.abspath(abs_path)
@@ -399,7 +400,7 @@ def mark_missing_outside_prefixes_safely(
         return None
 
 
-def content_ids_outside_prefixes(session: Session, prefixes: list[str]) -> list[str]:
+def content_ids_outside_prefixes(session: Session, prefixes: list[str],exec_context: execution_context.ExecutionContext) -> list[str]:
     """The live rows outside every prefix. A read: the marking re-checks each is still
     live inside its own write transaction."""
     is_owned = path_prefix_matcher(prefixes)
@@ -427,11 +428,11 @@ def collect_paths_for_roots(
     """
     paths: list[str] = []
     if "models" in roots:
-        paths.extend(collect_models_files())
+        paths.extend(collect_models_files(exec_context=exec_context))
     if "input" in roots:
-        paths.extend(list_files_recursively(folder_paths.get_input_directory(), progress, should_stop))
+        paths.extend(list_files_recursively(folder_paths.get_input_directory(user_hash=exec_context.user_hash), progress, should_stop))
     if "output" in roots:
-        paths.extend(list_files_recursively(folder_paths.get_output_directory(), progress, should_stop))
+        paths.extend(list_files_recursively(folder_paths.get_output_directory(user_hash=exec_context.user_hash), progress, should_stop))
     return paths
 
 

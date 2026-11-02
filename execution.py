@@ -2,6 +2,8 @@ import copy
 import heapq
 import inspect
 import logging
+import psutil
+import os
 import sys
 import threading
 import time
@@ -53,6 +55,10 @@ from app.assets.manager import AssetManager, NoAssets
 if TYPE_CHECKING:
     from comfy_execution.server_protocol import ExecutionServer
 
+import diffus.system_monitor
+import execution_context
+import node_helpers
+
 
 class ExecutionResult(Enum):
     SUCCESS = 0
@@ -69,7 +75,7 @@ class IsChangedCache:
         self.outputs_cache = outputs_cache
         self.is_changed = {}
 
-    async def get(self, node_id):
+    async def get(self, exec_context: execution_context.ExecutionContext, node_id):
         if node_id in self.is_changed:
             return self.is_changed[node_id]
 
@@ -93,7 +99,7 @@ class IsChangedCache:
             return self.is_changed[node_id]
 
         # Intentionally do not use cached outputs here. We only want constants in IS_CHANGED
-        input_data_all, _, v3_data = get_input_data(node["inputs"], class_def, node_id, None)
+        input_data_all, _, v3_data = get_input_data(exec_context, node["inputs"], class_def, node_id, None)
         try:
             is_changed = await _async_map_node_over_list(self.prompt_id, node_id, class_def, input_data_all, is_changed_name, v3_data=v3_data)
             is_changed = await resolve_map_node_over_list_results(is_changed)
@@ -161,18 +167,20 @@ class CacheSet:
 
 SENSITIVE_EXTRA_DATA_KEYS = ("auth_token_comfy_org", "api_key_comfy_org")
 
-def get_input_data(inputs, class_def, unique_id, execution_list=None, dynprompt=None, extra_data={}):
+def get_input_data(exec_context: execution_context.ExecutionContext, inputs, class_def, unique_id, execution_list=None, dynprompt=None, extra_data={}):
     is_v3 = issubclass(class_def, _ComfyNodeInternal)
     v3_data: io.V3Data = {}
     hidden_inputs_v3 = {}
-    valid_inputs = class_def.INPUT_TYPES()
+    valid_inputs = node_helpers.get_node_input_types(exec_context, class_def)
+
+    hidden = None
     if is_v3:
         valid_inputs, hidden, v3_data = _io.get_finalized_class_inputs(valid_inputs, inputs)
     input_data_all = {}
     missing_keys = {}
     for x in inputs:
         input_data = inputs[x]
-        _, input_category, input_info = get_input_info(class_def, x, valid_inputs)
+        _, input_category, input_info = get_input_info(exec_context, class_def, x, valid_inputs)
         def mark_missing():
             missing_keys[x] = True
             input_data_all[x] = (None,)
@@ -212,6 +220,12 @@ def get_input_data(inputs, class_def, unique_id, execution_list=None, dynprompt=
                 hidden_inputs_v3[io.Hidden.comfy_usage_source] = extra_data.get("comfy_usage_source", None)
             if io.Hidden.execution_list.name in hidden:
                 hidden_inputs_v3[io.Hidden.execution_list] = execution_list
+            if io.Hidden.exec_context.name in hidden:
+                hidden_inputs_v3[io.Hidden.exec_context] = exec_context
+                input_data_all[io.Hidden.exec_context.name] = [exec_context]
+            if io.Hidden.user_hash.name in hidden:
+                hidden_inputs_v3[io.Hidden.user_hash] = exec_context.user_hash
+                input_data_all[io.Hidden.user_hash.name] = [exec_context.user_hash]
     else:
         if "hidden" in valid_inputs:
             h = valid_inputs["hidden"]
@@ -232,6 +246,10 @@ def get_input_data(inputs, class_def, unique_id, execution_list=None, dynprompt=
                     input_data_all[x] = [extra_data.get("api_key_comfy_org", None)]
                 if h[x] == "COMFY_USAGE_SOURCE":
                     input_data_all[x] = [extra_data.get("comfy_usage_source", None)]
+                if h[x] == "USER_HASH":
+                    input_data_all[x] = [exec_context.user_hash]
+                if h[x] == "EXECUTION_CONTEXT":
+                    input_data_all[x] = [exec_context]
     v3_data["hidden_inputs"] = hidden_inputs_v3
     return input_data_all, missing_keys, v3_data
 
@@ -349,7 +367,8 @@ def merge_result_data(results, obj):
             output.append([o[i] for o in results])
     return output
 
-async def get_output_data(prompt_id, unique_id, obj, input_data_all, execution_block_cb=None, pre_execute_cb=None, v3_data=None):
+@diffus.system_monitor.node_execution_monitor
+async def get_output_data(prompt_id, unique_id, obj, input_data_all, extra_data, execution_block_cb=None, pre_execute_cb=None, v3_data=None):
     return_values = await _async_map_node_over_list(prompt_id, unique_id, obj, input_data_all, obj.FUNCTION, allow_interrupt=True, execution_block_cb=execution_block_cb, pre_execute_cb=pre_execute_cb, v3_data=v3_data)
     has_pending_task = any(isinstance(r, asyncio.Task) and not r.done() for r in return_values)
     if has_pending_task:
@@ -436,7 +455,7 @@ def _is_intermediate_output(dynprompt, node_id):
     return getattr(class_def, 'HAS_INTERMEDIATE_OUTPUT', False)
 
 
-async def execute(server: "ExecutionServer", dynprompt, caches, current_item, extra_data, executed, prompt_id, execution_list, pending_subgraph_results, pending_async_nodes, ui_outputs, asset_manager: AssetManager):
+async def execute(server: "ExecutionServer", exec_context: execution_context.ExecutionContext, dynprompt, caches, current_item, extra_data, executed, prompt_id, execution_list, pending_subgraph_results, pending_async_nodes, ui_outputs, asset_manager: AssetManager):
     unique_id = current_item
     real_node_id = dynprompt.get_real_node_id(unique_id)
     display_node_id = dynprompt.get_display_node_id(unique_id)
@@ -446,7 +465,7 @@ async def execute(server: "ExecutionServer", dynprompt, caches, current_item, ex
     class_def = nodes.NODE_CLASS_MAPPINGS[class_type]
     cached = await caches.outputs.get(unique_id)
     if cached is not None:
-        emit_cached_output(server, unique_id, display_node_id, cached, prompt_id, ui_outputs, asset_manager)
+        emit_cached_output(server, unique_id, display_node_id, cached, prompt_id, ui_outputs, asset_manager, exec_context=exec_context)
         get_progress_state().finish_progress(unique_id)
         execution_list.cache_update(unique_id, cached)
         return (ExecutionResult.SUCCESS, None, None)
@@ -491,7 +510,7 @@ async def execute(server: "ExecutionServer", dynprompt, caches, current_item, ex
             has_subgraph = False
         else:
             get_progress_state().start_progress(unique_id)
-            input_data_all, missing_keys, v3_data = get_input_data(inputs, class_def, unique_id, execution_list, dynprompt, extra_data)
+            input_data_all, missing_keys, v3_data = get_input_data(exec_context, inputs, class_def, unique_id, execution_list, dynprompt, extra_data)
             if server.client_id is not None:
                 server.last_node_id = display_node_id
                 server.send_sync("executing", { "node": unique_id, "display_node": display_node_id, "prompt_id": prompt_id }, server.client_id)
@@ -517,7 +536,7 @@ async def execute(server: "ExecutionServer", dynprompt, caches, current_item, ex
                 )]
                 if len(required_inputs) > 0:
                     for i in required_inputs:
-                        execution_list.make_input_strong_link(unique_id, i)
+                        execution_list.make_input_strong_link(exec_context, unique_id, i)
                     return (ExecutionResult.PENDING, None, None)
                 if execution_list.is_staged_node_blocked():
                     return (ExecutionResult.PENDING, None, None)
@@ -545,7 +564,7 @@ async def execute(server: "ExecutionServer", dynprompt, caches, current_item, ex
                 GraphBuilder.set_default_prefix(unique_id, call_index, 0)
 
             try:
-                output_data, output_ui, has_subgraph, has_pending_tasks = await get_output_data(prompt_id, unique_id, obj, input_data_all, execution_block_cb=execution_block_cb, pre_execute_cb=pre_execute_cb, v3_data=v3_data)
+                output_data, output_ui, has_subgraph, has_pending_tasks = await get_output_data(prompt_id, unique_id, obj, input_data_all, extra_data, execution_block_cb=execution_block_cb, pre_execute_cb=pre_execute_cb, v3_data=v3_data)
             finally:
                 if comfy.memory_management.aimdo_enabled:
                     if get_console_log_level(args.verbose) == "DEBUG":
@@ -566,14 +585,14 @@ async def execute(server: "ExecutionServer", dynprompt, caches, current_item, ex
         cache_ui_value = ui_outputs.get(unique_id)
         if len(output_ui) > 0:
             asset_previews = take_asset_previews(output_ui)
-            output_ui = enrich_output_with_media_metadata(output_ui)
+            output_ui = enrich_output_with_media_metadata(exec_context, output_ui)
             meta = {
                 "node_id": unique_id,
                 "display_node": display_node_id,
                 "parent_node": parent_node_id,
                 "real_node_id": real_node_id,
             }
-            enriched_output_ui = register_executed_outputs(output_ui, prompt_id, asset_manager, asset_previews)
+            enriched_output_ui = register_executed_outputs(output_ui, prompt_id, asset_manager, asset_previews, exec_context=exec_context)
             ui_outputs[unique_id] = {"meta": meta, "output": enriched_output_ui}
             cache_ui_value = {"meta": meta, "output": output_ui}
             if server.client_id is not None:
@@ -604,20 +623,21 @@ async def execute(server: "ExecutionServer", dynprompt, caches, current_item, ex
                     cached_outputs.append((True, node_outputs))
             new_node_ids = set(new_node_ids)
             for cache in caches.all:
-                subcache = await cache.ensure_subcache_for(unique_id, new_node_ids)
+                subcache = await cache.ensure_subcache_for(exec_context, unique_id, new_node_ids)
                 subcache.clean_unused()
             for node_id in new_output_ids:
-                execution_list.add_node(node_id)
+                execution_list.add_node(exec_context, node_id)
                 execution_list.cache_link(node_id, unique_id)
             for link in new_output_links:
-                execution_list.add_strong_link(link[0], link[1], unique_id)
+                execution_list.add_strong_link(exec_context, link[0], link[1], unique_id)
             pending_subgraph_results[unique_id] = cached_outputs
             return (ExecutionResult.PENDING, None, None)
 
         cache_entry = CacheEntry(ui=cache_ui_value, outputs=output_data)
         execution_list.cache_update(unique_id, cache_entry)
         await caches.outputs.set(unique_id, cache_entry)
-
+    except diffus.system_monitor.MonitorTierMismatchedException:
+        raise
     except comfy.model_management.InterruptProcessingException as iex:
         logging.info("Processing interrupted")
 
@@ -627,7 +647,10 @@ async def execute(server: "ExecutionServer", dynprompt, caches, current_item, ex
         }
 
         return (ExecutionResult.FAILURE, error_details, iex)
-    except Exception as ex:
+    except (diffus.system_monitor.MonitorException, Exception) as ex:
+        upgrade_info = diffus.system_monitor.make_monitor_error_message(ex)
+        if upgrade_info['need_upgrade']:
+            raise
         typ, _, tb = sys.exc_info()
         exception_type = full_type_name(typ)
         input_data_formatted = {}
@@ -676,6 +699,7 @@ class PromptExecutor:
         self.caches = CacheSet(cache_type=self.cache_type, cache_args=self.cache_args)
         self.status_messages = []
         self.success = True
+        self.history_result = {}
 
     def add_message(self, event, data: dict, broadcast: bool):
         data = {
@@ -727,10 +751,10 @@ class PromptExecutor:
             except Exception as e:
                 _cache_logger.warning(f"Cache provider {provider.__class__.__name__} error on {event}: {e}")
 
-    def execute(self, prompt, prompt_id, extra_data={}, execute_outputs=[]):
-        asyncio.run(self.execute_async(prompt, prompt_id, extra_data, execute_outputs))
+    def execute(self, exec_context: execution_context.ExecutionContext, prompt, prompt_id, extra_data={}, execute_outputs=[]):
+        asyncio.run(self.execute_async(exec_context, prompt, prompt_id, extra_data, execute_outputs))
 
-    async def execute_async(self, prompt, prompt_id, extra_data={}, execute_outputs=[]):
+    async def execute_async(self, exec_context: execution_context.ExecutionContext, prompt, prompt_id, extra_data={}, execute_outputs=[]):
         set_preview_method(extra_data.get("preview_method"))
 
         nodes.interrupt_processing(False)
@@ -742,6 +766,7 @@ class PromptExecutor:
             self.server.client_id = None
 
         self.status_messages = []
+        self.history_result = {}
         self.add_message("execution_start", { "prompt_id": prompt_id}, broadcast=False)
 
         self._notify_prompt_lifecycle("start", prompt_id)
@@ -757,7 +782,7 @@ class PromptExecutor:
                 add_progress_handler(WebUIProgressHandler(self.server))
                 is_changed_cache = IsChangedCache(prompt_id, dynamic_prompt, self.caches.outputs)
                 for cache in self.caches.all:
-                    await cache.set_prompt(dynamic_prompt, prompt.keys(), is_changed_cache)
+                    await cache.set_prompt(exec_context, dynamic_prompt, prompt.keys(), is_changed_cache)
                     cache.clean_unused()
 
                 node_ids = list(prompt.keys())
@@ -780,7 +805,7 @@ class PromptExecutor:
                 execution_list = ExecutionList(dynamic_prompt, self.caches.outputs, self.prompt_model_tracker.add)
                 current_outputs = self.caches.outputs.all_node_ids()
                 for node_id in list(execute_outputs):
-                    execution_list.add_node(node_id)
+                    execution_list.add_node(exec_context, node_id)
 
                 while not execution_list.is_empty():
                     node_id, error, ex = await execution_list.stage_node_execution()
@@ -790,7 +815,7 @@ class PromptExecutor:
                         break
 
                     assert node_id is not None, "Node ID should not be None at this point"
-                    result, error, ex = await execute(self.server, dynamic_prompt, self.caches, node_id, extra_data, executed, prompt_id, execution_list, pending_subgraph_results, pending_async_nodes, ui_node_outputs, self.asset_manager)
+                    result, error, ex = await execute(self.server, exec_context, dynamic_prompt, self.caches, node_id, extra_data, executed, prompt_id, execution_list, pending_subgraph_results, pending_async_nodes, ui_node_outputs, self.asset_manager)
                     self.success = result != ExecutionResult.FAILURE
                     if result == ExecutionResult.FAILURE:
                         self.handle_execution_error(prompt_id, dynamic_prompt.original_prompt, current_outputs, executed, error, ex)
@@ -824,7 +849,7 @@ class PromptExecutor:
                         cached = await self.caches.outputs.get(node_id)
                         if cached is not None:
                             display_node_id = dynamic_prompt.get_display_node_id(node_id)
-                            emit_cached_output(self.server, node_id, display_node_id, cached, prompt_id, ui_node_outputs, self.asset_manager)
+                            emit_cached_output(self.server, node_id, display_node_id, cached, prompt_id, ui_node_outputs, self.asset_manager, exec_context=exec_context)
                     self.add_message("execution_success", { "prompt_id": prompt_id }, broadcast=False)
 
                 ui_outputs = {}
@@ -847,7 +872,7 @@ class PromptExecutor:
             self._notify_prompt_lifecycle("end", prompt_id)
 
 
-async def validate_inputs(prompt_id, prompt, item, validated, visiting=None):
+async def validate_inputs(exec_context: execution_context.ExecutionContext, prompt_id, prompt, item, validated, visiting=None):
     if visiting is None:
         visiting = []
 
@@ -881,9 +906,9 @@ async def validate_inputs(prompt_id, prompt, item, validated, visiting=None):
     v3_data = None
     validate_function_inputs = []
     validate_has_kwargs = False
+    class_inputs = node_helpers.get_node_input_types(exec_context, obj_class)
     if issubclass(obj_class, _ComfyNodeInternal):
         obj_class: _io._ComfyNodeBaseInternal
-        class_inputs = obj_class.INPUT_TYPES()
         try:
             class_inputs, _, v3_data = _io.get_finalized_class_inputs(class_inputs, inputs)
         except _io.DynamicInputError as ex:
@@ -898,7 +923,6 @@ async def validate_inputs(prompt_id, prompt, item, validated, visiting=None):
         validate_function_name = "validate_inputs"
         validate_function = first_real_override(obj_class, validate_function_name)
     else:
-        class_inputs = obj_class.INPUT_TYPES()
         validate_function_name = "VALIDATE_INPUTS"
         validate_function = getattr(obj_class, validate_function_name, None)
     if validate_function is not None:
@@ -910,7 +934,7 @@ async def validate_inputs(prompt_id, prompt, item, validated, visiting=None):
     valid_inputs = set(class_inputs.get('required',{})).union(set(class_inputs.get('optional',{})))
 
     for x in valid_inputs:
-        input_type, input_category, extra_info = get_input_info(obj_class, x, class_inputs)
+        input_type, input_category, extra_info = get_input_info(exec_context, obj_class, x, class_inputs)
         assert extra_info is not None
         if x not in inputs:
             if input_category == "required":
@@ -966,7 +990,7 @@ async def validate_inputs(prompt_id, prompt, item, validated, visiting=None):
             try:
                 visiting.append(unique_id)
                 try:
-                    r = await validate_inputs(prompt_id, prompt, o_id, validated, visiting)
+                    r = await validate_inputs(exec_context, prompt_id, prompt, o_id, validated, visiting)
                 finally:
                     visiting.pop()
                 if r[0] is False:
@@ -974,6 +998,7 @@ async def validate_inputs(prompt_id, prompt, item, validated, visiting=None):
                     valid = False
                     continue
             except Exception as ex:
+                logging.exception(ex)
                 typ, _, tb = sys.exc_info()
                 valid = False
                 exception_type = full_type_name(typ)
@@ -1094,7 +1119,7 @@ async def validate_inputs(prompt_id, prompt, item, validated, visiting=None):
                         continue
 
     if len(validate_function_inputs) > 0 or validate_has_kwargs:
-        input_data_all, _, v3_data = get_input_data(inputs, obj_class, unique_id)
+        input_data_all, _, v3_data = get_input_data(exec_context, inputs, obj_class, unique_id)
         dynamic_paths = v3_data.get("dynamic_paths", {})
         if not validate_has_kwargs:
             dynamic_paths = {key: path for key, path in dynamic_paths.items() if path.split(".")[0] in validate_function_inputs}
@@ -1145,7 +1170,7 @@ def full_type_name(klass):
         return klass.__qualname__
     return module + '.' + klass.__qualname__
 
-async def validate_prompt(prompt_id, prompt, partial_execution_list: Union[list[str], None]):
+async def validate_prompt(exec_context: execution_context.ExecutionContext, prompt_id, prompt, partial_execution_list: Union[list[str], None]):
     outputs = set()
     for x in prompt:
         if 'class_type' not in prompt[x]:
@@ -1197,7 +1222,7 @@ async def validate_prompt(prompt_id, prompt, partial_execution_list: Union[list[
     end_nodes = set()
     for node_id, node in prompt.items():
         class_def = nodes.NODE_CLASS_MAPPINGS[node["class_type"]]
-        boundary = class_def.GET_SCHEMA().loop_boundary if issubclass(class_def, _ComfyNodeInternal) else None
+        boundary = class_def.GET_SCHEMA(exec_context=exec_context).loop_boundary if issubclass(class_def, _ComfyNodeInternal) else None
         if boundary == "start":
             start_nodes.add(node_id)
         elif boundary == "end":
@@ -1211,7 +1236,7 @@ async def validate_prompt(prompt_id, prompt, partial_execution_list: Union[list[
         valid = False
         reasons = []
         try:
-            m = await validate_inputs(prompt_id, prompt, o, validated)
+            m = await validate_inputs(exec_context, prompt_id, prompt, o, validated)
             valid = m[0]
             reasons = m[1]
         except Exception as ex:
@@ -1283,7 +1308,7 @@ async def validate_prompt(prompt_id, prompt, partial_execution_list: Union[list[
                 good_outputs.discard(output_id)
             errors.append((dependent_outputs[0], [ex.error]))
 
-    if len(good_outputs) == 0:
+    if len(node_errors) > 0:
         errors_list = []
         for o, errors in errors:
             for error in errors:
@@ -1358,6 +1383,29 @@ class PromptQueue:
                 'status': status_dict,
             }
             self.history[prompt[1]].update(history_result)
+            if os.getenv('SQL_DATABASE_URL_COMFY', None):
+                try:
+                    import diffus.repository
+                    record = self.history[prompt[1]]
+                    number, prompt_id, prompt_dict, extra_data, outputs_to_execute, exec_context = record["prompt"]
+                    extra_data = copy.deepcopy(extra_data)
+                    del extra_data["diffus-request-headers"]
+                    del extra_data["client_id"]
+                    params = {
+                        "prompt": [
+                            number, prompt_id, prompt_dict, extra_data, outputs_to_execute
+                        ],
+                        "outputs": record["outputs"],
+                        "status": record["status"],
+                        "meta": record.get("meta", None),
+                    }
+                    diffus.repository.insert_comfy_task_record(
+                        user_id=exec_context.user_id,
+                        task_id=prompt[1],
+                        params=params,
+                    )
+                except Exception as ex:
+                    logging.exception(f"failed to insert task record to diffus repo: {ex}")
             self.server.queue_updated()
 
     # Note: slow

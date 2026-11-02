@@ -16,25 +16,25 @@ WriteSession = None
 # The packages the imports below need; keep in step with them.
 _DEPENDENCIES = ("sqlalchemy", "alembic", "blake3")
 
-try:
-    from alembic import command
-    from alembic.config import Config
-    from alembic.runtime.migration import MigrationContext
-    from alembic.script import ScriptDirectory
-    from sqlalchemy import create_engine, event
-    from sqlalchemy.engine import URL, make_url
-    from sqlalchemy.exc import OperationalError
-    from sqlalchemy.orm import sessionmaker
-    from sqlalchemy.pool import StaticPool
-
-    from app.database.models import Base
-    import app.assets.database.models  # noqa: F401 — register models with Base.metadata
-    import blake3  # noqa: F401 — verify the hard dependency is importable at startup
-
-    _DB_AVAILABLE = True
-except ImportError:
-    # Only the assets system needs these; with it on, startup stops and says what to install.
-    logging.debug("Database packages failed to import", exc_info=True)
+# try:
+#     from alembic import command
+#     from alembic.config import Config
+#     from alembic.runtime.migration import MigrationContext
+#     from alembic.script import ScriptDirectory
+#     from sqlalchemy import create_engine, event
+#     from sqlalchemy.engine import URL, make_url
+#     from sqlalchemy.exc import OperationalError
+#     from sqlalchemy.orm import sessionmaker
+#     from sqlalchemy.pool import StaticPool
+#
+#     from app.database.models import Base
+#     import app.assets.database.models  # noqa: F401 — register models with Base.metadata
+#     import blake3  # noqa: F401 — verify the hard dependency is importable at startup
+#
+#     _DB_AVAILABLE = True
+# except ImportError:
+#     # Only the assets system needs these; with it on, startup stops and says what to install.
+#     logging.debug("Database packages failed to import", exc_info=True)
 
 
 def dependencies_available():

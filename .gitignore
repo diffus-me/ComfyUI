@@ -25,3 +25,6 @@ filtered-openapi.yaml
 uv.lock
 .comfy_environment
 /previews/
+
+custom_nodes.bak*
+.scratch

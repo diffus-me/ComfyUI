@@ -38,6 +38,7 @@ from app.assets.scanner import (
 from app.assets.services.hash_mode_state import drain_transition_queue, pending_transition_count
 from app.database.db import create_session, dependencies_available
 
+import execution_context
 
 class ScanInProgressError(Exception):
     """Raised when an operation cannot proceed because a scan is running."""
@@ -226,6 +227,7 @@ class _AssetSeeder:
         compute_hashes: bool = False,
         *,
         _start_paused: bool = False,
+        exec_context: execution_context.ExecutionContext = None,
     ) -> bool:
         """Start a background scan for the given roots.
 
@@ -237,6 +239,7 @@ class _AssetSeeder:
             compute_hashes: If True, compute blake3 hashes (slow)
             _start_paused: Start with phase work blocked until resume()
 
+            exec_context: exec_context
         Returns:
             True if scan was started, False if already running
         """
@@ -265,6 +268,7 @@ class _AssetSeeder:
                 target=self._run_scan,
                 name="_AssetSeeder",
                 daemon=True,
+                args=(exec_context,)
             )
             self._thread.start()
             return True
@@ -274,6 +278,7 @@ class _AssetSeeder:
         roots: tuple[RootType, ...] = ("models", "input", "output"),
         progress_callback: ProgressCallback | None = None,
         prune_first: bool = False,
+        exec_context: execution_context.ExecutionContext | None = None,
     ) -> bool:
         """Start a fast scan (phase 1 only) - creates stub records.
 
@@ -281,6 +286,7 @@ class _AssetSeeder:
             roots: Tuple of root types to scan
             progress_callback: Optional callback for progress updates
             prune_first: If True, prune orphaned assets before scanning
+            exec_context: exec_context
 
         Returns:
             True if scan was started, False if already running
@@ -291,6 +297,7 @@ class _AssetSeeder:
             progress_callback=progress_callback,
             prune_first=prune_first,
             compute_hashes=False,
+            exec_context=exec_context,
         )
 
     def enqueue_scan(
@@ -298,6 +305,7 @@ class _AssetSeeder:
         roots: tuple[RootType, ...],
         phase: ScanPhase,
         compute_hashes: bool = False,
+        exec_context: execution_context.ExecutionContext | None = None,
     ) -> bool:
         with self._lock:
             if self.start(
@@ -393,6 +401,7 @@ class _AssetSeeder:
         prune_first: bool | None = None,
         compute_hashes: bool | None = None,
         timeout: float = 5.0,
+        exec_context: execution_context.ExecutionContext | None = None,
     ) -> bool:
         """Cancel any running scan and start a new one.
 
@@ -403,7 +412,7 @@ class _AssetSeeder:
             prune_first: Prune before scan (defaults to previous)
             compute_hashes: Compute hashes (defaults to previous)
             timeout: Max seconds to wait for current scan to stop
-
+            exec_context: exec_context
         Returns:
             True if new scan was started, False if failed to stop previous
         """
@@ -428,6 +437,7 @@ class _AssetSeeder:
             compute_hashes=(
                 compute_hashes if compute_hashes is not None else prev_hashes
             ),
+            exec_context=exec_context,
         )
 
     def wait(self, timeout: float | None = None) -> bool:
@@ -489,7 +499,7 @@ class _AssetSeeder:
                 self._thread = None
         return joined
 
-    def mark_missing_outside_prefixes(self) -> int | None:
+    def mark_missing_outside_prefixes(self, exec_context: execution_context.ExecutionContext) -> int | None:
         """Mark references as missing when outside all known root prefixes.
 
         This is a non-destructive soft-delete operation. Assets and their
@@ -530,7 +540,7 @@ class _AssetSeeder:
                 )
                 return 0
 
-            all_prefixes = get_owned_prefixes()
+            all_prefixes = get_owned_prefixes(exec_context=exec_context)
             # Not pausable (the API waits on it), but a cancel or shutdown stops it
             # between batches: it runs on a worker thread that exit would wait for.
             stopped = False
@@ -690,7 +700,7 @@ class _AssetSeeder:
                 if prefixes:
                     logging.info("Asset scan [%s] directories: %s", root, prefixes)
 
-    def _run_scan(self) -> None:
+    def _run_scan(self, exec_context: execution_context.ExecutionContext) -> None:
         """Main scan loop running in background thread."""
         t_start = time.perf_counter()
         # Per-thread CPU clock on Windows, macOS and Linux; excludes time blocked while paused.
@@ -718,7 +728,7 @@ class _AssetSeeder:
             scan_state = self._scan_state
 
             if self._prune_first:
-                all_prefixes = get_owned_prefixes()
+                all_prefixes = get_owned_prefixes(exec_context=exec_context)
                 marked = mark_missing_outside_prefixes_safely(
                     all_prefixes, lambda: self._check_pause_and_cancel(_ScanStage.PRUNING)
                 )
@@ -750,7 +760,7 @@ class _AssetSeeder:
 
             # Phase 1: Fast scan (stub records)
             if phase in (ScanPhase.FAST, ScanPhase.FULL):
-                created, skipped, paths = self._run_fast_phase(roots)
+                created, skipped, paths = self._run_fast_phase(exec_context, roots)
                 total_created, skipped_existing, total_paths = created, skipped, paths
 
                 if self._check_pause_and_cancel(_ScanStage.FAST_SCAN):
@@ -903,7 +913,7 @@ class _AssetSeeder:
                 root=root,
             )
 
-    def _run_fast_phase(self, roots: tuple[RootType, ...]) -> tuple[int, int, int]:
+    def _run_fast_phase(self, exec_context: execution_context.ExecutionContext, roots: tuple[RootType, ...]) -> tuple[int, int, int]:
         """Run phase 1: fast scan to create stub records.
 
         Returns:
@@ -945,7 +955,7 @@ class _AssetSeeder:
         t_collect = time.perf_counter()
         walk = list_output_for_rescan() if by_listing else None
         should_stop = lambda: self._check_pause_and_cancel(_ScanStage.FAST_SCAN)
-        paths = walk.files if walk is not None else collect_paths_for_roots(roots, scan_state, should_stop)
+        paths = walk.files if walk is not None else collect_paths_for_roots(exec_context, roots, scan_state, should_stop)
         # A cancel during the walk leaves paths partial.
         if should_stop():
             return total_created, skipped_existing, 0

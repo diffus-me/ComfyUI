@@ -14,7 +14,7 @@ def _load_lora_file(lora_name: str):
 
 def _lora_template() -> list[io.Input]:
     return [
-        io.Combo.Input("lora_name", options=folder_paths.get_filename_list("loras"),
+        io.Combo.Input("lora_name", options=folder_paths.get_filename_list(None, "loras"),
                        tooltip="The name of the LoRA file to apply."),
         io.Float.Input("strength", default=1.0, min=-100.0, max=100.0, step=0.01,
                        tooltip="How strongly to apply this LoRA. 0 = off, negative inverts the effect."),

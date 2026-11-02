@@ -1,6 +1,8 @@
 import os
 import json
 from typing_extensions import override
+
+import execution_context
 from comfy_api.latest import io, ComfyExtension, ui
 import folder_paths
 
@@ -29,18 +31,19 @@ class SaveTextNode(io.ComfyNode):
                 io.Combo.Input("format", options=list(cls.FORMAT_EXTENSIONS), default="txt"),
             ],
             outputs=[io.String.Output(display_name="text")],
+            hidden=[io.Hidden.exec_context],
             is_output_node=True,
         )
 
     @classmethod
-    def execute(cls, text, filename_prefix, format):
+    def execute(cls, text, filename_prefix, format, exec_context: execution_context.ExecutionContext):
         extension = cls.FORMAT_EXTENSIONS.get(format)
         if extension is None:
             raise ValueError(f"Unsupported text format: {format!r}")
 
         full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(
             filename_prefix,
-            folder_paths.get_output_directory(),
+            folder_paths.get_output_directory(user_hash=exec_context.user_hash),
             1,
             1,
         )
@@ -66,7 +69,7 @@ class SaveTextNode(io.ComfyNode):
             ui={
                 "text": (text,),
                 "files": [
-                    ui.SavedResult(file, subfolder, io.FolderType.output)
+                    ui.SavedResult(file, subfolder, io.FolderType.output, user_hash=exec_context.user_hash)
                 ]
             }
         )
@@ -75,7 +78,7 @@ class TextExtension(ComfyExtension):
     @override
     async def get_node_list(self) -> list[type[io.ComfyNode]]:
         return [
-            SaveTextNode
+            # SaveTextNode
         ]
 
 async def comfy_entrypoint() -> TextExtension:

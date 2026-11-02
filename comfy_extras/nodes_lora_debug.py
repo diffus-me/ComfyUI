@@ -1,3 +1,4 @@
+import execution_context
 import folder_paths
 import comfy.utils
 import comfy.sd
@@ -15,14 +16,17 @@ class LoraLoaderBypass:
         self.loaded_lora = None
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(s, exec_context: execution_context.ExecutionContext):
         return {
             "required": {
                 "model": ("MODEL", {"tooltip": "The diffusion model the LoRA will be applied to."}),
                 "clip": ("CLIP", {"tooltip": "The CLIP model the LoRA will be applied to."}),
-                "lora_name": (folder_paths.get_filename_list("loras"), {"tooltip": "The name of the LoRA."}),
+                "lora_name": (folder_paths.get_filename_list(exec_context, "loras"), {"tooltip": "The name of the LoRA."}),
                 "strength_model": ("FLOAT", {"default": 1.0, "min": -100.0, "max": 100.0, "step": 0.01, "tooltip": "How strongly to modify the diffusion model. This value can be negative."}),
                 "strength_clip": ("FLOAT", {"default": 1.0, "min": -100.0, "max": 100.0, "step": 0.01, "tooltip": "How strongly to modify the CLIP model. This value can be negative."}),
+            },
+            "hidden": {
+                "exec_context": "EXECUTION_CONTEXT",
             }
         }
 
@@ -34,11 +38,11 @@ class LoraLoaderBypass:
     DESCRIPTION = "Apply LoRA in bypass mode. Unlike regular LoRA, this doesn't modify model weights - instead it injects the LoRA computation during forward pass. Useful for training scenarios."
     EXPERIMENTAL = True
 
-    def load_lora(self, model, clip, lora_name, strength_model, strength_clip):
+    def load_lora(self, model, clip, lora_name, strength_model, strength_clip, exec_context: execution_context.ExecutionContext):
         if strength_model == 0 and strength_clip == 0:
             return (model, clip)
 
-        lora_path = folder_paths.get_full_path_or_raise("loras", lora_name)
+        lora_path = folder_paths.get_full_path_or_raise(exec_context, "loras", lora_name)
         lora = None
         if self.loaded_lora is not None:
             if self.loaded_lora[0] == lora_path:
@@ -56,16 +60,18 @@ class LoraLoaderBypass:
 
 class LoraLoaderBypassModelOnly(LoraLoaderBypass):
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(s, exec_context: execution_context.ExecutionContext):
         return {"required": { "model": ("MODEL",),
-                              "lora_name": (folder_paths.get_filename_list("loras"), ),
+                              "lora_name": (folder_paths.get_filename_list(exec_context, "loras"), ),
                               "strength_model": ("FLOAT", {"default": 1.0, "min": -100.0, "max": 100.0, "step": 0.01}),
-                              }}
+                              },
+                "hidden": { "exec_context": "EXECUTION_CONTEXT",}
+                }
     RETURN_TYPES = ("MODEL",)
     FUNCTION = "load_lora_model_only"
 
-    def load_lora_model_only(self, model, lora_name, strength_model):
-        return (self.load_lora(model, None, lora_name, strength_model, 0)[0],)
+    def load_lora_model_only(self, model, lora_name, strength_model, exec_context: execution_context.ExecutionContext):
+        return (self.load_lora(model, None, lora_name, strength_model, 0, exec_context)[0],)
 
 
 NODE_CLASS_MAPPINGS = {

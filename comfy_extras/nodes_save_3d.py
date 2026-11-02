@@ -14,6 +14,7 @@ from PIL import Image
 import torch
 from typing_extensions import override
 
+import execution_context
 import folder_paths
 from comfy.cli_args import args
 from comfy_api.latest import ComfyExtension, IO, Types, UI
@@ -559,12 +560,12 @@ class SaveGLB(IO.ComfyNode):
                 ),
                 IO.String.Input("filename_prefix", default="3d/ComfyUI"),
             ],
-            hidden=[IO.Hidden.prompt, IO.Hidden.extra_pnginfo]
+            hidden=[IO.Hidden.prompt, IO.Hidden.extra_pnginfo, IO.Hidden.exec_context]
         )
 
     @classmethod
-    def execute(cls, mesh: Types.MESH | Types.File3D, filename_prefix: str) -> IO.NodeOutput:
-        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, folder_paths.get_output_directory())
+    def execute(cls, mesh: Types.MESH | Types.File3D, filename_prefix: str, exec_context: execution_context.ExecutionContext) -> IO.NodeOutput:
+        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, folder_paths.get_output_directory(user_hash=exec_context.user_hash))
         results = []
 
         metadata = {}
@@ -868,9 +869,9 @@ class GetMeshInfo(IO.ComfyNode):
         return IO.NodeOutput(mesh, info, ui=UI.PreviewText(info))
 
 
-def _save_file3d_to_output(model_3d: Types.File3D, filename_prefix: str) -> UI.SavedResult:
+def _save_file3d_to_output(exec_context: execution_context.ExecutionContext, model_3d: Types.File3D, filename_prefix: str) -> UI.SavedResult:
     full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(
-        filename_prefix, folder_paths.get_output_directory()
+        filename_prefix, folder_paths.get_output_directory(user_hash=exec_context.user_hash)
     )
     ext = model_3d.format or "glb"
     saved_filename = f"{filename}_{counter:05}.{ext}"
@@ -878,8 +879,8 @@ def _save_file3d_to_output(model_3d: Types.File3D, filename_prefix: str) -> UI.S
     return UI.SavedResult(saved_filename, subfolder, IO.FolderType.output)
 
 
-def execute_save_3d_advanced(model_3d, viewport_state, width, height, filename_prefix, kwargs) -> IO.NodeOutput:
-    saved = _save_file3d_to_output(model_3d, filename_prefix)
+def execute_save_3d_advanced(exec_context: execution_context.ExecutionContext, model_3d, viewport_state, width, height, filename_prefix, kwargs) -> IO.NodeOutput:
+    saved = _save_file3d_to_output(exec_context, model_3d, filename_prefix)
     viewport_state = viewport_state if isinstance(viewport_state, dict) else {}
     camera_info_input = kwargs.get("camera_info", None)
     camera_info = camera_info_input if camera_info_input is not None else viewport_state.get('camera_info')
@@ -933,11 +934,15 @@ class Save3DAdvanced(IO.ComfyNode):
                 IO.Int.Output(display_name="width", tooltip="Render width of the viewport in pixels."),
                 IO.Int.Output(display_name="height", tooltip="Render height of the viewport in pixels."),
             ],
+            hidden=[
+                IO.Hidden.exec_context
+            ],
         )
 
     @classmethod
     def execute(cls, model_3d: Types.File3D, viewport_state, width: int, height: int, filename_prefix: str, **kwargs) -> IO.NodeOutput:
-        return execute_save_3d_advanced(model_3d, viewport_state, width, height, filename_prefix, kwargs)
+        exec_context = kwargs["exec_context"]
+        return execute_save_3d_advanced(exec_context, model_3d, viewport_state, width, height, filename_prefix, kwargs)
 
 
 class SaveGaussianSplat(IO.ComfyNode):
@@ -976,11 +981,15 @@ class SaveGaussianSplat(IO.ComfyNode):
                 IO.Int.Output(display_name="width"),
                 IO.Int.Output(display_name="height"),
             ],
+            hidden=[
+                IO.Hidden.exec_context
+            ]
         )
 
     @classmethod
     def execute(cls, model_3d: Types.File3D, viewport_state, width: int, height: int, filename_prefix: str, **kwargs) -> IO.NodeOutput:
-        return execute_save_3d_advanced(model_3d, viewport_state, width, height, filename_prefix, kwargs)
+        exec_context = kwargs["exec_context"]
+        return execute_save_3d_advanced(exec_context, model_3d, viewport_state, width, height, filename_prefix, kwargs)
 
 
 class SavePointCloud(IO.ComfyNode):
@@ -1016,17 +1025,21 @@ class SavePointCloud(IO.ComfyNode):
                 IO.Int.Output(display_name="width"),
                 IO.Int.Output(display_name="height"),
             ],
+            hidden=[
+                IO.Hidden.exec_context
+            ],
         )
 
     @classmethod
     def execute(cls, model_3d: Types.File3D, viewport_state, width: int, height: int, filename_prefix: str, **kwargs) -> IO.NodeOutput:
-        return execute_save_3d_advanced(model_3d, viewport_state, width, height, filename_prefix, kwargs)
+        exec_context = kwargs["exec_context"]
+        return execute_save_3d_advanced(exec_context, model_3d, viewport_state, width, height, filename_prefix, kwargs)
 
 
 class Save3DExtension(ComfyExtension):
     @override
     async def get_node_list(self) -> list[type[IO.ComfyNode]]:
-        return [SaveGLB, MeshToFile3D, RotateMesh, MergeMeshes, GetMeshInfo, Save3DAdvanced, SaveGaussianSplat, SavePointCloud]
+        return [MeshToFile3D, RotateMesh, MergeMeshes, GetMeshInfo]
 
 
 async def comfy_entrypoint() -> Save3DExtension:

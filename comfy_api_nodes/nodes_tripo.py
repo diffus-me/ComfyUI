@@ -58,6 +58,7 @@ from comfy_api_nodes.util import (
     validate_output_unlinked,
     validate_string,
 )
+import execution_context
 
 MULTIVIEW_KEYS = ("front_view_url", "left_view_url", "back_view_url", "right_view_url")
 SEED_MAX = 2**31 - 1
@@ -437,6 +438,7 @@ class TripoTextToModelNode(IO.ComfyNode):
         quad: bool | None = None,
         smart_low_poly: bool | None = None,
         auto_size: bool = True,
+        exec_context: execution_context.ExecutionContext = None,
     ) -> IO.NodeOutput:
         return glb_or_fbx_output(
             *await text_to_model(
@@ -619,6 +621,7 @@ class TripoImageToModelNode(IO.ComfyNode):
         quad: bool | None = None,
         smart_low_poly: bool | None = None,
         auto_size: bool = True,
+        exec_context: execution_context.ExecutionContext = None,
     ) -> IO.NodeOutput:
         return glb_or_fbx_output(
             *await image_to_model(
@@ -754,6 +757,7 @@ class TripoMultiviewToModelNode(IO.ComfyNode):
         quad: bool | None = None,
         smart_low_poly: bool | None = None,
         auto_size: bool = False,
+        exec_context: execution_context.ExecutionContext = None,
     ) -> IO.NodeOutput:
         if image is None:
             raise RuntimeError("front image for multiview is required")
@@ -1396,7 +1400,7 @@ class TripoSegmentNode(IO.ComfyNode):
         )
 
     @classmethod
-    async def execute(cls, model_task_id) -> IO.NodeOutput:
+    async def execute(cls, model_task_id, exec_context: execution_context.ExecutionContext = None,) -> IO.NodeOutput:
         response = await sync_op(
             cls,
             endpoint=ApiEndpoint(path="/proxy/tripo/v3/mesh/segment", method="POST"),
@@ -1443,7 +1447,7 @@ class TripoMeshCompleteNode(IO.ComfyNode):
         )
 
     @classmethod
-    async def execute(cls, segment_task_id, part_names: str = "") -> IO.NodeOutput:
+    async def execute(cls, segment_task_id, part_names: str = "", exec_context: execution_context.ExecutionContext = None,) -> IO.NodeOutput:
         response = await sync_op(
             cls,
             endpoint=ApiEndpoint(path="/proxy/tripo/v3/mesh/complete", method="POST"),
@@ -1521,6 +1525,7 @@ class TripoRetopologyNode(IO.ComfyNode):
         quad: bool = False,
         bake: bool = True,
         part_names: str = "",
+            exec_context: execution_context.ExecutionContext = None,
     ) -> IO.NodeOutput:
         if face_limit != -1 and not 500 <= face_limit <= (10000 if quad else 20000):
             raise ValueError("face_limit must be between 500 and 20,000 for triangles or 500 and 10,000 for quads.")
@@ -1823,6 +1828,7 @@ class TripoConversionNode(IO.ComfyNode):
         export_vertex_colors: bool,
         export_orientation: str,
         animate_in_place: bool,
+        exec_context: execution_context.ExecutionContext = None,
     ) -> IO.NodeOutput:
         if not original_model_task_id:
             raise RuntimeError("original_model_task_id is required")

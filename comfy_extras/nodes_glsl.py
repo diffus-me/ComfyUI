@@ -8,6 +8,7 @@ from typing import TypedDict
 import numpy as np
 import torch
 
+import execution_context
 import nodes
 import comfy_angle
 from comfy_api.latest import ComfyExtension, io, ui
@@ -745,6 +746,9 @@ class GLSLShader(io.ComfyNode):
                 io.Image.Output(display_name="IMAGE2", tooltip="Available via layout(location = 2) out vec4 fragColor2 in the shader code"),
                 io.Image.Output(display_name="IMAGE3", tooltip="Available via layout(location = 3) out vec4 fragColor3 in the shader code"),
             ],
+            hidden=[
+                io.Hidden.exec_context
+            ]
         )
 
     @classmethod
@@ -759,7 +763,7 @@ class GLSLShader(io.ComfyNode):
         curves: io.Autogrow.Type = None,
         **kwargs,
     ) -> io.NodeOutput:
-
+        exec_context = kwargs["exec_context"]
         image_list = [v for v in images.values() if v is not None]
         float_list = (
             [v if v is not None else 0.0 for v in floats.values()] if floats else []
@@ -807,17 +811,18 @@ class GLSLShader(io.ComfyNode):
         output_tensors = [torch.stack(all_outputs[i], dim=0) for i in range(MAX_OUTPUTS)]
         return io.NodeOutput(
             *output_tensors,
-            ui=cls._build_ui_output(image_list, output_tensors[0]),
+            ui=cls._build_ui_output(image_list, output_tensors[0], exec_context=exec_context),
         )
 
     @classmethod
     def _build_ui_output(
-        cls, image_list: list[torch.Tensor], output_batch: torch.Tensor
+        cls, image_list: list[torch.Tensor], output_batch: torch.Tensor, exec_context: execution_context.ExecutionContext,
     ) -> dict[str, list]:
         """Build UI output with input and output images for client-side shader execution."""
         input_images_ui = []
         for img in image_list:
             input_images_ui.extend(ui.ImageSaveHelper.save_images(
+                exec_context,
                 img,
                 filename_prefix="GLSLShader_input",
                 folder_type=io.FolderType.temp,
