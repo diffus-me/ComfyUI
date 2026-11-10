@@ -21,9 +21,9 @@ def _sample_consumption_ratio(
             ratio *= 0.5
     elif model_name and model_name.startswith("minimax_h3"):
         if count > 100:
-            ratio *= 0.4
+            ratio *= 0.15
         elif count > 50:
-            ratio *= 0.6
+            ratio *= 0.2
     elif model_name.startswith("svdq-"):
         ratio *= 2
     return ratio
