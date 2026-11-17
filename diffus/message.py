@@ -284,7 +284,7 @@ class MessageQueue:
 
     def _publish_prompt_message(self, sid, message):
         if not sid:
-            sid = "anonymous"
+            return
         key = f'diffus:comfyui:message:{sid}'
 
         if isinstance(message, str) and "monitor_info" in message:
