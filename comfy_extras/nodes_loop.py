@@ -1,3 +1,4 @@
+import execution_context
 from comfy_api.latest import io
 from comfy_execution.graph_utils import GraphBuilder, is_link
 from server import PromptServer
@@ -184,7 +185,7 @@ class StartLoop(io.ComfyNode):
                     tooltip="Loop-carried value for the current iteration: initial_iteration_value on the first iteration, then next_iteration_value from End Loop on each subsequent iteration.",
                 ),
             ],
-            hidden=[io.Hidden.dynprompt, io.Hidden.execution_list, io.Hidden.unique_id],
+            hidden=[io.Hidden.dynprompt, io.Hidden.execution_list, io.Hidden.unique_id, io.Hidden.exec_context],
             enable_expand=True,
         )
 
@@ -207,6 +208,7 @@ class StartLoop(io.ComfyNode):
         dynprompt = cls.hidden.dynprompt
         execution_list = cls.hidden.execution_list
         unique_id = cls.hidden.unique_id
+        exec_context = cls.hidden.exec_context
         loop = dynprompt.get_node(unique_id)
         body = set(loop["_loop_body"])
         close_id = loop["_loop_end"]
@@ -225,7 +227,7 @@ class StartLoop(io.ComfyNode):
         for name in tuple(close_inputs):
             if name in ("output_value", "next_iteration_value") or name.startswith("termination"):
                 del close_inputs[name]
-        execution_list.add_node(close_id)
+        execution_list.add_node(exec_context, close_id)
         execution_list.add_external_block(close_id)
         execution_list.inhibit_nodes(body)
         dynprompt.override_node(close_id, {"class_type": close["class_type"], "inputs": close_inputs})

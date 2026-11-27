@@ -229,7 +229,7 @@ def set_user_directory(user_dir: str) -> None:
 SYSTEM_USER_PREFIX = "__"
 
 
-def get_system_user_directory(name: str = "system") -> str:
+def get_system_user_directory(exec_context: execution_context.ExecutionContext, name: str = "system") -> str:
     """
     Get the path to a System User directory.
 
@@ -257,7 +257,7 @@ def get_system_user_directory(name: str = "system") -> str:
         raise ValueError(f"Invalid system user name: '{name}'")
     if name.startswith("_"):
         raise ValueError("System user name should not start with underscore")
-    return os.path.join(get_user_directory(), f"{SYSTEM_USER_PREFIX}{name}")
+    return os.path.join(get_user_directory(exec_context.user_hash), f"{SYSTEM_USER_PREFIX}{name}")
 
 
 def get_public_user_directory(user_id: str) -> str | None:

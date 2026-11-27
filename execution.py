@@ -222,10 +222,21 @@ def get_input_data(exec_context: execution_context.ExecutionContext, inputs, cla
                 hidden_inputs_v3[io.Hidden.execution_list] = execution_list
             if io.Hidden.exec_context.name in hidden:
                 hidden_inputs_v3[io.Hidden.exec_context] = exec_context
-                input_data_all[io.Hidden.exec_context.name] = [exec_context]
             if io.Hidden.user_hash.name in hidden:
                 hidden_inputs_v3[io.Hidden.user_hash] = exec_context.user_hash
-                input_data_all[io.Hidden.user_hash.name] = [exec_context.user_hash]
+
+            # pack exec_context & user_hash to input_data if necessary
+            positional_args = []
+            signature = inspect.signature(class_def.execute)
+            for i, param in enumerate(signature.parameters.values()):
+                if param.kind not in (param.POSITIONAL_ONLY, param.POSITIONAL_OR_KEYWORD):
+                    break
+                positional_args.append(param)
+            for i, param in enumerate(positional_args):
+                if (param.annotation == str or param.annotation == "str") and param.name == 'user_hash':
+                    input_data_all[io.Hidden.user_hash.name] = [exec_context.user_hash]
+                elif param.annotation == execution_context.ExecutionContext or param.annotation == "execution_context.ExecutionContext":
+                    input_data_all[io.Hidden.exec_context.name] = [exec_context]
     else:
         if "hidden" in valid_inputs:
             h = valid_inputs["hidden"]
